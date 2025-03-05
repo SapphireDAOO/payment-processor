@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { Invoice } from "../Types/InvoiceType.sol";
+import { Invoice } from "../types/InvoiceType.sol";
 
 /**
  * @title Payment processor interface

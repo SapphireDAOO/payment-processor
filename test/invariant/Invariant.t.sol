@@ -3,8 +3,7 @@ pragma solidity 0.8.28;
 
 import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { Test, console } from "forge-std/Test.sol";
-import { Invoice } from "../../src/Types/InvoiceType.sol";
-import { PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
+import { Invoice, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 import {
     CREATED,
     ACCEPTED,
