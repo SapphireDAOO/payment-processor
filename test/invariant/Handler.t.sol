@@ -3,7 +3,6 @@ pragma solidity 0.8.28;
 
 import { Test, console } from "forge-std/Test.sol";
 import { PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
-import "../../src/utils/Constants.sol";
 
 contract Handler is Test {
     PaymentProcessorV1 public pp;
@@ -16,7 +15,6 @@ contract Handler is Test {
 
     uint256[] public ids;
 
-    uint256 constant FEE = 1 ether;
     uint256 constant INVOICE_PRICE = 1000 ether;
 
     uint256 constant PAYERS_INITIAL_FUND = 10_000 ether;
@@ -40,7 +38,7 @@ contract Handler is Test {
     }
 
     function createInvoice(uint256 _price) public countCall("createInvoice") {
-        _price = bound(_price, FEE + 1, INVOICE_PRICE);
+        _price = bound(_price, 1.01 ether, INVOICE_PRICE);
         vm.prank(creator);
         uint256 invoiceId = pp.createInvoice(_price);
         ids.push(invoiceId);
@@ -51,7 +49,7 @@ contract Handler is Test {
     function cancelInvoice(uint256 _invoiceId) public countCall("cancelInvoice") {
         if (ids.length > 0) {
             _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            if (pp.getInvoiceData(_invoiceId).status != CREATED) return;
+            if (pp.getInvoiceData(_invoiceId).status != pp.CREATED()) return;
             vm.prank(creator);
             pp.cancelInvoice(_invoiceId);
         }
@@ -60,20 +58,22 @@ contract Handler is Test {
     function makePayment(uint256 _invoiceId, uint256 _value) public countCall("makePayment") {
         if (ids.length > 0) {
             _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            if (pp.getInvoiceData(_invoiceId).status != CREATED) return;
-            _value = bound(_value, FEE + 1, price[_invoiceId]);
+            if (pp.getInvoiceData(_invoiceId).status != pp.CREATED()) return;
+            uint256 iPrice = pp.getInvoiceData(_invoiceId).price;
+            uint256 fee = pp.calculateFee(iPrice);
+            _value = bound(_value, fee + 1, price[_invoiceId]);
 
             vm.prank(payer);
             pp.makeInvoicePayment{ value: _value }(_invoiceId);
 
-            balance += FEE;
+            balance += fee;
         }
     }
 
     function acceptInvoice(uint256 _invoiceId) public countCall("acceptInvoice") {
         if (ids.length > 0) {
             _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            if (pp.getInvoiceData(_invoiceId).status != PAID) return;
+            if (pp.getInvoiceData(_invoiceId).status != pp.PAID()) return;
             vm.prank(creator);
             pp.creatorsAction(_invoiceId, true);
         }
@@ -82,7 +82,7 @@ contract Handler is Test {
     function rejectInvoice(uint256 _invoiceId) public countCall("rejectInvoice") {
         if (ids.length > 0) {
             _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            if (pp.getInvoiceData(_invoiceId).status != PAID) return;
+            if (pp.getInvoiceData(_invoiceId).status != pp.PAID()) return;
             vm.prank(creator);
             pp.creatorsAction(_invoiceId, true);
         }
@@ -91,8 +91,8 @@ contract Handler is Test {
     function releaseInvoice(uint256 _invoiceId) public countCall("releaseInvoice") {
         if (ids.length > 0) {
             _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            if (pp.getInvoiceData(_invoiceId).status == RELEASED) return;
-            vm.assume(block.timestamp > block.timestamp + ACCEPTANCE_WINDOW);
+            if (pp.getInvoiceData(_invoiceId).status == pp.RELEASED()) return;
+            vm.assume(block.timestamp > block.timestamp + pp.ACCEPTANCE_WINDOW());
             vm.prank(creator);
             pp.releaseInvoice(_invoiceId);
         }

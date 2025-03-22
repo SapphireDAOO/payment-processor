@@ -1,13 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { Invoice } from "../types/InvoiceType.sol";
-
 /**
  * @title Payment processor interface
- * @notice @notice This interface provides functionality for creating and managing invoices.
+ * @notice This interface provides functionality for creating and managing invoices.
  */
 interface IPaymentProcessorV1 {
+    struct Invoice {
+        /// @notice The address of the creator of the invoice.
+        address creator;
+        /// @notice The address of the payer of the invoice.
+        address payer;
+        /// @notice The address of the escrow contract managing the funds for this invoice.
+        address escrow;
+        /// @notice The total price of the invoice in wei.
+        uint256 price;
+        /// @notice The amount that has been paid.
+        uint256 amountPaid;
+        /// @notice The Unix timestamp when the invoice was created.
+        uint32 createdAt;
+        /// @notice The Unix timestamp when the payment was completed.
+        uint32 paymentTime;
+        /// @notice The timestampwhen funds in escrow can be released to the creator.
+        uint32 releaseAt;
+        /// @notice The current status of the invoice.
+        uint32 status;
+    }
+
+    /// @notice Thrown when the provided fee rate exceeds the maximum allowed (100% = 10,000 basis points).
+    error FeeTooHigh();
+
     /// @notice Thrown when the provided value is lower than the required minimum.
     error ValueIsTooLow();
 
@@ -42,11 +64,14 @@ interface IPaymentProcessorV1 {
     /// @notice Thrown when an invoice that has already been fully paid is attempted to be paid again.
     error InvoiceAlreadyPaid();
 
-    /// @notice Thrown when an action is attempted on a non-existent invoice.
-    error InvoiceDoesNotExist();
+    /// @notice Thrown when an invoice has not been accepted
+    error InvoiceHasNotBeenAccepted();
 
     /// @notice Thrown when the creator attempts to take action on an invoice after the acceptance window has expired.
     error AcceptanceWindowExceeded();
+
+    /// @notice Thrown when the calculated release time exceeds the maximum value allowed for a uint32.
+    error ReleaseTimeOverflow();
 
     /// @notice Thrown when the creator of an invoice attempts to pay for their own invoice.
     error CreatorCannotPayOwnedInvoice();
@@ -58,7 +83,7 @@ interface IPaymentProcessorV1 {
     error HoldPeriodHasNotBeenExceeded();
 
     /// @notice Thrown when attempting to set a custom hold period that is less than the default hold period.
-    error HoldPeriodShouldBeGreaterThanDefault();
+    error HoldPeriodShouldBeGreaterThanPrevious();
 
     /// @notice Error thrown when attempting to release an invoice that has already been released.
     error InvoiceHasAlreadyBeenReleased();
@@ -103,7 +128,7 @@ interface IPaymentProcessorV1 {
      * @param _invoiceId The ID of the invoice.
      * @param _holdPeriod The new hold period in seconds.
      */
-    function setInvoiceHoldPeriod(uint256 _invoiceId, uint32 _holdPeriod) external;
+    function setInvoiceReleaseTime(uint256 _invoiceId, uint32 _holdPeriod) external;
 
     /**
      * @notice Updates the address of the fee receiver.
@@ -129,17 +154,16 @@ interface IPaymentProcessorV1 {
     function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) external;
 
     /**
-     * @notice Updates the fee for using Blockhead service.
-     * @dev Only callable by the contract owner.
-     * @param _newFee The new fee amount in wei.
+     * @notice Sets the transaction fee rate
+     * @param _feeRate New fee rate in basis points (1% = 100)
      */
-    function setFee(uint256 _newFee) external;
+    function setFeeRate(uint256 _feeRate) external;
 
     /**
      * @notice Gets the current fee for invoice creation.
      * @return The fee amount in wei.
      */
-    function getFee() external view returns (uint256);
+    function getFeeRate() external view returns (uint256);
 
     /**
      * @notice Gets the current fee receiver address.
@@ -177,6 +201,14 @@ interface IPaymentProcessorV1 {
      * @dev The caller must be either the contract owner or the fee receiver.
      */
     function withdrawFees() external;
+
+    /*
+    * @notice Calculates the fee based on the provided amount and current fee rate.
+    * @dev Fee rate is expressed in basis points (1% = 100).
+    * @param _amount The amount to calculate the fee from.
+    * @return The calculated fee amount.
+    */
+    function calculateFee(uint256 _amount) external view returns (uint256);
 
     /**
      * @notice Emitted when a new invoice is created.

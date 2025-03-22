@@ -3,15 +3,7 @@ pragma solidity 0.8.28;
 
 import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { Test, console } from "forge-std/Test.sol";
-import { Invoice, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
-import {
-    CREATED,
-    ACCEPTED,
-    REJECTED,
-    PAID,
-    CANCELLED,
-    VALID_PERIOD
-} from "../../src/utils/Constants.sol";
+import { PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 
 import { Handler } from "./Handler.t.sol";
 
@@ -34,7 +26,7 @@ contract Invariant is StdInvariant, Test {
         feeReceiver = makeAddr("feeReceiver");
         creator = makeAddr("creator");
         payer = makeAddr("payer");
-        pp = new PaymentProcessorV1(feeReceiver, FEE, DEFAULT_HOLD_PERIOD);
+        pp = new PaymentProcessorV1(feeReceiver, 700, DEFAULT_HOLD_PERIOD);
         handler = new Handler(pp);
 
         bytes4[] memory selectors = new bytes4[](6);

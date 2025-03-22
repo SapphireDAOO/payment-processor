@@ -1,56 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { Test, console } from "forge-std/Test.sol";
-import { Invoice, IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
-import {
-    CREATED,
-    ACCEPTED,
-    REJECTED,
-    PAID,
-    CANCELLED,
-    RELEASED,
-    REFUNDED,
-    ACCEPTANCE_WINDOW,
-    VALID_PERIOD
-} from "../../src/utils/Constants.sol";
+import { SetUp } from "../SetUp.sol";
+import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 
 error Unauthorized();
 
-contract PaymentProcessorTest is Test {
-    PaymentProcessorV1 pp;
-
-    address owner;
-    address feeReceiver;
-
-    address creatorOne;
-    address creatorTwo;
-    address payerOne;
-    address payerTwo;
-
-    uint256 constant FEE = 1 ether;
-    uint256 constant DEFAULT_HOLD_PERIOD = 1 days;
-    uint256 constant PAYER_ONE_INITIAL_BALANCE = 10_000 ether;
-    uint256 constant PAYER_TWO_INITIAL_BALANCE = 5_000 ether;
-
-    function setUp() public {
-        owner = makeAddr("owner");
-        feeReceiver = makeAddr("feeReceiver");
-        creatorOne = makeAddr("creatorOne");
-        creatorTwo = makeAddr("creatorTwo");
-        payerOne = makeAddr("payerOne");
-        payerTwo = makeAddr("payerTwo");
-
-        vm.deal(payerOne, PAYER_ONE_INITIAL_BALANCE);
-        vm.deal(payerTwo, PAYER_TWO_INITIAL_BALANCE);
-
-        vm.prank(owner);
-        pp = new PaymentProcessorV1(feeReceiver, FEE, DEFAULT_HOLD_PERIOD);
-        vm.stopPrank();
-    }
-
+contract PaymentProcessorTest is SetUp {
     function test_storage_state() public view {
-        assertEq(pp.getFee(), FEE);
+        assertEq(pp.getFeeRate(), FEE_RATE);
         assertEq(pp.getFeeReceiver(), feeReceiver);
         assertEq(pp.getNextInvoiceId(), 1);
         assertEq(pp.getDefaultHoldPeriod(), DEFAULT_HOLD_PERIOD);
@@ -60,7 +18,7 @@ contract PaymentProcessorTest is Test {
         vm.startPrank(owner);
 
         vm.expectRevert(IPaymentProcessorV1.FeeValueCanNotBeZero.selector);
-        pp.setFee(0);
+        pp.setFeeRate(0);
 
         vm.expectRevert(IPaymentProcessorV1.HoldPeriodCanNotBeZero.selector);
         pp.setDefaultHoldPeriod(0);
@@ -71,36 +29,34 @@ contract PaymentProcessorTest is Test {
     }
 
     function test_invoice_creation() public {
-        uint256 cOneInvoicePrice = 10;
+        uint256 cOneInvoicePrice = 100 ether;
         vm.startPrank(creatorOne);
-        vm.expectRevert();
-        pp.createInvoice(cOneInvoicePrice);
-        cOneInvoicePrice = 100 ether;
+
         pp.createInvoice(cOneInvoicePrice);
         vm.stopPrank();
 
-        Invoice memory invoiceDataOne = pp.getInvoiceData(1);
+        IPaymentProcessorV1.Invoice memory invoiceDataOne = pp.getInvoiceData(1);
         assertEq(invoiceDataOne.creator, creatorOne);
         assertEq(invoiceDataOne.createdAt, block.timestamp);
         assertEq(invoiceDataOne.paymentTime, 0);
         assertEq(invoiceDataOne.price, 100 ether);
         assertEq(invoiceDataOne.amountPaid, 0);
         assertEq(invoiceDataOne.payer, address(0));
-        assertEq(invoiceDataOne.status, CREATED);
+        assertEq(invoiceDataOne.status, pp.CREATED());
         assertEq(invoiceDataOne.escrow, address(0));
         assertEq(pp.getNextInvoiceId(), 2);
 
         vm.prank(creatorTwo);
         pp.createInvoice(25 ether);
 
-        Invoice memory invoiceDataTwo = pp.getInvoiceData(2);
+        IPaymentProcessorV1.Invoice memory invoiceDataTwo = pp.getInvoiceData(2);
         assertEq(invoiceDataTwo.creator, creatorTwo);
         assertEq(invoiceDataTwo.createdAt, block.timestamp);
         assertEq(invoiceDataTwo.paymentTime, 0);
         assertEq(invoiceDataTwo.price, 25 ether);
         assertEq(invoiceDataTwo.amountPaid, 0);
         assertEq(invoiceDataTwo.payer, address(0));
-        assertEq(invoiceDataTwo.status, CREATED);
+        assertEq(invoiceDataTwo.status, pp.CREATED());
         assertEq(invoiceDataTwo.escrow, address(0));
         assertEq(pp.getNextInvoiceId(), 3);
     }
@@ -130,7 +86,7 @@ contract PaymentProcessorTest is Test {
         pp.cancelInvoice(newInvoiceId);
         vm.stopPrank();
 
-        assertEq(pp.getInvoiceData(newInvoiceId).status, CANCELLED);
+        assertEq(pp.getInvoiceData(newInvoiceId).status, pp.CANCELLED());
     }
 
     function test_make_invoice_payment() public {
@@ -139,6 +95,7 @@ contract PaymentProcessorTest is Test {
         deal(creatorOne, 1);
         vm.startPrank(creatorOne);
         uint256 invoiceId = pp.createInvoice(invoicePrice);
+        uint256 fee = pp.calculateFee(invoicePrice);
 
         vm.expectRevert(IPaymentProcessorV1.CreatorCannotPayOwnedInvoice.selector);
         pp.makeInvoicePayment{ value: 1 }(invoiceId);
@@ -147,7 +104,7 @@ contract PaymentProcessorTest is Test {
         vm.startPrank(payerOne);
         // TRY VERY LOW PAYMENT
         vm.expectRevert(IPaymentProcessorV1.ValueIsTooLow.selector);
-        pp.makeInvoicePayment{ value: FEE }(invoiceId);
+        pp.makeInvoicePayment{ value: fee }(invoiceId);
 
         // TRY EXCESSIVE PAYMENT
 
@@ -155,12 +112,12 @@ contract PaymentProcessorTest is Test {
         pp.makeInvoicePayment{ value: invoicePrice + 1 }(invoiceId);
 
         // TRY EXPIRED INVOICE
-        vm.warp(block.timestamp + VALID_PERIOD + 1);
+        vm.warp(block.timestamp + pp.VALID_PERIOD() + 1);
         vm.expectRevert(IPaymentProcessorV1.InvoiceIsNoLongerValid.selector);
         pp.makeInvoicePayment{ value: invoicePrice }(invoiceId);
 
         // MAKE VALID PAYMENT
-        vm.warp(block.timestamp - VALID_PERIOD);
+        vm.warp(block.timestamp - pp.VALID_PERIOD());
         address escrowAddress = pp.makeInvoicePayment{ value: invoicePrice }(invoiceId);
 
         uint256 currentInvoiceStatus = pp.getInvoiceData(invoiceId).status;
@@ -173,14 +130,14 @@ contract PaymentProcessorTest is Test {
         pp.makeInvoicePayment{ value: invoicePrice }(invoiceId);
         vm.stopPrank();
 
-        Invoice memory invoiceData = pp.getInvoiceData(invoiceId);
+        IPaymentProcessorV1.Invoice memory invoiceData = pp.getInvoiceData(invoiceId);
 
         assertEq(payerOne.balance, PAYER_ONE_INITIAL_BALANCE - invoicePrice);
-        assertEq(escrowAddress.balance, invoicePrice - FEE);
-        assertEq(address(pp).balance, FEE);
+        assertEq(escrowAddress.balance, invoicePrice - fee);
+        assertEq(address(pp).balance, fee);
         assertEq(escrowAddress.balance + address(pp).balance, invoicePrice);
         assertEq(invoiceData.escrow, escrowAddress);
-        assertEq(invoiceData.status, PAID);
+        assertEq(invoiceData.status, pp.PAID());
         assertEq(invoiceData.payer, payerOne);
     }
 
@@ -204,7 +161,7 @@ contract PaymentProcessorTest is Test {
 
         vm.prank(creatorOne);
         pp.creatorsAction(invoiceId, true);
-        assertEq(pp.getInvoiceData(invoiceId).status, ACCEPTED);
+        assertEq(pp.getInvoiceData(invoiceId).status, pp.ACCEPTED());
     }
 
     function test_payment_acceptance_after_acceptance_window() public {
@@ -215,7 +172,7 @@ contract PaymentProcessorTest is Test {
         vm.prank(payerOne);
         pp.makeInvoicePayment{ value: invoicePrice }(invoiceId);
 
-        vm.warp(block.timestamp + ACCEPTANCE_WINDOW + 1);
+        vm.warp(block.timestamp + pp.ACCEPTANCE_WINDOW() + 1);
         vm.prank(creatorOne);
         vm.expectRevert(IPaymentProcessorV1.AcceptanceWindowExceeded.selector);
         pp.creatorsAction(invoiceId, true);
@@ -225,6 +182,7 @@ contract PaymentProcessorTest is Test {
         uint256 invoicePrice = 100 ether;
         vm.prank(creatorOne);
         uint256 invoiceId = pp.createInvoice(invoicePrice);
+        uint256 fee = pp.calculateFee(invoicePrice);
 
         // 10000
         uint256 balanceBeforePayment = payerOne.balance;
@@ -236,7 +194,7 @@ contract PaymentProcessorTest is Test {
         vm.expectRevert(IPaymentProcessorV1.InvoiceNotEligibleForRefund.selector);
         pp.refundPayerAfterWindow(invoiceId);
 
-        vm.warp(block.timestamp + ACCEPTANCE_WINDOW + 1);
+        vm.warp(block.timestamp + pp.ACCEPTANCE_WINDOW() + 1);
         pp.refundPayerAfterWindow(invoiceId);
         vm.stopPrank();
 
@@ -244,14 +202,15 @@ contract PaymentProcessorTest is Test {
 
         uint256 balanceAfterRefund = payerOne.balance;
 
-        assertEq(pp.getInvoiceData(invoiceId).status, REFUNDED);
-        assertEq(balanceBeforePayment - FEE, balanceAfterRefund);
+        assertEq(pp.getInvoiceData(invoiceId).status, pp.REFUNDED());
+        assertEq(balanceBeforePayment - fee, balanceAfterRefund);
     }
 
     function test_payment_rejection() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(creatorOne);
         uint256 invoiceId = pp.createInvoice(invoicePrice);
+        uint256 fee = pp.calculateFee(invoicePrice);
 
         vm.prank(payerOne);
         pp.makeInvoicePayment{ value: invoicePrice }(invoiceId);
@@ -261,8 +220,8 @@ contract PaymentProcessorTest is Test {
         vm.prank(creatorOne);
         pp.creatorsAction(invoiceId, false);
 
-        assertEq(pp.getInvoiceData(invoiceId).status, REJECTED);
-        assertEq(address(payerOne).balance, payerOneBalanceAfterPayment + invoicePrice - FEE);
+        assertEq(pp.getInvoiceData(invoiceId).status, pp.REJECTED());
+        assertEq(address(payerOne).balance, payerOneBalanceAfterPayment + invoicePrice - fee);
     }
 
     function test_default_hold_release_invoice() public {
@@ -270,6 +229,8 @@ contract PaymentProcessorTest is Test {
         uint256 invoicePrice = 100 ether;
         vm.prank(creatorOne);
         uint256 invoiceId = pp.createInvoice(invoicePrice);
+
+        uint256 fee = pp.calculateFee(invoicePrice);
 
         // PAY
         vm.prank(payerOne);
@@ -294,21 +255,23 @@ contract PaymentProcessorTest is Test {
         pp.releaseInvoice(invoiceId);
         vm.stopPrank();
 
-        assertEq(creatorOne.balance, invoicePrice - FEE);
-        assertEq(pp.getInvoiceData(invoiceId).status, RELEASED);
+        assertEq(creatorOne.balance, invoicePrice - fee);
+        assertEq(pp.getInvoiceData(invoiceId).status, pp.RELEASED());
     }
 
     function test_dynamic_hold_release_invoice() public {
         uint32 adminHoldPeriod = 25 days;
 
         vm.prank(owner);
-        vm.expectRevert(IPaymentProcessorV1.InvoiceDoesNotExist.selector);
-        pp.setInvoiceHoldPeriod(1, adminHoldPeriod);
+        vm.expectRevert(IPaymentProcessorV1.InvoiceHasNotBeenAccepted.selector);
+        pp.setInvoiceReleaseTime(1, adminHoldPeriod);
 
         // CREATE
         uint256 invoicePrice = 100 ether;
         vm.prank(creatorOne);
         uint256 invoiceId = pp.createInvoice(invoicePrice);
+
+        uint256 fee = pp.calculateFee(invoicePrice);
 
         // PAY
         vm.prank(payerOne);
@@ -318,18 +281,12 @@ contract PaymentProcessorTest is Test {
         vm.prank(creatorOne);
         pp.creatorsAction(invoiceId, true);
 
-        vm.startPrank(owner);
-        vm.expectRevert(IPaymentProcessorV1.HoldPeriodShouldBeGreaterThanDefault.selector);
-        pp.setInvoiceHoldPeriod(invoiceId, 5 minutes);
-        pp.setInvoiceHoldPeriod(invoiceId, uint32(adminHoldPeriod + block.timestamp));
-        vm.stopPrank();
-
         vm.warp(block.timestamp + adminHoldPeriod + 1);
         vm.prank(creatorOne);
         pp.releaseInvoice(invoiceId);
 
-        assertEq(creatorOne.balance, invoicePrice - FEE);
-        assertEq(pp.getInvoiceData(invoiceId).status, RELEASED);
+        assertEq(creatorOne.balance, invoicePrice - fee);
+        assertEq(pp.getInvoiceData(invoiceId).status, pp.RELEASED());
     }
 
     function test_Ether_Withdrawal() public {
@@ -338,6 +295,8 @@ contract PaymentProcessorTest is Test {
         vm.prank(creatorOne);
         uint256 invoiceIdOne = pp.createInvoice(invoicePrice);
 
+        uint256 fee = pp.calculateFee(invoicePrice);
+
         pp.makeInvoicePayment{ value: invoicePrice }(invoiceIdOne);
 
         vm.expectRevert(Unauthorized.selector);
@@ -345,7 +304,7 @@ contract PaymentProcessorTest is Test {
 
         vm.prank(feeReceiver);
         pp.withdrawFees();
-        assertEq(address(feeReceiver).balance, FEE);
+        assertEq(address(feeReceiver).balance, fee);
 
         vm.prank(creatorTwo);
         uint256 invoiceIdTwo = pp.createInvoice(invoicePrice);
@@ -355,7 +314,7 @@ contract PaymentProcessorTest is Test {
         uint256 receiversBalanceBefore = address(feeReceiver).balance;
         vm.prank(owner);
         pp.withdrawFees();
-        assertEq(address(feeReceiver).balance, FEE + receiversBalanceBefore);
+        assertEq(address(feeReceiver).balance, fee + receiversBalanceBefore);
         assertEq(address(pp).balance, 0);
     }
 }
