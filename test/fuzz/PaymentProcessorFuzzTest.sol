@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { SetUp } from "../SetUp.sol";
+import { SetUp, console } from "../SetUp.sol";
 import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 
-contract PaymentProcessorTest is SetUp {
+contract PaymentProcessorFuzzTest is SetUp {
     function testFuzz_invoice_creation(uint256 _amount) public {
         vm.assume(_amount > 1 ether);
         vm.prank(creatorOne);
@@ -23,7 +23,9 @@ contract PaymentProcessorTest is SetUp {
 
     function testFuzz_makeInvoicePayment(uint256 _paymentAmount) public {
         uint256 invoicePrice = 100 ether;
-        uint256 fee = pp.calculateFee(invoicePrice);
+        vm.assume(_paymentAmount < invoicePrice && _paymentAmount > pp.BASIS_POINTS());
+        uint256 fee = pp.calculateFee(_paymentAmount);
+
         _paymentAmount = bound(_paymentAmount, fee + 1, invoicePrice);
         vm.startPrank(creatorOne);
         uint256 invoiceId = pp.createInvoice(invoicePrice);
@@ -34,6 +36,6 @@ contract PaymentProcessorTest is SetUp {
         pp.makeInvoicePayment{ value: _paymentAmount }(invoiceId);
         IPaymentProcessorV1.Invoice memory invoice = pp.getInvoiceData(invoiceId);
         assertEq(invoice.status, pp.PAID());
-        assertEq(address(pp).balance, invoiceId * fee);
+        assertEq(address(pp).balance, fee);
     }
 }

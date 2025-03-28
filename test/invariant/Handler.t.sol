@@ -58,9 +58,11 @@ contract Handler is Test {
     function makePayment(uint256 _invoiceId, uint256 _value) public countCall("makePayment") {
         if (ids.length > 0) {
             _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
+
             if (pp.getInvoiceData(_invoiceId).status != pp.CREATED()) return;
             uint256 iPrice = pp.getInvoiceData(_invoiceId).price;
-            uint256 fee = pp.calculateFee(iPrice);
+            _value = bound(_value, pp.BASIS_POINTS(), iPrice);
+            uint256 fee = pp.calculateFee(_value);
             _value = bound(_value, fee + 1, price[_invoiceId]);
 
             vm.prank(payer);

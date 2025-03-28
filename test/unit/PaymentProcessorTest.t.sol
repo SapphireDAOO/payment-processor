@@ -104,7 +104,7 @@ contract PaymentProcessorTest is SetUp {
         vm.startPrank(payerOne);
         // TRY VERY LOW PAYMENT
         vm.expectRevert(IPaymentProcessorV1.ValueIsTooLow.selector);
-        pp.makeInvoicePayment{ value: fee }(invoiceId);
+        pp.makeInvoicePayment{ value: 0 }(invoiceId);
 
         // TRY EXCESSIVE PAYMENT
 
@@ -170,6 +170,7 @@ contract PaymentProcessorTest is SetUp {
         uint256 invoiceId = pp.createInvoice(invoicePrice);
 
         vm.prank(payerOne);
+        invoicePrice = 0.1 ether;
         pp.makeInvoicePayment{ value: invoicePrice }(invoiceId);
 
         vm.warp(block.timestamp + pp.ACCEPTANCE_WINDOW() + 1);

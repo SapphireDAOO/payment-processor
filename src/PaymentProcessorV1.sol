@@ -94,7 +94,7 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
     /// inheritdoc IPaymentProcessor
     function makeInvoicePayment(uint256 _invoiceId) external payable returns (address) {
         Invoice memory invoice = invoiceData[_invoiceId];
-        uint256 bhFee = calculateFee(invoice.price);
+        uint256 bhFee = calculateFee(msg.value);
 
         if (invoice.status != CREATED) {
             revert InvalidInvoiceState(invoice.status);
@@ -112,7 +112,7 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
             revert InvoiceIsNoLongerValid();
         }
 
-        if (msg.value <= bhFee || bhFee == 0) {
+        if (bhFee == 0) {
             revert ValueIsTooLow();
         }
 
