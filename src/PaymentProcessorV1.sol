@@ -21,6 +21,9 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
     /// @notice The default hold period for funds in escrow, measured in seconds.
     uint256 private defaultHoldPeriod;
 
+    /// @notice The minimum allowed value (in wei) required to create a new invoice.
+    uint256 private minimumInvoiceValue;
+
     /// @notice Status code representing that a payment or transaction has been created.
     uint32 public constant CREATED = 1;
 
@@ -65,18 +68,25 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
      * @param _feeReceiversAddress The address that will receive collected fees.
      * @param _feeRate The initial fee rate to apply on invoice payments (in basis points, 1% = 100).
      * @param _defaultHoldPeriod The default period (in seconds) to hold funds in escrow after acceptance.
+     * * @param _minimumInvoicePrice The new minimum default invoice value to set (in wei).
      */
-    constructor(address _feeReceiversAddress, uint256 _feeRate, uint256 _defaultHoldPeriod) {
+    constructor(
+        address _feeReceiversAddress,
+        uint256 _feeRate,
+        uint256 _defaultHoldPeriod,
+        uint256 _minimumInvoicePrice
+    ) {
         currentInvoiceId = 1;
         _initializeOwner(msg.sender);
         setFeeRate(_feeRate);
         setDefaultHoldPeriod(_defaultHoldPeriod);
         setFeeReceiversAddress(_feeReceiversAddress);
+        setMinimumInvoiceValue(_minimumInvoicePrice);
     }
 
     /// @inheritdoc IPaymentProcessorV1
     function createInvoice(uint256 _invoicePrice) external returns (uint256) {
-        if (_invoicePrice < 1 ether) revert ValueIsTooLow();
+        if (_invoicePrice < minimumInvoiceValue) revert ValueIsTooLow();
         uint256 thisInvoiceId = currentInvoiceId;
         Invoice memory invoice = invoiceData[thisInvoiceId];
         invoice.creator = msg.sender;
@@ -261,6 +271,11 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorV1
+    function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) public onlyOwner {
+        minimumInvoiceValue = _minimumInvoiceValue;
+    }
+
+    /// @inheritdoc IPaymentProcessorV1
     function getFeeRate() external view returns (uint256) {
         return feeRate;
     }
@@ -288,5 +303,10 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
     /// @inheritdoc IPaymentProcessorV1
     function getInvoiceData(uint256 _invoiceId) external view returns (Invoice memory) {
         return invoiceData[_invoiceId];
+    }
+
+    /// @inheritdoc IPaymentProcessorV1
+    function getMinimumInvoiceValue() external view returns (uint256) {
+        return minimumInvoiceValue;
     }
 }

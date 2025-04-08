@@ -84,6 +84,10 @@ contract Escrow is IEscrow {
         }
     }
 
+    /**
+     * @notice Ensures that the caller is the authorized payment processor.
+     * @dev Reverts with `Unauthorized` if `msg.sender` is not equal to `paymentProcessor`.
+     */
     function _onlyPaymentProcessor() internal view {
         if (msg.sender != paymentProcessor) {
             revert Unauthorized();

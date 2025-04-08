@@ -140,6 +140,13 @@ interface IPaymentProcessorV1 {
     function setFeeReceiversAddress(address _newFeeReceiver) external;
 
     /**
+     *  @notice Updates the minimum allowed invoice value required for creating an invoice.
+     * @dev Should only be callable by the contract owner or an authorized role.
+     * @param _minimumInvoiceValue The new minimum invoice value to set (in wei).
+     */
+    function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) external;
+
+    /**
      * @notice Refunds the creator of a specific invoice.
      * @dev This function allows the payer to be refund if the acceptance window has not been exceeded
      *      and the invoice is eligible for a refund. The refund will be processed through the escrow contract.
@@ -198,13 +205,19 @@ interface IPaymentProcessorV1 {
      */
     function getInvoiceData(uint256 _invoiceId) external view returns (Invoice memory);
 
-    /*
-    * @notice Calculates the fee based on the provided amount and current fee rate.
-    * @dev Fee rate is expressed in basis points (1% = 100).
-    * @param _amount The amount to calculate the fee from.
-    * @return The calculated fee amount.
-    */
+    /**
+     * @notice Calculates the fee based on the provided amount and current fee rate.
+     * @dev Fee rate is expressed in basis points (1% = 100).
+     * @param _amount The amount to calculate the fee from.
+     * @return The calculated fee amount.
+     */
     function calculateFee(uint256 _amount) external view returns (uint256);
+
+    /**
+     * @notice Returns the minimum allowed invoice value required for invoice creation.
+     * @return The minimum invoice value in wei.
+     */
+    function getMinimumInvoiceValue() external view returns (uint256);
 
     /**
      * @notice Emitted when a new invoice is created.

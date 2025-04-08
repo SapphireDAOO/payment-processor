@@ -7,26 +7,18 @@ import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProces
 
 import { Handler } from "./Handler.t.sol";
 
-contract Invariant is StdInvariant, Test {
-    PaymentProcessorV1 pp;
-    Handler handler;
+import { SetUp } from "../util/SetUp.sol";
 
-    address owner;
-    address feeReceiver;
+contract Invariant is StdInvariant, Test, SetUp {
+    Handler handler;
 
     address creator;
     address payer;
 
     uint256 constant FEE = 1 ether;
-    uint256 constant DEFAULT_HOLD_PERIOD = 1 days;
-    uint256 constant PAYER_ONE_INITIAL_BALANCE = 10_000 ether;
 
-    function setUp() public {
-        owner = makeAddr("owner");
-        feeReceiver = makeAddr("feeReceiver");
-        creator = makeAddr("creator");
-        payer = makeAddr("payer");
-        pp = new PaymentProcessorV1(feeReceiver, 700, DEFAULT_HOLD_PERIOD);
+    function setUp() public override {
+        super.setUp();
         handler = new Handler(pp);
 
         bytes4[] memory selectors = new bytes4[](6);

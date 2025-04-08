@@ -6,11 +6,13 @@ import { PaymentProcessorV1 } from "../src/PaymentProcessorV1.sol";
 
 contract PaymentProcessorV1Script is Script {
     uint256 constant FEE_RATE = 700;
-    uint256 constant DEFAULT_HOLD_PERIOD = 5 minutes;
+    uint256 constant DEFAULT_HOLD_PERIOD = 10 minutes;
+    uint256 constant MINIMUM_INVOICE_VALUE = 0.1 ether;
 
     function run() external returns (address) {
         vm.startBroadcast();
-        PaymentProcessorV1 pp = new PaymentProcessorV1(msg.sender, FEE_RATE, DEFAULT_HOLD_PERIOD);
+        PaymentProcessorV1 pp =
+            new PaymentProcessorV1(msg.sender, FEE_RATE, DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
         vm.stopBroadcast();
         return address(pp);
     }

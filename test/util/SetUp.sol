@@ -20,7 +20,9 @@ abstract contract SetUp is Test {
     uint256 constant FEE_RATE = 700;
     uint256 constant PAYER_TWO_INITIAL_BALANCE = 5_000 ether;
 
-    function setUp() public {
+    uint256 constant MINIMUM_INVOICE_VALUE = 1 ether;
+
+    function setUp() public virtual {
         owner = makeAddr("owner");
         feeReceiver = makeAddr("feeReceiver");
         creatorOne = makeAddr("creatorOne");
@@ -32,7 +34,7 @@ abstract contract SetUp is Test {
         vm.deal(payerTwo, PAYER_TWO_INITIAL_BALANCE);
 
         vm.prank(owner);
-        pp = new PaymentProcessorV1(feeReceiver, FEE_RATE, DEFAULT_HOLD_PERIOD);
+        pp = new PaymentProcessorV1(feeReceiver, FEE_RATE, DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
         vm.stopPrank();
     }
 }
