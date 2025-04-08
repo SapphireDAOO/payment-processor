@@ -34,7 +34,9 @@ abstract contract SetUp is Test {
         vm.deal(payerTwo, PAYER_TWO_INITIAL_BALANCE);
 
         vm.prank(owner);
-        pp = new PaymentProcessorV1(feeReceiver, FEE_RATE, DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
+        pp = new PaymentProcessorV1(
+            feeReceiver, FEE_RATE, DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE
+        );
         vm.stopPrank();
     }
 }
