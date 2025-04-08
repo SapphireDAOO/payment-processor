@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { Test, console } from "forge-std/Test.sol";
-import { PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
+import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 
 import { Handler } from "./Handler.t.sol";
 
@@ -46,7 +46,16 @@ contract Invariant is StdInvariant, Test {
     }
 
     function invariant_feeBalance() public view {
-        assertEq(handler.balance(), address(pp).balance);
+        assertEq(handler.balance(), feeReceiver.balance);
+    }
+
+    function invariant_invoiceStatusDoesNotRevert() public view {
+        uint256 count = pp.totalInvoiceCreated();
+        for (uint256 invoiceId = 1; invoiceId <= count; invoiceId++) {
+            IPaymentProcessorV1.Invoice memory i = pp.getInvoiceData(invoiceId);
+            assertTrue(i.status >= pp.CREATED());
+            assertTrue(i.status <= pp.RELEASED());
+        }
     }
 
     function invariant_callSummary() public view {

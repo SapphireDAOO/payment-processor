@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { SetUp, console } from "../SetUp.sol";
+import { SetUp, console } from "../util/SetUp.sol";
 import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 
 contract PaymentProcessorFuzzTest is SetUp {
@@ -21,21 +21,24 @@ contract PaymentProcessorFuzzTest is SetUp {
         assertEq(pp.getNextInvoiceId(), 2);
     }
 
-    function testFuzz_makeInvoicePayment(uint256 _paymentAmount) public {
-        uint256 invoicePrice = 100 ether;
-        vm.assume(_paymentAmount < invoicePrice && _paymentAmount > pp.BASIS_POINTS());
-        uint256 fee = pp.calculateFee(_paymentAmount);
+    function testFuzz_createAndPayInvoice(uint256 _invoicePrice) public {
+        _invoicePrice = bound(_invoicePrice, 1 ether, 1000 ether);
 
-        _paymentAmount = bound(_paymentAmount, fee + 1, invoicePrice);
         vm.startPrank(creatorOne);
-        uint256 invoiceId = pp.createInvoice(invoicePrice);
+        uint256 invoiceId = pp.createInvoice(_invoicePrice);
         vm.stopPrank();
 
-        vm.prank(payerOne);
-
-        pp.makeInvoicePayment{ value: _paymentAmount }(invoiceId);
         IPaymentProcessorV1.Invoice memory invoice = pp.getInvoiceData(invoiceId);
-        assertEq(invoice.status, pp.PAID());
-        assertEq(address(pp).balance, fee);
+        assertEq(invoice.price, _invoicePrice);
+        assertEq(invoice.status, pp.CREATED());
+
+        vm.prank(payerOne);
+        address escrow = pp.makeInvoicePayment{ value: _invoicePrice }(invoiceId);
+
+        IPaymentProcessorV1.Invoice memory updated = pp.getInvoiceData(invoiceId);
+        assertEq(updated.payer, payerOne);
+        assertEq(updated.amountPaid, _invoicePrice);
+        assertEq(updated.status, pp.PAID());
+        assertEq(updated.escrow, escrow);
     }
 }

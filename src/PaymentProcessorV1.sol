@@ -6,7 +6,7 @@ import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { IEscrow, Escrow } from "./Escrow.sol";
 import { IPaymentProcessorV1 } from "./interface/IPaymentProcessorV1.sol";
 
-contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
+contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
     using SafeCastLib for uint256;
 
     /// @notice The address that receives the fees collected for creating invoices.
@@ -62,19 +62,19 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
     /**
      * @notice Initializes the payment processor with owner, fee settings, and default hold period.
      * @dev Sets the fee receiver address, the fee rate (in basis points), and the default escrow hold time.
-     * @param _receiversAddress The address that will receive collected fees.
+     * @param _feeReceiversAddress The address that will receive collected fees.
      * @param _feeRate The initial fee rate to apply on invoice payments (in basis points, 1% = 100).
      * @param _defaultHoldPeriod The default period (in seconds) to hold funds in escrow after acceptance.
      */
-    constructor(address _receiversAddress, uint256 _feeRate, uint256 _defaultHoldPeriod) {
+    constructor(address _feeReceiversAddress, uint256 _feeRate, uint256 _defaultHoldPeriod) {
         currentInvoiceId = 1;
         _initializeOwner(msg.sender);
         setFeeRate(_feeRate);
         setDefaultHoldPeriod(_defaultHoldPeriod);
-        setFeeReceiversAddress(_receiversAddress);
+        setFeeReceiversAddress(_feeReceiversAddress);
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function createInvoice(uint256 _invoicePrice) external returns (uint256) {
         if (_invoicePrice < 1 ether) revert ValueIsTooLow();
         uint256 thisInvoiceId = currentInvoiceId;
@@ -91,10 +91,9 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
         return thisInvoiceId;
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function makeInvoicePayment(uint256 _invoiceId) external payable returns (address) {
         Invoice memory invoice = invoiceData[_invoiceId];
-        uint256 bhFee = calculateFee(msg.value);
 
         if (invoice.status != CREATED) {
             revert InvalidInvoiceState(invoice.status);
@@ -104,28 +103,22 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
             revert CreatorCannotPayOwnedInvoice();
         }
 
-        if (msg.value > invoice.price) {
-            revert ExcessivePayment();
+        if (msg.value != invoice.price) {
+            revert IncorrectPaymentAmount(msg.value, invoice.price);
         }
 
         if (block.timestamp > invoice.createdAt + VALID_PERIOD) {
             revert InvoiceIsNoLongerValid();
         }
 
-        if (bhFee == 0) {
-            revert ValueIsTooLow();
-        }
-
-        uint256 amountPaid = msg.value - bhFee;
-
         address escrow = address(
-            new Escrow{ value: amountPaid }(_invoiceId, invoice.creator, msg.sender, address(this))
+            new Escrow{ value: msg.value }(_invoiceId, invoice.creator, msg.sender, address(this))
         );
 
         invoice.escrow = escrow;
         invoice.payer = msg.sender;
         invoice.status = PAID;
-        invoice.amountPaid = amountPaid;
+        invoice.amountPaid = msg.value;
         invoice.paymentTime = (block.timestamp).toUint32();
         invoiceData[_invoiceId] = invoice;
 
@@ -133,7 +126,7 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
         return escrow;
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function creatorsAction(uint256 _invoiceId, bool _state) external {
         Invoice memory invoice = invoiceData[_invoiceId];
         if (block.timestamp > invoice.paymentTime + ACCEPTANCE_WINDOW) {
@@ -148,7 +141,7 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
         _state ? _acceptInvoice(_invoiceId) : _rejectInvoice(_invoiceId, invoice);
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function cancelInvoice(uint256 _invoiceId) external {
         Invoice memory invoice = invoiceData[_invoiceId];
         if (invoice.creator != msg.sender) {
@@ -161,7 +154,7 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
         emit InvoiceCanceled(_invoiceId);
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function releaseInvoice(uint256 _invoiceId) external {
         Invoice memory invoice = invoiceData[_invoiceId];
 
@@ -181,7 +174,7 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
         emit InvoiceReleased(_invoiceId);
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function refundPayerAfterWindow(uint256 _invoiceId) external {
         Invoice memory invoice = invoiceData[_invoiceId];
         if (invoice.status != PAID || block.timestamp < invoice.paymentTime + ACCEPTANCE_WINDOW) {
@@ -205,6 +198,10 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
         uint256 holdPeriod = invoice.releaseAt == 0 ? defaultHoldPeriod : invoice.releaseAt;
         invoice.releaseAt = (holdPeriod + block.timestamp).toUint32();
         invoiceData[_invoiceId] = invoice;
+
+        uint256 feeValue = calculateFee(invoice.price);
+        IEscrow(invoice.escrow).payFee(feeReceiver, _invoiceId, feeValue);
+
         emit InvoiceAccepted(_invoiceId);
     }
 
@@ -222,7 +219,7 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
         emit InvoiceRejected(_invoiceId);
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function setInvoiceReleaseTime(uint256 _invoiceId, uint32 _holdPeriod) external onlyOwner {
         Invoice memory invoice = invoiceData[_invoiceId];
 
@@ -239,69 +236,56 @@ contract PaymentProcessorV1 is Ownable, IPaymentProcessorV1 {
         emit UpdateHoldPeriod(_invoiceId, newReleaseTime);
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function calculateFee(uint256 _amount) public view returns (uint256) {
         return (_amount * feeRate) / BASIS_POINTS;
     }
 
-    /// inheritdoc IPaymentProcessor
-    function withdrawFees() external {
-        if (owner() != msg.sender && msg.sender != feeReceiver) {
-            revert Unauthorized();
-        }
-        uint256 balance = address(this).balance;
-        (bool success,) = feeReceiver.call{ value: balance }("");
-        if (!success) {
-            revert TransferFailed();
-        }
-    }
-
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function setFeeReceiversAddress(address _newFeeReceiver) public onlyOwner {
         if (_newFeeReceiver == address(0)) revert ZeroAddressIsNotAllowed();
         feeReceiver = _newFeeReceiver;
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) public onlyOwner {
         if (_newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
         defaultHoldPeriod = _newDefaultHoldPeriod;
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function setFeeRate(uint256 _feeRate) public onlyOwner {
         if (_feeRate == 0) revert FeeValueCanNotBeZero();
         if (_feeRate > BASIS_POINTS) revert FeeTooHigh();
-
         feeRate = _feeRate;
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function getFeeRate() external view returns (uint256) {
         return feeRate;
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function getFeeReceiver() external view returns (address) {
         return feeReceiver;
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function getNextInvoiceId() external view returns (uint256) {
         return currentInvoiceId;
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function totalInvoiceCreated() external view returns (uint256) {
         return currentInvoiceId - 1;
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function getDefaultHoldPeriod() external view returns (uint256) {
         return defaultHoldPeriod;
     }
 
-    /// inheritdoc IPaymentProcessor
+    /// @inheritdoc IPaymentProcessorV1
     function getInvoiceData(uint256 _invoiceId) external view returns (Invoice memory) {
         return invoiceData[_invoiceId];
     }

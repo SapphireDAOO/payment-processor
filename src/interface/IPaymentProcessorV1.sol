@@ -39,8 +39,10 @@ interface IPaymentProcessorV1 {
     /// @notice Thrown when an action is attempted on an invoice that has not been paid.
     error InvoiceNotPaid();
 
-    /// @notice Thrown when the payment amount exceeds the required invoice amount.
-    error ExcessivePayment();
+    /// @notice Thrown when the payment amount sent does not match the expected invoice price.
+    /// @param sent The amount of Ether (in wei) sent with the transaction.
+    /// @param expected The exact invoice price expected (in wei).
+    error IncorrectPaymentAmount(uint256 sent, uint256 expected);
 
     /// @notice Thrown when the fee value provided is zero.
     error FeeValueCanNotBeZero();
@@ -195,12 +197,6 @@ interface IPaymentProcessorV1 {
      * @return A struct containing the invoice's details.
      */
     function getInvoiceData(uint256 _invoiceId) external view returns (Invoice memory);
-
-    /**
-     * @notice Allows the fee receiver to withdraw the contract's balance.
-     * @dev The caller must be either the contract owner or the fee receiver.
-     */
-    function withdrawFees() external;
 
     /*
     * @notice Calculates the fee based on the provided amount and current fee rate.

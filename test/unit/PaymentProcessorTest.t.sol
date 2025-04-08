@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { SetUp } from "../SetUp.sol";
+import { SetUp } from "../util/SetUp.sol";
 import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 
 error Unauthorized();
@@ -95,21 +95,22 @@ contract PaymentProcessorTest is SetUp {
         deal(creatorOne, 1);
         vm.startPrank(creatorOne);
         uint256 invoiceId = pp.createInvoice(invoicePrice);
-        uint256 fee = pp.calculateFee(invoicePrice);
 
         vm.expectRevert(IPaymentProcessorV1.CreatorCannotPayOwnedInvoice.selector);
         pp.makeInvoicePayment{ value: 1 }(invoiceId);
         vm.stopPrank();
 
         vm.startPrank(payerOne);
-        // TRY VERY LOW PAYMENT
-        vm.expectRevert(IPaymentProcessorV1.ValueIsTooLow.selector);
-        pp.makeInvoicePayment{ value: 0 }(invoiceId);
 
-        // TRY EXCESSIVE PAYMENT
+        // TRY INCORRECT PAYMENT
 
-        vm.expectRevert(IPaymentProcessorV1.ExcessivePayment.selector);
-        pp.makeInvoicePayment{ value: invoicePrice + 1 }(invoiceId);
+        uint256 s = invoicePrice + 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPaymentProcessorV1.IncorrectPaymentAmount.selector, s, invoicePrice
+            )
+        );
+        pp.makeInvoicePayment{ value: s }(invoiceId);
 
         // TRY EXPIRED INVOICE
         vm.warp(block.timestamp + pp.VALID_PERIOD() + 1);
@@ -133,8 +134,7 @@ contract PaymentProcessorTest is SetUp {
         IPaymentProcessorV1.Invoice memory invoiceData = pp.getInvoiceData(invoiceId);
 
         assertEq(payerOne.balance, PAYER_ONE_INITIAL_BALANCE - invoicePrice);
-        assertEq(escrowAddress.balance, invoicePrice - fee);
-        assertEq(address(pp).balance, fee);
+        assertEq(escrowAddress.balance, invoicePrice);
         assertEq(escrowAddress.balance + address(pp).balance, invoicePrice);
         assertEq(invoiceData.escrow, escrowAddress);
         assertEq(invoiceData.status, pp.PAID());
@@ -161,7 +161,10 @@ contract PaymentProcessorTest is SetUp {
 
         vm.prank(creatorOne);
         pp.creatorsAction(invoiceId, true);
-        assertEq(pp.getInvoiceData(invoiceId).status, pp.ACCEPTED());
+        IPaymentProcessorV1.Invoice memory i = pp.getInvoiceData(invoiceId);
+        uint256 fee = pp.calculateFee(i.price);
+        assertEq(i.status, pp.ACCEPTED());
+        assertEq(pp.getFeeReceiver().balance, fee);
     }
 
     function test_payment_acceptance_after_acceptance_window() public {
@@ -170,7 +173,6 @@ contract PaymentProcessorTest is SetUp {
         uint256 invoiceId = pp.createInvoice(invoicePrice);
 
         vm.prank(payerOne);
-        invoicePrice = 0.1 ether;
         pp.makeInvoicePayment{ value: invoicePrice }(invoiceId);
 
         vm.warp(block.timestamp + pp.ACCEPTANCE_WINDOW() + 1);
@@ -183,13 +185,11 @@ contract PaymentProcessorTest is SetUp {
         uint256 invoicePrice = 100 ether;
         vm.prank(creatorOne);
         uint256 invoiceId = pp.createInvoice(invoicePrice);
-        uint256 fee = pp.calculateFee(invoicePrice);
 
         // 10000
         uint256 balanceBeforePayment = payerOne.balance;
         vm.prank(payerOne);
         pp.makeInvoicePayment{ value: invoicePrice }(invoiceId);
-        // 10000 - 100 = 9900
 
         vm.startPrank(payerOne);
         vm.expectRevert(IPaymentProcessorV1.InvoiceNotEligibleForRefund.selector);
@@ -199,19 +199,16 @@ contract PaymentProcessorTest is SetUp {
         pp.refundPayerAfterWindow(invoiceId);
         vm.stopPrank();
 
-        // 9900 + 99 = 9999
-
         uint256 balanceAfterRefund = payerOne.balance;
 
         assertEq(pp.getInvoiceData(invoiceId).status, pp.REFUNDED());
-        assertEq(balanceBeforePayment - fee, balanceAfterRefund);
+        assertEq(balanceBeforePayment, balanceAfterRefund);
     }
 
     function test_payment_rejection() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(creatorOne);
         uint256 invoiceId = pp.createInvoice(invoicePrice);
-        uint256 fee = pp.calculateFee(invoicePrice);
 
         vm.prank(payerOne);
         pp.makeInvoicePayment{ value: invoicePrice }(invoiceId);
@@ -222,7 +219,7 @@ contract PaymentProcessorTest is SetUp {
         pp.creatorsAction(invoiceId, false);
 
         assertEq(pp.getInvoiceData(invoiceId).status, pp.REJECTED());
-        assertEq(address(payerOne).balance, payerOneBalanceAfterPayment + invoicePrice - fee);
+        assertEq(payerOne.balance, payerOneBalanceAfterPayment + invoicePrice);
     }
 
     function test_default_hold_release_invoice() public {
@@ -288,34 +285,5 @@ contract PaymentProcessorTest is SetUp {
 
         assertEq(creatorOne.balance, invoicePrice - fee);
         assertEq(pp.getInvoiceData(invoiceId).status, pp.RELEASED());
-    }
-
-    function test_Ether_Withdrawal() public {
-        // CREATE INVOICE
-        uint256 invoicePrice = 100 ether;
-        vm.prank(creatorOne);
-        uint256 invoiceIdOne = pp.createInvoice(invoicePrice);
-
-        uint256 fee = pp.calculateFee(invoicePrice);
-
-        pp.makeInvoicePayment{ value: invoicePrice }(invoiceIdOne);
-
-        vm.expectRevert(Unauthorized.selector);
-        pp.withdrawFees();
-
-        vm.prank(feeReceiver);
-        pp.withdrawFees();
-        assertEq(address(feeReceiver).balance, fee);
-
-        vm.prank(creatorTwo);
-        uint256 invoiceIdTwo = pp.createInvoice(invoicePrice);
-
-        pp.makeInvoicePayment{ value: invoicePrice }(invoiceIdTwo);
-
-        uint256 receiversBalanceBefore = address(feeReceiver).balance;
-        vm.prank(owner);
-        pp.withdrawFees();
-        assertEq(address(feeReceiver).balance, fee + receiversBalanceBefore);
-        assertEq(address(pp).balance, 0);
     }
 }

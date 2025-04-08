@@ -26,6 +26,15 @@ interface IEscrow {
     function withdrawToCreator(address _creator) external;
 
     /**
+     * @notice Pays the processing fee for a specific invoice.
+     * @dev Can only be called by an authorized payment processor.
+     * @param _to The address receiving the fee.
+     * @param _invoiceId The ID of the invoice for which the fee is being paid.
+     * @param _fee The amount of the fee to be transferred (in wei).
+     */
+    function payFee(address _to, uint256 _invoiceId, uint256 _fee) external;
+
+    /**
      * @notice Emitted when funds are refunded to the payer.
      * @param invoiceId The ID of the invoice associated with the refund.
      * @param payer The address of the payer receiving the refund.
@@ -49,4 +58,11 @@ interface IEscrow {
      * @param value The amount of funds deposited in wei.
      */
     event FundsDeposited(uint256 indexed invoiceId, uint256 indexed value);
+
+    /**
+     * @notice Emitted when a fee is successfully paid to a payment processor.
+     * @param invoiceId The unique ID of the invoice associated with the fee.
+     * @param amount The fee amount paid (in wei).
+     */
+    event FeePaid(uint256 indexed invoiceId, uint256 amount);
 }

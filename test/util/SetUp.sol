@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { Test, console } from "forge-std/Test.sol";
-import { IPaymentProcessorV1, PaymentProcessorV1 } from "../src/PaymentProcessorV1.sol";
+import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 
 abstract contract SetUp is Test {
     PaymentProcessorV1 pp;

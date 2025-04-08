@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { Test, console } from "forge-std/Test.sol";
-import { PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
+import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 
 contract Handler is Test {
     PaymentProcessorV1 public pp;
@@ -61,23 +61,24 @@ contract Handler is Test {
 
             if (pp.getInvoiceData(_invoiceId).status != pp.CREATED()) return;
             uint256 iPrice = pp.getInvoiceData(_invoiceId).price;
-            _value = bound(_value, pp.BASIS_POINTS(), iPrice);
-            uint256 fee = pp.calculateFee(_value);
-            _value = bound(_value, fee + 1, price[_invoiceId]);
+            _value = bound(_value, iPrice, iPrice);
+
+            _value = bound(_value, 0, price[_invoiceId]);
 
             vm.prank(payer);
             pp.makeInvoicePayment{ value: _value }(_invoiceId);
-
-            balance += fee;
         }
     }
 
     function acceptInvoice(uint256 _invoiceId) public countCall("acceptInvoice") {
         if (ids.length > 0) {
             _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            if (pp.getInvoiceData(_invoiceId).status != pp.PAID()) return;
+            IPaymentProcessorV1.Invoice memory i = pp.getInvoiceData(_invoiceId);
+            if (i.status != pp.PAID()) return;
+            uint256 fee = pp.calculateFee(i.price);
             vm.prank(creator);
             pp.creatorsAction(_invoiceId, true);
+            balance += fee;
         }
     }
 
@@ -86,7 +87,7 @@ contract Handler is Test {
             _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
             if (pp.getInvoiceData(_invoiceId).status != pp.PAID()) return;
             vm.prank(creator);
-            pp.creatorsAction(_invoiceId, true);
+            pp.creatorsAction(_invoiceId, false);
         }
     }
 

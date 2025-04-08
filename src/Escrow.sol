@@ -52,6 +52,12 @@ contract Escrow is IEscrow {
         emit FundsRefunded(invoiceId, _payer, bal);
     }
 
+    /// @inheritdoc IEscrow
+    function payFee(address _to, uint256 _invoiceId, uint256 _fee) external onlyPaymentProcessor {
+        _withdraw(_to, _fee);
+        emit FeePaid(_invoiceId, _fee);
+    }
+
     /**
      * @notice Withdraws the entire balance of the contract to a specified address.
      * @dev This function attempts to transfer the full balance of the contract to the provided address.
@@ -61,11 +67,21 @@ contract Escrow is IEscrow {
      */
     function _withdraw(address _to) internal returns (uint256) {
         uint256 bal = address(this).balance;
-        (bool success,) = _to.call{ value: bal }("");
+        _withdraw(_to, bal);
+        return bal;
+    }
+    /**
+     * @notice Withdraws a specific amount of Ether to the given address.
+     * @dev Uses low-level call to transfer Ether and reverts if the transfer fails.
+     *  @param _to The address to receive the Ether.
+     *  @param _amount The amount of Ether to transfer (in wei).
+     */
+
+    function _withdraw(address _to, uint256 _amount) internal {
+        (bool success,) = _to.call{ value: _amount }("");
         if (!success) {
             revert TransferFailed();
         }
-        return bal;
     }
 
     function _onlyPaymentProcessor() internal view {
