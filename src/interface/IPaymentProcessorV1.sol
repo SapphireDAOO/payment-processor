@@ -21,7 +21,7 @@ interface IPaymentProcessorV1 {
         uint32 createdAt;
         /// @notice The Unix timestamp when the payment was completed.
         uint32 paymentTime;
-        /// @notice The timestampwhen funds in escrow can be released to the creator.
+        /// @notice The timestamp when funds in escrow can be released to the creator.
         uint32 releaseAt;
         /// @notice The current status of the invoice.
         uint32 status;
