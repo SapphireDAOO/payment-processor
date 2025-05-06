@@ -3,10 +3,10 @@ src = "src"
 out = "out"
 libs = ["lib"]
 
-remappings = ["solady/=lib/solady/src/"]
+remappings = ["solady/=lib/solady/src/", "@openzeppelin/=lib/openzeppelin-contracts/"]
 
 [fmt]
-line_length = 100
+line_length = 120
 bracket_spacing = true
 
 [invariant]

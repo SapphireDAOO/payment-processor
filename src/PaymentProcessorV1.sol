@@ -121,9 +121,7 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
             revert InvoiceIsNoLongerValid();
         }
 
-        address escrow = address(
-            new Escrow{ value: msg.value }(_invoiceId, invoice.creator, msg.sender, address(this))
-        );
+        address escrow = address(new Escrow{ value: msg.value }(_invoiceId, invoice.creator, msg.sender, address(this)));
 
         invoice.escrow = escrow;
         invoice.payer = msg.sender;
