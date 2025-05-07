@@ -97,6 +97,7 @@ contract PaymentProcessorV2 {
     mapping(uint256 id => MetaInvoice data) private metaInvoice;
     mapping(address token => bool allowed) private isAllowed;
     mapping(uint256 mId => mapping(uint256 id => Invoice)) private metaInvoiceToSubInvoice;
+    mapping(uint256 subInvId => uint256 metaInvId) private subInvoiceToMetaInvoiceId;
 
     constructor() {
         nextInvoiceId = 1;
@@ -113,14 +114,15 @@ contract PaymentProcessorV2 {
         MetaInvoice storage metaInv = metaInvoice[thisMetaInvoiceId];
         metaInv.lower = startInvoiceId;
         for (; i < sellers.length; i++) {
-            uint256 invoiceId = startInvoiceId + i;
+            startInvoiceId += i;
+
             totalPrice += prices[i];
-            Invoice memory inv = _openInvoice(invoiceId, sellers[i], buyer, prices[i], thisMetaInvoiceId);
-            invoice[invoiceId] = inv;
-            metaInvoiceToSubInvoice[thisMetaInvoiceId][invoiceId] = inv;
+            Invoice memory inv = _openInvoice(startInvoiceId, sellers[i], buyer, prices[i], thisMetaInvoiceId);
+            metaInvoiceToSubInvoice[thisMetaInvoiceId][startInvoiceId] = inv;
+            subInvoiceToMetaInvoiceId[startInvoiceId] = thisMetaInvoiceId;
         }
 
-        metaInv.upper = startInvoiceId + i;
+        metaInv.upper = startInvoiceId;
         metaInv.price = totalPrice;
         nextMetaInvoiceId++;
         nextInvoiceId += i;
@@ -144,10 +146,12 @@ contract PaymentProcessorV2 {
     function payMetaInvoice(uint256 id, address paymentToken) external payable {
         if (paymentToken != address(0) && !isAllowed[paymentToken]) revert();
         MetaInvoice memory meta = metaInvoice[id];
+        if (msg.sender != metaInvoiceToSubInvoice[id][meta.lower].buyer) revert();
 
         for (uint256 i = meta.lower; i <= meta.upper; i++) {
             if (metaInvoiceToSubInvoice[id][i].state == CANCELED) continue;
             metaInvoiceToSubInvoice[id][i].state = PAID;
+            emit MetaInvoiceSubPaid(i);
         }
 
         _handlePayment(paymentToken, msg.value, meta.price);
@@ -181,33 +185,36 @@ contract PaymentProcessorV2 {
 
     // cancel invoice
 
-    // function requestCancellation(uint256 id) external {
-    //     Invoice memory inv = invoice[id];
-    //     if (inv.state != INITIATED) revert();
-    //     if (msg.sender != inv.buyer) { }
-
-    //     // sender must be buyer or seller ??
-    //     // can only request
-    //     inv.state = CANCELED;
-    //     uint256 metaInvoiceId = inv.metaInvoiceId;
-    //     if (metaInvoiceId > 0) {
-    //         metaInvoice[metaInvoiceId].price -= inv.price;
-    //         metaInvoice[metaInvoiceId].invoices[id] = inv;
-    //     }
-    // }
-
     // dispute invoice
 
     // resolve dispute
 
     function getInvoice(uint256 id) external view returns (Invoice memory) {
-        return invoice[id];
+        uint256 metaInvoiceId = subInvoiceToMetaInvoiceId[id];
+        return metaInvoiceId == 0 ? invoice[id] : metaInvoiceToSubInvoice[metaInvoiceId][id];
+    }
+
+    function getMetaInvoice(uint256 id) external view returns (MetaInvoice memory) {
+        return metaInvoice[id];
     }
 
     function getMetaInvoiceTotalPrice(uint256 metaInvoiceId) external view returns (uint256) {
         return metaInvoice[metaInvoiceId].price;
     }
 
+    function getNextInvoiceId() external view returns (uint256) {
+        return nextInvoiceId;
+    }
+
+    function getNextMetaInvoiceId() external view returns (uint256) {
+        return nextMetaInvoiceId;
+    }
+
+    function getMetaInvoiceIdForSub(uint256 id) external view returns (uint256) {
+        return subInvoiceToMetaInvoiceId[id];
+    }
+
+    event MetaInvoiceSubPaid(uint256 indexed id);
     event OpenedMetaInvoice(uint256 indexed id, uint256 indexed price);
     event OpenedInvoice(uint256 indexed invoiceId, Invoice invoice);
 
