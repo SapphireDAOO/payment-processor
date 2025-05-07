@@ -11,8 +11,7 @@ contract PaymentProcessorV1Script is Script {
 
     function run() external returns (address) {
         vm.startBroadcast();
-        PaymentProcessorV1 pp =
-            new PaymentProcessorV1(msg.sender, FEE_RATE, DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
+        PaymentProcessorV1 pp = new PaymentProcessorV1(msg.sender, FEE_RATE, DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
         vm.stopBroadcast();
         return address(pp);
     }

@@ -75,11 +75,7 @@ contract PaymentProcessorTest is SetUp {
         uint256 currentInvoiceStatus = pp.getInvoiceData(invoiceId).status;
 
         vm.startPrank(creatorOne);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IPaymentProcessorV1.InvalidInvoiceState.selector, currentInvoiceStatus
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IPaymentProcessorV1.InvalidInvoiceState.selector, currentInvoiceStatus));
         pp.cancelInvoice(invoiceId);
 
         uint256 newInvoiceId = pp.createInvoice(invoicePrice);
@@ -105,11 +101,7 @@ contract PaymentProcessorTest is SetUp {
         // TRY INCORRECT PAYMENT
 
         uint256 s = invoicePrice + 1;
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IPaymentProcessorV1.IncorrectPaymentAmount.selector, s, invoicePrice
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IPaymentProcessorV1.IncorrectPaymentAmount.selector, s, invoicePrice));
         pp.makeInvoicePayment{ value: s }(invoiceId);
 
         // TRY EXPIRED INVOICE
@@ -123,11 +115,7 @@ contract PaymentProcessorTest is SetUp {
 
         uint256 currentInvoiceStatus = pp.getInvoiceData(invoiceId).status;
         // TRY ALREADY PAID INVOICE
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IPaymentProcessorV1.InvalidInvoiceState.selector, currentInvoiceStatus
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IPaymentProcessorV1.InvalidInvoiceState.selector, currentInvoiceStatus));
         pp.makeInvoicePayment{ value: invoicePrice }(invoiceId);
         vm.stopPrank();
 

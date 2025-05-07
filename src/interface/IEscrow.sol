@@ -48,9 +48,7 @@ interface IEscrow {
      * @param creator The address of the creator receiving the withdrawn funds.
      * @param amount The amount withdrawn in wei.
      */
-    event FundsWithdrawn(
-        uint256 indexed invoiceId, address indexed creator, uint256 indexed amount
-    );
+    event FundsWithdrawn(uint256 indexed invoiceId, address indexed creator, uint256 indexed amount);
 
     /**
      * @notice Emitted when funds are deposited into the escrow for an invoice.
