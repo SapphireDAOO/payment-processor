@@ -19,10 +19,15 @@ contract PaymentProcessorV2Test is Test {
 
     function test_singleInvoiceCreation() public {
         uint256 price = 0.01 ether;
-        pp.openInvoiceWithPayment{ value: price }(sellerOne, buyerOne, address(0), price);
-        Invoice memory i = pp.getInvoice(1);
-        assertEq(i.seller, sellerOne);
-        assertEq(address(pp).balance, price);
+        pp.openInvoice(sellerOne, buyerOne, price);
+        uint256 nextInvoiceId = pp.getNextInvoiceId();
+        Invoice memory inv = pp.getInvoice(nextInvoiceId - 1);
+        assertEq(inv.price, price);
+        assertEq(inv.buyer, buyerOne);
+        assertEq(inv.seller, sellerOne);
+        assertEq(inv.createdAt, block.timestamp);
+        assertEq(inv.metaInvoiceId, 0);
+        assertEq(nextInvoiceId, 2);
     }
 
     function test_openMultipleInvoiceWithPayment() public {
@@ -34,10 +39,27 @@ contract PaymentProcessorV2Test is Test {
         prices[0] = 0.01 ether;
         prices[1] = 0.02 ether;
 
-        pp.openMultipleInvoiceWithPayment(sellers, prices, buyerOne, address(0));
+        uint256 startInvoiceId = pp.getNextInvoiceId();
+        pp.openMetaInvoice(sellers, prices, buyerOne);
 
-        assertEq(pp.getChildInvoice(1, 1).metaInvoiceId, 1);
-        assertEq(pp.getChildInvoice(1, 2).metaInvoiceId, 1);
-        assertEq(pp.getMetaInvoiceTotalPrice(1), 0.03 ether);
+        uint256 thisMetaInvoiceId = pp.getNextMetaInvoiceId() - 1;
+        uint256 upper = pp.getNextInvoiceId() - 1;
+
+        MetaInvoice memory metaInv = pp.getMetaInvoice(thisMetaInvoiceId);
+        Invoice memory inv = pp.getInvoice(upper);
+
+        assertEq(inv.price, prices[1]);
+        assertEq(inv.buyer, buyerOne);
+        assertEq(inv.seller, sellerTwo);
+        assertEq(inv.createdAt, block.timestamp);
+        assertEq(inv.metaInvoiceId, thisMetaInvoiceId);
+        assertEq(pp.getNextInvoiceId(), upper + 1);
+
+        assertEq(thisMetaInvoiceId, 1);
+        assertEq(pp.getMetaInvoiceIdForSub(upper), thisMetaInvoiceId);
+        assertEq(pp.getMetaInvoiceIdForSub(startInvoiceId), thisMetaInvoiceId);
+        assertEq(metaInv.price, prices[0] + prices[1]);
+        assertEq(metaInv.upper, upper);
+        assertEq(metaInv.lower, startInvoiceId);
     }
 }
