@@ -167,6 +167,7 @@ contract PaymentProcessorV2 is EscrowFactory {
         for (uint256 i = meta.lower; i <= meta.upper; i++) {
             Invoice memory inv = metaInvoiceToSubInvoice[id][i];
             if (inv.state == CANCELED) continue;
+
             _invoicePayment(inv, inv.price, i, paymentToken);
             metaInvoiceToSubInvoice[id][i] = inv;
 
@@ -176,13 +177,13 @@ contract PaymentProcessorV2 is EscrowFactory {
 
     function _invoicePayment(Invoice memory inv, uint256 value, uint256 id, address paymentToken) internal {
         address predicted = getPredictedAddress(computeSalt(inv.seller, inv.buyer, id));
+        if (value > 0 && value != inv.price) revert InvalidNativePayment();
+        if (value == 0) {
+            inv.paymentToken = paymentToken;
+        }
 
         inv.state = PAID;
         inv.escrow = predicted;
-
-        if (msg.value == 0) {
-            inv.paymentToken = paymentToken;
-        }
 
         EscrowCreationParams memory params = EscrowCreationParams({
             seller: inv.seller,
@@ -192,21 +193,13 @@ contract PaymentProcessorV2 is EscrowFactory {
             paymentToken: paymentToken
         });
 
-        address actual = _handlePayment(params, inv.price);
-
-        if (actual != predicted) revert EscrowAddressMismatch();
-    }
-
-    function _handlePayment(EscrowCreationParams memory params, uint256 price) internal returns (address) {
-        if (params.value > 0 && params.value != price) revert InvalidNativePayment();
-
-        address escrow = _create(params);
+        address actual = _create(params);
 
         if (params.value == 0) {
-            params.paymentToken.safeTransferFrom(msg.sender, escrow, price);
+            params.paymentToken.safeTransferFrom(msg.sender, actual, inv.price);
         }
 
-        return escrow;
+        if (actual != predicted) revert EscrowAddressMismatch();
     }
 
     function _openInvoice(uint256 id, address seller, address buyer, uint256 price, uint256 metaInvoiceId)
