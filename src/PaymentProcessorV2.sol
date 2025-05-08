@@ -153,7 +153,7 @@ contract PaymentProcessorV2 is EscrowFactory {
     function paySingleInvoice(uint256 id, address paymentToken) external payable {
         if (paymentToken != address(0) && !isAllowed[paymentToken]) revert InvalidPaymentToken();
         Invoice memory inv = invoice[id];
-        _invoicePayment(inv, id, paymentToken);
+        _invoicePayment(inv, msg.value, id, paymentToken);
         invoice[id] = inv;
     }
 
@@ -167,14 +167,14 @@ contract PaymentProcessorV2 is EscrowFactory {
         for (uint256 i = meta.lower; i <= meta.upper; i++) {
             Invoice memory inv = metaInvoiceToSubInvoice[id][i];
             if (inv.state == CANCELED) continue;
-            _invoicePayment(inv, i, paymentToken);
+            _invoicePayment(inv, inv.price, i, paymentToken);
             metaInvoiceToSubInvoice[id][i] = inv;
 
             emit MetaInvoiceSubPaid(i);
         }
     }
 
-    function _invoicePayment(Invoice memory inv, uint256 id, address paymentToken) internal {
+    function _invoicePayment(Invoice memory inv, uint256 value, uint256 id, address paymentToken) internal {
         address predicted = getPredictedAddress(computeSalt(inv.seller, inv.buyer, id));
 
         inv.state = PAID;
@@ -184,24 +184,26 @@ contract PaymentProcessorV2 is EscrowFactory {
             inv.paymentToken = paymentToken;
         }
 
-        uint256 feeValue = calculateFee(inv.price);
+        EscrowCreationParams memory params = EscrowCreationParams({
+            seller: inv.seller,
+            buyer: inv.buyer,
+            invoiceId: id,
+            value: value,
+            paymentToken: paymentToken
+        });
 
-        address actual = _handlePayment(paymentToken, id, msg.value, inv.price - feeValue);
-        IEscrow(actual).payFee(address(this), feeValue, feeValue);
+        address actual = _handlePayment(params, inv.price);
 
         if (actual != predicted) revert EscrowAddressMismatch();
     }
 
-    function _handlePayment(address paymentToken, uint256 invoiceId, uint256 value, uint256 price)
-        internal
-        returns (address)
-    {
-        if (value > 0 && value != price) revert InvalidNativePayment();
+    function _handlePayment(EscrowCreationParams memory params, uint256 price) internal returns (address) {
+        if (params.value > 0 && params.value != price) revert InvalidNativePayment();
 
-        address escrow = _create(msg.sender, invoiceId, value);
+        address escrow = _create(params);
 
-        if (value == 0) {
-            paymentToken.safeTransferFrom(msg.sender, escrow, price);
+        if (params.value == 0) {
+            params.paymentToken.safeTransferFrom(msg.sender, escrow, price);
         }
 
         return escrow;

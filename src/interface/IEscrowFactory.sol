@@ -6,7 +6,7 @@ interface IEscrowFactory {
         address seller;
         address buyer;
         uint256 invoiceId;
-        uint256 invoicePaymentValue;
+        uint256 value;
         address paymentToken;
     }
 

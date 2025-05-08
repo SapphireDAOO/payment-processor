@@ -26,21 +26,20 @@ abstract contract EscrowFactory is IEscrowFactory {
      *  - seller: The address of the seller or invoice creator.
      *  - buyer: The address of the payer (msg.sender).
      *  - invoiceId: The unique identifier of the invoice.
-     *  - invoicePaymentValue: The value of the payment in wei (used only for native ETH payments).
+     *  - value: The value of the payment in wei (used only for native ETH payments).
      *  - paymentToken: The token address used for payment; address(0) indicates native ETH.
      * @return escrow The address of the newly deployed Escrow contract.
      */
     function _create(EscrowCreationParams memory params) internal returns (address) {
-        bytes memory constructorArg = abi.encode(params.invoiceId, params.seller, msg.sender, address(this));
+        bytes memory constructorArg = abi.encode(params.invoiceId, params.seller, params.buyer, address(this));
         bytes32 salt = computeSalt(params.seller, params.buyer, params.invoiceId);
 
         if (params.paymentToken != address(0)) {
-            params.invoicePaymentValue = 0;
+            params.value = 0;
         }
 
-        address escrow = CREATE3.deployDeterministic(
-            params.invoicePaymentValue, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt
-        );
+        address escrow =
+            CREATE3.deployDeterministic(params.value, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt);
 
         emit EscrowCreated(params.invoiceId, escrow);
 
