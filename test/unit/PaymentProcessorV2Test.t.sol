@@ -3,9 +3,11 @@ pragma solidity 0.8.28;
 
 import { Test, console } from "forge-std/Test.sol";
 import { PaymentProcessorV2, Invoice, MetaInvoice } from "../../src/PaymentProcessorV2.sol";
+import { MockERC20 } from "../mock/mERC20.sol";
 
 contract PaymentProcessorV2Test is Test {
     PaymentProcessorV2 pp;
+    MockERC20 paymentTokenOne;
 
     address admin = address(1);
     address buyerOne = address(2);
@@ -15,6 +17,12 @@ contract PaymentProcessorV2Test is Test {
 
     function setUp() public {
         pp = new PaymentProcessorV2();
+        paymentTokenOne = new MockERC20("Payment token", "PTK");
+
+        pp.setPaymentTokenState(address(paymentTokenOne), true);
+
+        vm.deal(buyerOne, 100 ether);
+        vm.deal(sellerOne, 100 ether);
     }
 
     function test_singleInvoiceCreation() public {
@@ -61,5 +69,31 @@ contract PaymentProcessorV2Test is Test {
         assertEq(metaInv.price, prices[0] + prices[1]);
         assertEq(metaInv.upper, upper);
         assertEq(metaInv.lower, startInvoiceId);
+    }
+
+    function test_nativeTokenPaymentForSingleInvoice() public {
+        uint256 price = 0.01 ether;
+        pp.openInvoice(sellerOne, buyerOne, price);
+        uint256 thisInvoiceId = pp.getNextInvoiceId() - 1;
+
+        vm.startPrank(buyerOne);
+
+        vm.expectRevert(PaymentProcessorV2.InvalidPaymentToken.selector);
+        pp.paySingleInvoice(thisInvoiceId, address(12));
+
+        vm.expectRevert(PaymentProcessorV2.InvalidNativePayment.selector);
+        pp.paySingleInvoice{ value: 0.001 ether }(thisInvoiceId, address(0));
+
+        pp.paySingleInvoice{ value: price }(thisInvoiceId, address(0));
+
+        Invoice memory inv = pp.getInvoice(thisInvoiceId);
+
+        address escrow = inv.escrow;
+
+        vm.stopPrank();
+
+        assertEq(escrow.balance, price);
+        assertEq(inv.paymentToken, address(0));
+        assertEq(inv.state, pp.PAID());
     }
 }
