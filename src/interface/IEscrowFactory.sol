@@ -2,24 +2,32 @@
 pragma solidity 0.8.28;
 
 interface IEscrowFactory {
+    struct EscrowCreationParams {
+        address seller;
+        address buyer;
+        uint256 invoiceId;
+        uint256 invoicePaymentValue;
+        address paymentToken;
+    }
+
     /**
      * @notice Predicts the address of a contract based on the provided salt.
      * @dev Uses the CREATE2 opcode for deterministic contract deployment.
      *      This function allows pre-calculating the address before deployment.
-     * @param _salt The unique salt value used for the contract deployment.
+     * @param salt The unique salt value used for the contract deployment.
      * @return The address where the contract would be deployed with the given salt.
      */
-    function getPredictedAddress(bytes32 _salt) external view returns (address);
+    function getPredictedAddress(bytes32 salt) external view returns (address);
 
     /**
      * @notice Computes a unique salt value based on the provided parameters.
      * @dev The salt is used to deterministically deploy or identify contracts via CREATE2.
-     * @param _creator The address of the invoice creator.
-     * @param _payer The address of the payer associated with the invoice.
-     * @param _invoiceId The unique ID of the invoice.
+     * @param creator The address of the invoice creator.
+     * @param payer The address of the payer associated with the invoice.
+     * @param invoiceId The unique ID of the invoice.
      * @return A `bytes32` salt value derived from the input parameters.
      */
-    function computeSalt(address _creator, address _payer, uint256 _invoiceId) external pure returns (bytes32);
+    function computeSalt(address creator, address payer, uint256 invoiceId) external pure returns (bytes32);
 
     /**
      * @notice Emitted when a new escrow contract is created.

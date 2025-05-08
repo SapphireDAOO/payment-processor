@@ -8,33 +8,41 @@ import { IEscrowFactory } from "./interface/IEscrowFactory.sol";
 
 abstract contract EscrowFactory is IEscrowFactory {
     /// @inheritdoc IEscrowFactory
-    function computeSalt(address _creator, address _payer, uint256 _invoiceId) public pure returns (bytes32) {
-        return keccak256(abi.encode(_creator, _payer, _invoiceId));
+    function computeSalt(address seller, address buyer, uint256 invoiceId) public pure returns (bytes32) {
+        return keccak256(abi.encode(seller, buyer, invoiceId));
     }
 
     /// @inheritdoc IEscrowFactory
-    function getPredictedAddress(bytes32 _salt) public view returns (address) {
-        return CREATE3.predictDeterministicAddress(_salt);
+    function getPredictedAddress(bytes32 salt) public view returns (address) {
+        return CREATE3.predictDeterministicAddress(salt);
     }
 
     /**
-     * @notice Creates a new Escrow contract deterministically using CREATE3.
-     * @dev This function deploys the `Escrow` contract at a deterministic address, based on the provided arguments.
-     *      The function uses `CREATE3.deployDeterministic` to ensure that the contract is deployed at a fixed address
-     * @param _creator The address of the creator of the escrow.
-     * @param _invoiceId The unique ID of the invoice associated with this escrow.
-     * @param _invoicePaymentValue The value of the payment associated with the escrow.
-     * @return The address of the newly deployed `Escrow` contract.
+     * @notice Deploys a new Escrow contract deterministically using CREATE3.
+     * @dev Uses a unique salt derived from the seller, buyer, and invoice ID to ensure predictable address generation.
+     *      If the payment is in ERC20, no native ETH is sent during deployment. Constructor arguments include the invoice ID,
+     *      seller, buyer, and payment processor (this contract).
+     * @param params Struct containing:
+     *  - seller: The address of the seller or invoice creator.
+     *  - buyer: The address of the payer (msg.sender).
+     *  - invoiceId: The unique identifier of the invoice.
+     *  - invoicePaymentValue: The value of the payment in wei (used only for native ETH payments).
+     *  - paymentToken: The token address used for payment; address(0) indicates native ETH.
+     * @return escrow The address of the newly deployed Escrow contract.
      */
-    function _create(address _creator, uint256 _invoiceId, uint256 _invoicePaymentValue) internal returns (address) {
-        bytes memory constructorArg = abi.encode(_invoiceId, _creator, msg.sender, address(this));
-        bytes32 salt = computeSalt(_creator, msg.sender, _invoiceId);
+    function _create(EscrowCreationParams memory params) internal returns (address) {
+        bytes memory constructorArg = abi.encode(params.invoiceId, params.seller, msg.sender, address(this));
+        bytes32 salt = computeSalt(params.seller, params.buyer, params.invoiceId);
+
+        if (params.paymentToken != address(0)) {
+            params.invoicePaymentValue = 0;
+        }
 
         address escrow = CREATE3.deployDeterministic(
-            _invoicePaymentValue, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt
+            params.invoicePaymentValue, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt
         );
 
-        emit EscrowCreated(_invoiceId, escrow);
+        emit EscrowCreated(params.invoiceId, escrow);
 
         return escrow;
     }
