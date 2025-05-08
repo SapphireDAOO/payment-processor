@@ -2,8 +2,11 @@
 pragma solidity 0.8.28;
 
 import { IEscrow } from "./interface/IEscrow.sol";
+import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 
 contract Escrow is IEscrow {
+    using SafeTransferLib for address;
+
     /// @notice The address of the payer associated with this escrow.
     address public immutable payer;
 
@@ -36,6 +39,10 @@ contract Escrow is IEscrow {
         payer = _payer;
         paymentProcessor = _paymentProcessor;
         emit FundsDeposited(_invoiceId, msg.value);
+    }
+
+    function withdraw(address token, address receiver) external onlyPaymentProcessor {
+        token.safeTransferAll(receiver);
     }
 
     /// @inheritdoc IEscrow
