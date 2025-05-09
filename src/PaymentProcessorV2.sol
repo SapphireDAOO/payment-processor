@@ -84,10 +84,11 @@ struct MetaInvoice {
 
 contract PaymentProcessorV2 is EscrowFactory {
     error InvalidBuyer();
-    error InvalidMetaPayment();
+    error InvalidMetaInvoicePayment();
     error InvalidPaymentToken();
     error InvalidNativePayment();
     error EscrowAddressMismatch();
+    error NoSubInvoiceCancelled();
 
     using SafeTransferLib for address;
 
@@ -161,7 +162,7 @@ contract PaymentProcessorV2 is EscrowFactory {
         if (paymentToken != address(0) && !isAllowed[paymentToken]) revert InvalidPaymentToken();
         MetaInvoice memory meta = metaInvoice[id];
 
-        if (msg.value != meta.price) revert InvalidMetaPayment();
+        if (msg.value != meta.price && msg.value > 0) revert InvalidMetaInvoicePayment();
         if (msg.sender != metaInvoiceToSubInvoice[id][meta.lower].buyer) revert InvalidBuyer();
 
         for (uint256 i = meta.lower; i <= meta.upper; i++) {
@@ -175,31 +176,70 @@ contract PaymentProcessorV2 is EscrowFactory {
         }
     }
 
-    function _invoicePayment(Invoice memory inv, uint256 value, uint256 id, address paymentToken) internal {
-        address predicted = getPredictedAddress(computeSalt(inv.seller, inv.buyer, id));
-        if (value > 0 && value != inv.price) revert InvalidNativePayment();
-        if (value == 0) {
-            inv.paymentToken = paymentToken;
+    function acceptInvoice(uint256 id) external {
+        Invoice memory inv = _getInvoice(id);
+        if (inv.state != PAID) revert();
+        if (inv.seller != msg.sender) revert();
+
+        inv.state = ACCEPTED;
+
+        _updateInvoice(id, inv);
+    }
+
+    function cancelMetaInvoice(uint256 id) external {
+        MetaInvoice memory meta = metaInvoice[id];
+
+        if (msg.sender != metaInvoiceToSubInvoice[id][meta.lower].buyer) revert InvalidBuyer();
+        uint256 i = meta.lower;
+        for (; i <= meta.upper; i++) {
+            Invoice memory inv = metaInvoiceToSubInvoice[id][i];
+
+            if (inv.state != PAID && inv.state != INITIATED) continue;
+
+            metaInvoiceToSubInvoice[id][i].state = REJECTED;
+
+            // refund to buyer & emit event
         }
+
+        if (i < meta.upper) revert NoSubInvoiceCancelled();
+    }
+
+    function cancelInvoice(uint256[] memory ids) external {
+        for (uint256 i; i < ids.length; i++) {
+            cancelInvoice(ids[i]);
+        }
+    }
+
+    function cancelInvoice(uint256 id) public {
+        Invoice memory inv = _getInvoice(id);
+        if (msg.sender != inv.buyer && inv.state != INITIATED) revert();
+        if (msg.sender != inv.seller && inv.state != PAID) revert();
+
+        inv.state = msg.sender == inv.seller ? REJECTED : CANCELED;
+
+        _updateInvoice(id, inv);
+    }
+
+    function _invoicePayment(Invoice memory inv, uint256 value, uint256 id, address paymentToken) internal {
+        if (value > 0 && value != inv.price) revert InvalidNativePayment();
+
+        address escrowAddress = _create(
+            EscrowCreationParams({
+                seller: inv.seller,
+                buyer: inv.buyer,
+                invoiceId: id,
+                value: value,
+                paymentToken: paymentToken
+            })
+        );
 
         inv.state = PAID;
-        inv.escrow = predicted;
+        inv.escrow = escrowAddress;
 
-        EscrowCreationParams memory params = EscrowCreationParams({
-            seller: inv.seller,
-            buyer: inv.buyer,
-            invoiceId: id,
-            value: value,
-            paymentToken: paymentToken
-        });
-
-        address actual = _create(params);
-
-        if (params.value == 0) {
-            params.paymentToken.safeTransferFrom(msg.sender, actual, inv.price);
+        if (paymentToken != address(0)) {
+            inv.paymentToken = paymentToken;
+            paymentToken.safeTransferFrom(msg.sender, escrowAddress, inv.price);
         }
-
-        if (actual != predicted) revert EscrowAddressMismatch();
     }
 
     function _openInvoice(uint256 id, address seller, address buyer, uint256 price, uint256 metaInvoiceId)
@@ -222,13 +262,16 @@ contract PaymentProcessorV2 is EscrowFactory {
         return inv;
     }
 
-    // introduce escrow
+    // function cancelInvoice(uint256 id) external {
+    //     Invoice memory inv = _getInvoice(id);
 
-    // cancel invoice
+    // }
 
     // dispute invoice
 
     // resolve dispute
+
+    // release
 
     function calculateFee(uint256 _amount) public view returns (uint256) {
         return (_amount * feeRate) / BASIS_POINTS;
@@ -236,6 +279,14 @@ contract PaymentProcessorV2 is EscrowFactory {
 
     function setPaymentTokenState(address token, bool state) external {
         isAllowed[token] = state;
+    }
+
+    function _updateInvoice(uint256 id, Invoice memory inv) internal {
+        if (inv.metaInvoiceId == 0) {
+            invoice[id] = inv;
+        } else {
+            metaInvoiceToSubInvoice[inv.metaInvoiceId][id] = inv;
+        }
     }
 
     function _getInvoice(uint256 id) internal view returns (Invoice memory) {
@@ -249,10 +300,6 @@ contract PaymentProcessorV2 is EscrowFactory {
 
     function getMetaInvoice(uint256 id) external view returns (MetaInvoice memory) {
         return metaInvoice[id];
-    }
-
-    function getMetaInvoiceTotalPrice(uint256 metaInvoiceId) external view returns (uint256) {
-        return metaInvoice[metaInvoiceId].price;
     }
 
     function getNextInvoiceId() external view returns (uint256) {
