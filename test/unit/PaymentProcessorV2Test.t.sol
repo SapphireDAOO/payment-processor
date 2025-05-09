@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import { Test, console } from "forge-std/Test.sol";
 import { PaymentProcessorV2, Invoice, MetaInvoice } from "../../src/PaymentProcessorV2.sol";
 import { MockERC20 } from "../mock/mERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PaymentProcessorV2Test is Test {
     PaymentProcessorV2 pp;
@@ -20,6 +21,11 @@ contract PaymentProcessorV2Test is Test {
         paymentTokenOne = new MockERC20("Payment token", "PTK");
 
         pp.setPaymentTokenState(address(paymentTokenOne), true);
+
+        paymentTokenOne.mint(buyerOne, 100_000 ether);
+
+        vm.prank(buyerOne);
+        IERC20(paymentTokenOne).approve(address(pp), type(uint256).max);
 
         vm.deal(buyerOne, 100 ether);
         vm.deal(sellerOne, 100 ether);
@@ -85,15 +91,110 @@ contract PaymentProcessorV2Test is Test {
         pp.paySingleInvoice{ value: 0.001 ether }(thisInvoiceId, address(0));
 
         pp.paySingleInvoice{ value: price }(thisInvoiceId, address(0));
+        vm.stopPrank();
 
         Invoice memory inv = pp.getInvoice(thisInvoiceId);
 
-        address escrow = inv.escrow;
+        assertEq(inv.escrow.balance, price);
+        assertEq(inv.paymentToken, address(0));
+        assertEq(inv.state, pp.PAID());
+    }
+
+    function test_nativeTokenPaymentForMetaInvoice() public {
+        address[] memory sellers = new address[](2);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 0.01 ether;
+        prices[1] = 0.02 ether;
+
+        uint256 thisInvoiceId = pp.getNextInvoiceId();
+        pp.openMetaInvoice(sellers, prices, buyerOne);
+
+        vm.expectRevert(PaymentProcessorV2.InvalidBuyer.selector);
+        pp.payMetaInvoice{ value: 0.03 ether }(thisInvoiceId, address(0));
+
+        vm.startPrank(buyerOne);
+        vm.expectRevert(PaymentProcessorV2.InvalidMetaInvoicePayment.selector);
+        pp.payMetaInvoice{ value: 0.01 ether }(thisInvoiceId, address(0));
+
+        vm.expectRevert(PaymentProcessorV2.InvalidPaymentToken.selector);
+        pp.payMetaInvoice(thisInvoiceId, address(12));
+
+        pp.payMetaInvoice{ value: 0.03 ether }(thisInvoiceId, address(0));
 
         vm.stopPrank();
 
-        assertEq(escrow.balance, price);
-        assertEq(inv.paymentToken, address(0));
+        Invoice memory invOne = pp.getInvoice(thisInvoiceId);
+        address escrowOne = _getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
+
+        assertEq(invOne.state, pp.PAID());
+        assertEq(invOne.escrow, escrowOne);
+        assertEq(invOne.escrow.balance, prices[0]);
+        assertEq(invOne.paymentToken, address(0));
+
+        Invoice memory invTwo = pp.getInvoice(pp.getNextInvoiceId() - 1);
+        address escrowTwo = _getEscrowAddress(invTwo.seller, invTwo.buyer, pp.getNextInvoiceId() - 1);
+
+        assertEq(invTwo.state, pp.PAID());
+        assertEq(invTwo.escrow, escrowTwo);
+        assertEq(invTwo.escrow.balance, prices[1]);
+        assertEq(invTwo.paymentToken, address(0));
+    }
+
+    function test_erc20PaymentForSingleInvoice() public {
+        uint256 price = 0.01 ether;
+        pp.openInvoice(sellerOne, buyerOne, price);
+        uint256 thisInvoiceId = pp.getNextInvoiceId() - 1;
+
+        vm.startPrank(buyerOne);
+
+        pp.paySingleInvoice(thisInvoiceId, address(paymentTokenOne));
+        vm.stopPrank();
+
+        Invoice memory inv = pp.getInvoice(thisInvoiceId);
+
+        assertEq(IERC20(paymentTokenOne).balanceOf(inv.escrow), price);
+        assertEq(inv.paymentToken, address(paymentTokenOne));
         assertEq(inv.state, pp.PAID());
+    }
+
+    function test_erc20PaymentForMetaInvoice() public {
+        address[] memory sellers = new address[](2);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 0.01 ether;
+        prices[1] = 0.02 ether;
+
+        uint256 thisInvoiceId = pp.getNextInvoiceId();
+        pp.openMetaInvoice(sellers, prices, buyerOne);
+
+        vm.prank(buyerOne);
+
+        pp.payMetaInvoice(thisInvoiceId, address(paymentTokenOne));
+
+        Invoice memory invOne = pp.getInvoice(thisInvoiceId);
+        address escrowOne = _getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
+
+        assertEq(invOne.state, pp.PAID());
+        assertEq(invOne.escrow, escrowOne);
+        assertEq(IERC20(paymentTokenOne).balanceOf(invOne.escrow), prices[0]);
+        assertEq(invOne.paymentToken, address(paymentTokenOne));
+
+        Invoice memory invTwo = pp.getInvoice(pp.getNextInvoiceId() - 1);
+        address escrowTwo = _getEscrowAddress(invTwo.seller, invTwo.buyer, pp.getNextInvoiceId() - 1);
+
+        assertEq(invTwo.state, pp.PAID());
+        assertEq(invTwo.escrow, escrowTwo);
+        assertEq(IERC20(paymentTokenOne).balanceOf(invTwo.escrow), prices[1]);
+        assertEq(invTwo.paymentToken, address(paymentTokenOne));
+    }
+
+    function _getEscrowAddress(address seller, address buyer, uint256 invoiceId) internal view returns (address) {
+        bytes32 salt = pp.computeSalt(seller, buyer, invoiceId);
+        return pp.getPredictedAddress(salt);
     }
 }
