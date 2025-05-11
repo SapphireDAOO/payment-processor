@@ -89,6 +89,10 @@ contract PaymentProcessorV2 is EscrowFactory {
     error InvalidNativePayment();
     error EscrowAddressMismatch();
     error NoSubInvoiceCancelled();
+    error InvalidInvoiceState();
+    error UnauthorizedSeller();
+    error InvoiceDoesNotExist();
+    error UnauthorizedBuyer();
 
     using SafeTransferLib for address;
 
@@ -97,12 +101,18 @@ contract PaymentProcessorV2 is EscrowFactory {
 
     uint256 private feeRate;
 
+    // a variable of the number of days before an invoice is responsed to after creation/payment
+
     uint32 public constant INITIATED = 1;
     uint32 public constant PAID = INITIATED + 1;
     uint32 public constant ACCEPTED = PAID + 1;
     uint32 public constant CANCELED = ACCEPTED + 1;
-    uint32 public constant REJECTED = CANCELED + 1;
+    uint32 public constant CANCELATION_REQUESTED = CANCELED + 1;
+    uint32 public constant CANCELATION_ACCEPTED = CANCELATION_REQUESTED + 1;
+    uint32 public constant CANCELATION_REJECTED = CANCELATION_ACCEPTED + 1;
+    uint32 public constant REJECTED = CANCELATION_REJECTED + 1;
     uint32 public constant DISPUTED = REJECTED + 1;
+
     uint32 public constant DISPUTE_RESOLVED = DISPUTED + 1;
     uint32 public constant DISPUTE_DISMISSED = DISPUTE_RESOLVED + 1;
     uint32 public constant DISPUTE_SETTLED = DISPUTE_DISMISSED + 1;
@@ -110,8 +120,8 @@ contract PaymentProcessorV2 is EscrowFactory {
     uint256 public constant BASIS_POINTS = 10_000;
 
     mapping(uint256 id => Invoice data) private invoice;
-    mapping(uint256 metaInvoiceId => MetaInvoice data) private metaInvoice;
     mapping(address token => bool allowed) private isAllowed;
+    mapping(uint256 metaInvoiceId => MetaInvoice data) private metaInvoice;
     mapping(uint256 subInvoiceId => uint256 metaInvoiceId) private subInvoiceToMetaInvoiceId;
     mapping(uint256 metaInvoiceId => mapping(uint256 subInvoiceId => Invoice invoices)) private metaInvoiceToSubInvoice;
 
@@ -130,15 +140,15 @@ contract PaymentProcessorV2 is EscrowFactory {
         MetaInvoice storage metaInv = metaInvoice[thisMetaInvoiceId];
         metaInv.lower = startInvoiceId;
         for (; i < sellers.length; i++) {
-            startInvoiceId += i;
+            uint256 invoiceId = startInvoiceId + i;
             totalPrice += prices[i];
 
-            Invoice memory inv = _openInvoice(startInvoiceId, sellers[i], buyer, prices[i], thisMetaInvoiceId);
-            metaInvoiceToSubInvoice[thisMetaInvoiceId][startInvoiceId] = inv;
-            subInvoiceToMetaInvoiceId[startInvoiceId] = thisMetaInvoiceId;
+            Invoice memory inv = _openInvoice(invoiceId, sellers[i], buyer, prices[i], thisMetaInvoiceId);
+            metaInvoiceToSubInvoice[thisMetaInvoiceId][invoiceId] = inv;
+            subInvoiceToMetaInvoiceId[invoiceId] = thisMetaInvoiceId;
         }
 
-        metaInv.upper = startInvoiceId;
+        metaInv.upper = startInvoiceId + i - 1;
         metaInv.price = totalPrice;
         nextMetaInvoiceId++;
         nextInvoiceId += i;
@@ -153,6 +163,7 @@ contract PaymentProcessorV2 is EscrowFactory {
 
     function paySingleInvoice(uint256 id, address paymentToken) external payable {
         if (paymentToken != address(0) && !isAllowed[paymentToken]) revert InvalidPaymentToken();
+
         Invoice memory inv = invoice[id];
         _invoicePayment(inv, msg.value, id, paymentToken);
         invoice[id] = inv;
@@ -161,6 +172,7 @@ contract PaymentProcessorV2 is EscrowFactory {
     function payMetaInvoice(uint256 id, address paymentToken) external payable {
         if (paymentToken != address(0) && !isAllowed[paymentToken]) revert InvalidPaymentToken();
         MetaInvoice memory meta = metaInvoice[id];
+        if (meta.price == 0) revert InvoiceDoesNotExist();
 
         if (msg.value != meta.price && msg.value > 0) revert InvalidMetaInvoicePayment();
         if (msg.sender != metaInvoiceToSubInvoice[id][meta.lower].buyer) revert InvalidBuyer();
@@ -176,32 +188,47 @@ contract PaymentProcessorV2 is EscrowFactory {
         }
     }
 
-    function acceptInvoice(uint256 id) external {
+    function acceptInvoice(uint256[] calldata ids) external {
+        for (uint256 i = 0; i < ids.length; i++) {
+            acceptInvoice(ids[i]);
+        }
+    }
+
+    function acceptInvoice(uint256 id) public {
         Invoice memory inv = _getInvoice(id);
-        if (inv.state != PAID) revert();
-        if (inv.seller != msg.sender) revert();
+        if (inv.seller != msg.sender) revert UnauthorizedSeller();
+        if (inv.state != PAID) revert InvalidInvoiceState();
 
         inv.state = ACCEPTED;
 
         _updateInvoice(id, inv);
+
+        emit InvoiceAccepted(id);
     }
 
-    function cancelMetaInvoice(uint256 id) external {
-        MetaInvoice memory meta = metaInvoice[id];
+    function handleCancelationRequest(uint256 id, bool accept) public {
+        Invoice memory inv = _getInvoice(id);
+        inv.state = accept ? CANCELATION_ACCEPTED : CANCELATION_REJECTED;
+        _updateInvoice(id, inv);
 
-        if (msg.sender != metaInvoiceToSubInvoice[id][meta.lower].buyer) revert InvalidBuyer();
-        uint256 i = meta.lower;
-        for (; i <= meta.upper; i++) {
-            Invoice memory inv = metaInvoiceToSubInvoice[id][i];
-
-            if (inv.state != PAID && inv.state != INITIATED) continue;
-
-            metaInvoiceToSubInvoice[id][i].state = REJECTED;
-
-            // refund to buyer & emit event
+        if (inv.state == CANCELATION_ACCEPTED) {
+            _refundPayer(inv.escrow, inv.buyer, inv.paymentToken);
         }
+    }
 
-        if (i < meta.upper) revert NoSubInvoiceCancelled();
+    function requestCancelation(uint256[] memory ids) public {
+        for (uint256 i = 0; i < ids.length; i++) {
+            requestCancelation(ids[i]);
+        }
+    }
+
+    function requestCancelation(uint256 id) public {
+        Invoice memory inv = _getInvoice(id);
+        if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
+        if (inv.state != PAID) revert InvalidInvoiceState();
+        // check if it is in time
+        inv.state = CANCELATION_REQUESTED;
+        _updateInvoice(id, inv);
     }
 
     function cancelInvoice(uint256[] memory ids) external {
@@ -212,12 +239,21 @@ contract PaymentProcessorV2 is EscrowFactory {
 
     function cancelInvoice(uint256 id) public {
         Invoice memory inv = _getInvoice(id);
-        if (msg.sender != inv.buyer && inv.state != INITIATED) revert();
-        if (msg.sender != inv.seller && inv.state != PAID) revert();
+        if (msg.sender != inv.seller && inv.state != PAID) revert("INVALID STATE");
 
-        inv.state = msg.sender == inv.seller ? REJECTED : CANCELED;
-
+        inv.state = CANCELED;
         _updateInvoice(id, inv);
+        _refundPayer(inv.escrow, inv.buyer, inv.paymentToken);
+
+        emit InvoiceCanceled(id);
+    }
+
+    function _refundPayer(address escrow, address buyer, address paymentToken) internal {
+        if (paymentToken == address(0)) {
+            IEscrow(escrow).refundToPayer(buyer);
+        } else {
+            IEscrow(escrow).withdraw(paymentToken, buyer);
+        }
     }
 
     function _invoicePayment(Invoice memory inv, uint256 value, uint256 id, address paymentToken) internal {
@@ -262,16 +298,13 @@ contract PaymentProcessorV2 is EscrowFactory {
         return inv;
     }
 
-    // function cancelInvoice(uint256 id) external {
-    //     Invoice memory inv = _getInvoice(id);
-
-    // }
-
     // dispute invoice
 
     // resolve dispute
 
     // release
+
+    // may be allow multiple action on invoice in one?
 
     function calculateFee(uint256 _amount) public view returns (uint256) {
         return (_amount * feeRate) / BASIS_POINTS;
@@ -302,6 +335,14 @@ contract PaymentProcessorV2 is EscrowFactory {
         return metaInvoice[id];
     }
 
+    function totalUniqueInvoiceCreated() external view returns (uint256) {
+        return nextInvoiceId - 1;
+    }
+
+    function totalMetaInvoiceCreated() external view returns (uint256) {
+        return nextMetaInvoiceId - 1;
+    }
+
     function getNextInvoiceId() external view returns (uint256) {
         return nextInvoiceId;
     }
@@ -314,9 +355,12 @@ contract PaymentProcessorV2 is EscrowFactory {
         return subInvoiceToMetaInvoiceId[id];
     }
 
+    event InvoiceAccepted(uint256 indexed invoiceId);
     event MetaInvoiceSubPaid(uint256 indexed id);
     event OpenedMetaInvoice(uint256 indexed id, uint256 indexed price);
     event OpenedInvoice(uint256 indexed invoiceId, Invoice invoice);
+    event InvoiceCanceled(uint256 indexed invoiceId);
+    event InvoiceRejected(uint256 indexed invoiceId);
 
     // take the price input and the amount transferred should be equal to the price input
 }
