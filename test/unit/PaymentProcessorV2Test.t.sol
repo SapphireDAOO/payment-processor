@@ -29,6 +29,9 @@ contract PaymentProcessorV2Test is Test {
 
         vm.deal(buyerOne, 100 ether);
         vm.deal(sellerOne, 100 ether);
+
+        vm.deal(buyerTwo, 100 ether);
+        vm.deal(sellerTwo, 100 ether);
     }
 
     function test_singleInvoiceCreation() public {
@@ -191,6 +194,67 @@ contract PaymentProcessorV2Test is Test {
         assertEq(invTwo.escrow, escrowTwo);
         assertEq(IERC20(paymentTokenOne).balanceOf(invTwo.escrow), prices[1]);
         assertEq(invTwo.paymentToken, address(paymentTokenOne));
+    }
+
+    function test_sellerAcceptsInvoice() public {
+        // single Invoice
+
+        uint256 price = 0.01 ether;
+        pp.openInvoice(sellerOne, buyerOne, price);
+
+        uint256 currentId = pp.totalUniqueInvoiceCreated();
+
+        vm.prank(sellerOne);
+        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        pp.acceptInvoice(currentId);
+
+        vm.prank(buyerOne);
+        pp.paySingleInvoice{ value: price }(currentId, address(0));
+
+        assertEq(pp.getInvoice(currentId).state, pp.PAID());
+
+        vm.prank(sellerTwo);
+        vm.expectRevert(PaymentProcessorV2.UnauthorizedSeller.selector);
+        pp.acceptInvoice(currentId);
+
+        vm.prank(sellerOne);
+        pp.acceptInvoice(currentId);
+
+        assertEq(pp.getInvoice(currentId).state, pp.ACCEPTED());
+
+        // meta invoice
+
+        address[] memory sellers = new address[](2);
+        sellers[0] = sellerTwo;
+        sellers[1] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 0.01 ether;
+        prices[1] = 0.02 ether;
+
+        pp.openMetaInvoice(sellers, prices, buyerTwo);
+
+        uint256 currentMetaId = pp.totalMetaInvoiceCreated();
+
+        vm.prank(buyerTwo);
+        pp.payMetaInvoice{ value: 0.03 ether }(currentMetaId, address(0));
+
+        MetaInvoice memory meta = pp.getMetaInvoice(currentMetaId);
+
+        uint256[] memory ids = new uint256[](meta.upper - meta.lower + 1);
+
+        uint256 index = 0;
+        for (uint256 i = meta.lower; i <= meta.upper; i++) {
+            ids[index] = i;
+            index++;
+        }
+
+        vm.prank(sellerTwo);
+        pp.acceptInvoice(ids);
+
+        for (uint256 i = 0; i < ids.length; i++) {
+            assertEq(pp.getInvoice(ids[i]).state, pp.ACCEPTED());
+        }
     }
 
     function _getEscrowAddress(address seller, address buyer, uint256 invoiceId) internal view returns (address) {
