@@ -34,6 +34,11 @@ contract PaymentProcessorV2Test is Test {
         vm.deal(sellerTwo, 100 ether);
     }
 
+    function test_Initialization() public view {
+        assertEq(pp.getNextInvoiceId(), 1);
+        assertEq(pp.getNextMetaInvoiceId(), 1);
+    }
+
     function test_singleInvoiceCreation() public {
         uint256 price = 0.01 ether;
         pp.openInvoice(sellerOne, buyerOne, price);
@@ -239,15 +244,7 @@ contract PaymentProcessorV2Test is Test {
         vm.prank(buyerTwo);
         pp.payMetaInvoice{ value: 0.03 ether }(currentMetaId, address(0));
 
-        MetaInvoice memory meta = pp.getMetaInvoice(currentMetaId);
-
-        uint256[] memory ids = new uint256[](meta.upper - meta.lower + 1);
-
-        uint256 index = 0;
-        for (uint256 i = meta.lower; i <= meta.upper; i++) {
-            ids[index] = i;
-            index++;
-        }
+        uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(currentMetaId);
 
         vm.prank(sellerTwo);
         pp.acceptInvoice(ids);
@@ -255,6 +252,129 @@ contract PaymentProcessorV2Test is Test {
         for (uint256 i = 0; i < ids.length; i++) {
             assertEq(pp.getInvoice(ids[i]).state, pp.ACCEPTED());
         }
+    }
+
+    function test_sellerCancelInitiatedInvoice() public {
+        // single invoice
+        uint256 price = 0.01 ether;
+        pp.openInvoice(sellerOne, buyerOne, price);
+
+        uint256 currentId = pp.totalUniqueInvoiceCreated();
+
+        vm.prank(buyerOne);
+        pp.paySingleInvoice{ value: price }(currentId, address(0));
+
+        uint256 buyersBalanceBeforeCancellation = buyerOne.balance;
+
+        vm.prank(sellerOne);
+        pp.cancelInvoice(currentId);
+
+        uint256 buyersBalanceAfterCancellation = buyerOne.balance;
+
+        Invoice memory invOne = pp.getInvoice(currentId);
+        assertEq(invOne.state, pp.CANCELED());
+        assertEq(buyersBalanceAfterCancellation - buyersBalanceBeforeCancellation, price);
+
+        // meta invoice
+
+        address[] memory sellers = new address[](3);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerOne;
+        sellers[2] = sellerOne;
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 0.01 ether;
+        prices[1] = 0.02 ether;
+        prices[2] = 0.02 ether;
+
+        pp.openMetaInvoice(sellers, prices, buyerOne);
+        uint256 currentMetaInvoiceId = pp.totalMetaInvoiceCreated();
+
+        vm.prank(buyerOne);
+        pp.payMetaInvoice{ value: 0.05 ether }(currentMetaInvoiceId, address(0));
+        buyersBalanceBeforeCancellation = buyerOne.balance;
+
+        uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(currentMetaInvoiceId);
+
+        vm.prank(sellerOne);
+        pp.cancelInvoice(ids);
+
+        for (uint256 i = 0; i < ids.length; i++) {
+            assertEq(pp.getInvoice(ids[i]).state, pp.CANCELED());
+        }
+        assertEq(buyerOne.balance, buyersBalanceBeforeCancellation + 0.05 ether);
+    }
+
+    function test_invoiceCancelationRequest() public {
+        uint256 price = 0.01 ether;
+        pp.openInvoice(sellerOne, buyerOne, price);
+
+        uint256 currentId = pp.totalUniqueInvoiceCreated();
+
+        vm.expectRevert(PaymentProcessorV2.UnauthorizedBuyer.selector);
+        pp.requestCancelation(currentId);
+
+        vm.startPrank(buyerOne);
+
+        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        pp.requestCancelation(currentId);
+
+        pp.paySingleInvoice{ value: price }(currentId, address(0));
+
+        pp.requestCancelation(currentId);
+
+        vm.stopPrank();
+        assertEq(pp.getInvoice(currentId).state, pp.CANCELATION_REQUESTED());
+    }
+
+    function test_handleInvoiceCancelation() public {
+        address[] memory sellers = new address[](3);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerOne;
+        sellers[2] = sellerOne;
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 0.01 ether;
+        prices[1] = 0.02 ether;
+        prices[2] = 0.02 ether;
+
+        pp.openMetaInvoice(sellers, prices, buyerOne);
+        uint256 currentMetaInvoiceId = pp.totalMetaInvoiceCreated();
+
+        vm.startPrank(buyerOne);
+        pp.payMetaInvoice{ value: 0.05 ether }(currentMetaInvoiceId, address(0));
+
+        uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(currentMetaInvoiceId);
+        pp.requestCancelation(ids);
+
+        vm.startPrank(sellerOne);
+
+        bool[] memory accept = new bool[](ids.length);
+        accept[0] = true; // + 0.01 ether
+        accept[1] = false;
+        accept[2] = false;
+
+        uint256 buyersBalanceBefore = buyerOne.balance;
+        for (uint256 i = 0; i < ids.length; ++i) {
+            pp.handleCancelationRequest(ids[i], accept[i]);
+        }
+
+        assertEq(buyerOne.balance, buyersBalanceBefore + prices[0]);
+        assertEq(pp.getInvoice(ids[0]).state, pp.CANCELATION_ACCEPTED());
+        assertEq(pp.getInvoice(ids[1]).state, pp.CANCELATION_REJECTED());
+        assertEq(pp.getInvoice(ids[2]).state, pp.CANCELATION_REJECTED());
+    }
+
+    function _getSubInvoiceIdsForMetaInvoice(uint256 metaInvoiceId) internal view returns (uint256[] memory) {
+        MetaInvoice memory meta = pp.getMetaInvoice(metaInvoiceId);
+        uint256 count = meta.upper - meta.lower + 1;
+        uint256[] memory ids = new uint256[](count);
+
+        for (uint256 i = 0; i < count; i++) {
+            ids[i] = meta.lower + i;
+        }
+
+        return ids;
     }
 
     function _getEscrowAddress(address seller, address buyer, uint256 invoiceId) internal view returns (address) {

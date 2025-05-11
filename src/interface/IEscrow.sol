@@ -11,6 +11,8 @@ interface IEscrow {
     /// @notice Thrown when a fund transfer fails.
     error TransferFailed();
 
+    function withdraw(address token, address receiver) external;
+
     /**
      * @notice Refunds the balance held in escrow to the payer when invoice is rejected.
      * @dev Only callable by the payment processor contract.
