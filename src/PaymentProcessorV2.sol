@@ -5,11 +5,17 @@ import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 import { EscrowFactory } from "./EscrowFactory.sol";
 import { IEscrow } from "./interface/IEscrow.sol";
 
+// time before cancelation
+// timeframe when dispute can be created
+
 struct Invoice {
     address seller;
     address buyer;
     uint256 price;
     uint256 createdAt;
+    uint256 paidAt;
+    uint256 timeBeforeCancelation;
+    uint256 disputeWindow;
     uint256 state;
     uint256 metaInvoiceId;
     address paymentToken;
@@ -24,6 +30,21 @@ struct MetaInvoice {
     address escrow;
 }
 
+struct InvoiceCreationParam {
+    address seller;
+    address buyer;
+    uint256 price;
+    uint256 timeBeforeCancelation;
+    uint256 disputeWindow;
+}
+
+// Dispute
+// Release
+// Events
+// v1 + v2
+// fuzz
+// invariant ?
+
 contract PaymentProcessorV2 is EscrowFactory {
     error InvalidBuyer();
     error InvalidMetaInvoicePayment();
@@ -35,6 +56,7 @@ contract PaymentProcessorV2 is EscrowFactory {
     error UnauthorizedSeller();
     error InvoiceDoesNotExist();
     error UnauthorizedBuyer();
+    error InvoiceResponseTimeExpired();
 
     using SafeTransferLib for address;
 
@@ -73,7 +95,7 @@ contract PaymentProcessorV2 is EscrowFactory {
     }
 
     // impl access control
-    function openMetaInvoice(address[] calldata sellers, uint256[] calldata prices, address buyer) public {
+    function openMetaInvoice(address buyer, InvoiceCreationParam[] memory param) public {
         uint256 totalPrice;
         uint256 thisMetaInvoiceId = nextMetaInvoiceId;
         uint256 startInvoiceId = nextInvoiceId;
@@ -81,11 +103,12 @@ contract PaymentProcessorV2 is EscrowFactory {
 
         MetaInvoice storage metaInv = metaInvoice[thisMetaInvoiceId];
         metaInv.lower = startInvoiceId;
-        for (; i < sellers.length; i++) {
+        for (; i < param.length; i++) {
             uint256 invoiceId = startInvoiceId + i;
-            totalPrice += prices[i];
+            param[i].buyer = buyer;
+            totalPrice += param[i].price;
 
-            Invoice memory inv = _openInvoice(invoiceId, sellers[i], buyer, prices[i], thisMetaInvoiceId);
+            Invoice memory inv = _openInvoice(invoiceId, thisMetaInvoiceId, param[i]);
             metaInvoiceToSubInvoice[thisMetaInvoiceId][invoiceId] = inv;
             subInvoiceToMetaInvoiceId[invoiceId] = thisMetaInvoiceId;
         }
@@ -99,8 +122,8 @@ contract PaymentProcessorV2 is EscrowFactory {
     }
 
     // impl access control
-    function openInvoice(address seller, address buyer, uint256 price) public {
-        _openInvoice(nextInvoiceId++, seller, buyer, price, 0);
+    function openInvoice(InvoiceCreationParam memory param) public {
+        _openInvoice(nextInvoiceId++, 0, param);
     }
 
     function paySingleInvoice(uint256 id, address paymentToken) external payable {
@@ -140,6 +163,7 @@ contract PaymentProcessorV2 is EscrowFactory {
         Invoice memory inv = _getInvoice(id);
         if (inv.seller != msg.sender) revert UnauthorizedSeller();
         if (inv.state != PAID) revert InvalidInvoiceState();
+        if (block.timestamp > inv.createdAt + inv.timeBeforeCancelation) revert InvoiceResponseTimeExpired();
 
         inv.state = ACCEPTED;
 
@@ -168,7 +192,8 @@ contract PaymentProcessorV2 is EscrowFactory {
         Invoice memory inv = _getInvoice(id);
         if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
         if (inv.state != PAID) revert InvalidInvoiceState();
-        // check if it is in time
+        if (block.timestamp > inv.createdAt + inv.timeBeforeCancelation) revert InvoiceResponseTimeExpired();
+
         inv.state = CANCELATION_REQUESTED;
         _updateInvoice(id, inv);
     }
@@ -200,6 +225,7 @@ contract PaymentProcessorV2 is EscrowFactory {
 
     function _invoicePayment(Invoice memory inv, uint256 value, uint256 id, address paymentToken) internal {
         if (value > 0 && value != inv.price) revert InvalidNativePayment();
+        if (inv.state != INITIATED) revert InvalidInvoiceState();
 
         address escrowAddress = _create(
             EscrowCreationParams({
@@ -213,6 +239,7 @@ contract PaymentProcessorV2 is EscrowFactory {
 
         inv.state = PAID;
         inv.escrow = escrowAddress;
+        inv.paidAt = block.timestamp;
 
         if (paymentToken != address(0)) {
             inv.paymentToken = paymentToken;
@@ -220,20 +247,19 @@ contract PaymentProcessorV2 is EscrowFactory {
         }
     }
 
-    function _openInvoice(uint256 id, address seller, address buyer, uint256 price, uint256 metaInvoiceId)
+    function _openInvoice(uint256 id, uint256 metaInvoiceId, InvoiceCreationParam memory param)
         internal
         returns (Invoice memory)
     {
-        Invoice memory inv = Invoice({
-            seller: seller,
-            buyer: buyer,
-            price: price,
-            createdAt: block.timestamp,
-            state: INITIATED,
-            metaInvoiceId: metaInvoiceId,
-            paymentToken: address(0),
-            escrow: address(0)
-        });
+        Invoice memory inv;
+        inv.seller = param.seller;
+        inv.buyer = param.buyer;
+        inv.price = param.price;
+        inv.createdAt = block.timestamp;
+        inv.timeBeforeCancelation = param.timeBeforeCancelation;
+        inv.state = INITIATED;
+        inv.metaInvoiceId = metaInvoiceId;
+        inv.disputeWindow = param.disputeWindow;
 
         invoice[id] = inv;
         emit OpenedInvoice(id, inv);
