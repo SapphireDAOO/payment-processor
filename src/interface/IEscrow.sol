@@ -13,6 +13,10 @@ interface IEscrow {
 
     function withdraw(address token, address receiver) external;
 
+    function refundToPayer(address payer, uint256 amount) external;
+
+    function withdraw(address token, address receiver, uint256 amount) external;
+
     /**
      * @notice Refunds the balance held in escrow to the payer when invoice is rejected.
      * @dev Only callable by the payment processor contract.

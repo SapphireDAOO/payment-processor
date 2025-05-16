@@ -17,10 +17,12 @@ contract PaymentProcessorV2Test is Test {
     address sellerTwo = address(5);
 
     function setUp() public {
-        pp = new PaymentProcessorV2();
+        vm.startPrank(admin);
+        pp = new PaymentProcessorV2(admin, address(this), 700);
         paymentTokenOne = new MockERC20("Payment token", "PTK");
 
         pp.setPaymentTokenState(address(paymentTokenOne), true);
+        vm.stopPrank();
 
         paymentTokenOne.mint(buyerOne, 100_000 ether);
 

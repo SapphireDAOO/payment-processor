@@ -359,7 +359,7 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         marketplace = marketplaceAddr;
     }
 
-    function setPaymentTokenState(address token, bool state) external {
+    function setPaymentTokenState(address token, bool state) external onlyOwner {
         isAllowed[token] = state;
     }
 

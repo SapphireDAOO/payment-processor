@@ -41,6 +41,18 @@ contract Escrow is IEscrow {
         emit FundsDeposited(_invoiceId, msg.value);
     }
 
+    // what should the escrow do ?
+
+    // what about event ? Handle in processor?
+
+    function withdraw(address token, address receiver, uint256 amount) external onlyPaymentProcessor {
+        if (token == address(0)) {
+            receiver.safeTransferETH(amount);
+        } else {
+            token.safeTransfer(receiver, amount);
+        }
+    }
+
     function withdraw(address token, address receiver) external onlyPaymentProcessor {
         token.safeTransferAll(receiver);
     }
@@ -55,6 +67,11 @@ contract Escrow is IEscrow {
     function refundToPayer(address _payer) external onlyPaymentProcessor {
         uint256 bal = _withdraw(_payer);
         emit FundsRefunded(invoiceId, _payer, bal);
+    }
+
+    function refundToPayer(address _payer, uint256 amount) external onlyPaymentProcessor {
+        _withdraw(_payer, amount);
+        emit FundsRefunded(invoiceId, _payer, amount);
     }
 
     /// @inheritdoc IEscrow
