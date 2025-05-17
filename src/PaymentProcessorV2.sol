@@ -7,14 +7,13 @@ import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 
-// expire when an invoice is sent without a payment
-
 struct Invoice {
     address seller;
     address buyer;
     uint256 createdAt;
     uint256 price;
     uint256 paidAt;
+    uint256 invoiceExpiryDuration;
     uint256 timeBeforeCancelation;
     uint256 disputeWindow;
     uint256 state;
@@ -34,18 +33,16 @@ struct MetaInvoice {
 struct InvoiceCreationParam {
     address seller;
     address buyer;
-    uint256 timeBeforeCancelation; // pack
-    uint256 disputeWindow; // pack
+    uint256 invoiceExpiryDuration;
+    uint256 timeBeforeCancelation; 
+    uint256 disputeWindow; /
     uint256 price;
 }
 
-// send funds in dispute settlement
-// release should impl access control
-// tests
-// impl access control
 // test
-// rearrange file (v1 + v2) ?
 // package struct
+// rearrange file (v1 + v2) ?
+// test
 
 contract PaymentProcessorV2 is EscrowFactory, Ownable {
     error InvalidBuyer();
@@ -64,6 +61,11 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
     error InvalidSellersPayoutShare();
     error NoShareAllocatedToBuyer();
     error NotAuthorized();
+    error InvoiceExpired();
+    error CancelationRequestDeadlinePassed();
+    error ZeroEscrowBalance();
+    error AlreadyRefunded();
+    error InvoiceStillActive();
 
     using SafeTransferLib for address;
 
@@ -71,11 +73,13 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
     uint256 private nextMetaInvoiceId;
 
     uint256 private feeRate;
-    address private marketplace;
+    address public marketplace;
+    address private feeReceiver;
 
     uint32 public constant INITIATED = 1;
     uint32 public constant PAID = INITIATED + 1;
-    uint32 public constant ACCEPTED = PAID + 1;
+    uint32 public constant REFUNDED = PAID + 1;
+    uint32 public constant ACCEPTED = REFUNDED + 1;
     uint32 public constant CANCELED = ACCEPTED + 1;
     uint32 public constant CANCELATION_REQUESTED = CANCELED + 1;
     uint32 public constant CANCELATION_ACCEPTED = CANCELATION_REQUESTED + 1;
@@ -102,10 +106,11 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         _;
     }
 
-    constructor(address ownerAddress, address marketplaceAddress, uint256 newFeeRate) {
+    constructor(address ownerAddress, address marketplaceAddress, uint256 newFeeRate, address feeReceiverAddress) {
         _initializeOwner(ownerAddress);
         setMarketplace(marketplaceAddress);
         setFeeRate(newFeeRate);
+        setFeeReceiver(feeReceiverAddress);
         nextInvoiceId = 1;
         nextMetaInvoiceId = 1;
     }
@@ -180,7 +185,6 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         if (block.timestamp > inv.createdAt + inv.timeBeforeCancelation) revert InvoiceResponseTimeExpired();
 
         inv.state = ACCEPTED;
-
         _updateInvoice(id, inv);
 
         emit InvoiceAccepted(id);
@@ -190,7 +194,6 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         Invoice memory inv = _getInvoice(id);
         inv.state = accept ? CANCELATION_ACCEPTED : CANCELATION_REJECTED;
         _updateInvoice(id, inv);
-
         if (inv.state == CANCELATION_ACCEPTED) {
             IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.price);
         }
@@ -206,7 +209,7 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         Invoice memory inv = _getInvoice(id);
         if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
         if (inv.state != PAID) revert InvalidInvoiceState();
-        if (block.timestamp > inv.createdAt + inv.timeBeforeCancelation) revert InvoiceResponseTimeExpired();
+        if (block.timestamp > inv.createdAt + inv.timeBeforeCancelation) revert CancelationRequestDeadlinePassed();
 
         inv.state = CANCELATION_REQUESTED;
         _updateInvoice(id, inv);
@@ -220,7 +223,8 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
 
     function cancelInvoice(uint256 id) public {
         Invoice memory inv = _getInvoice(id);
-        if (msg.sender != inv.seller && inv.state != PAID) revert InvalidInvoiceState();
+        if (msg.sender != inv.seller) revert UnauthorizedSeller();
+        if (inv.state != PAID) revert InvalidInvoiceState();
         // time check?
 
         inv.state = CANCELED;
@@ -230,25 +234,22 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         emit InvoiceCanceled(id);
     }
 
-    // dispute invoice
-
     function createDispute(uint256 id) external {
         Invoice memory inv = _getInvoice(id);
         if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
-        if (block.timestamp > inv.paidAt + inv.disputeWindow) revert DisputeWindowExpired();
         if (inv.state != ACCEPTED) revert InvalidInvoiceState();
+        if (block.timestamp > inv.paidAt + inv.disputeWindow) revert DisputeWindowExpired();
 
         inv.state = DISPUTED;
         _updateInvoice(id, inv);
     }
 
-    // resolve dispute
-    // impl access control
     function resolveDispute(uint256 id, uint256 resolution, uint256 sellerShare) external onlyMarketplace {
         Invoice memory inv = _getInvoice(id);
+
         if (inv.state != DISPUTED) revert InvalidInvoiceState();
-        if (resolution < DISPUTED || resolution > DISPUTE_SETTLED) revert InvalidDisputeResolution();
         if (sellerShare > BASIS_POINTS) revert InvalidSellersPayoutShare();
+        if (resolution < DISPUTED || resolution > DISPUTE_SETTLED) revert InvalidDisputeResolution();
 
         inv.state = resolution;
         _updateInvoice(id, inv);
@@ -268,9 +269,8 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
                 buyerReceivingValue = _applyBasisPoints(inv.price, BASIS_POINTS - sellerShare);
                 IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, buyerReceivingValue);
             }
-            uint256 fee = _applyBasisPoints(sellerReceivingValue, feeRate);
-            sellerReceivingValue = _applyBasisPoints(sellerReceivingValue, fee);
-            IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.seller, sellerReceivingValue);
+
+            _processSellerPayout(inv, sellerReceivingValue);
 
             emit DisputeSettled(id, sellerReceivingValue, buyerReceivingValue);
         }
@@ -278,22 +278,33 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
 
     function releasePayment(uint256 id) external onlyMarketplace {
         Invoice memory inv = _getInvoice(id);
-        if (inv.state == RELEASED) revert();
-        if (inv.state == DISPUTE_SETTLED) revert();
-        if (inv.state != ACCEPTED && inv.state != DISPUTE_DISMISSED && inv.state != DISPUTE_RESOLVED) {
-            revert InvalidInvoiceState();
-        }
+        if (inv.state == RELEASED) revert InvalidInvoiceState();
+        if (inv.state != ACCEPTED) revert InvalidInvoiceState();
 
         inv.state = RELEASED;
         _updateInvoice(id, inv);
-        uint256 fee = _applyBasisPoints(inv.price, feeRate);
-        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.seller, inv.price - fee);
+        _processSellerPayout(inv, inv.price);
+    }
+
+    function claimExpiredInvoiceRefunds(uint256 id) external {
+        Invoice memory inv = _getInvoice(id);
+        if (inv.state > REFUNDED) revert InvalidInvoiceState();
+        if (inv.state == REFUNDED) revert AlreadyRefunded();
+        if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
+        if (block.timestamp < inv.createdAt + inv.timeBeforeCancelation) revert InvoiceStillActive();
+
+        inv.state = REFUNDED;
+        _updateInvoice(id, inv);
+
+        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.price);
     }
 
     // may be allow multiple action on invoice in one?
 
     function _invoicePayment(Invoice memory inv, uint256 value, uint256 id, address paymentToken) internal {
+        if (block.timestamp > inv.createdAt + inv.invoiceExpiryDuration) revert InvoiceExpired();
         if (value > 0 && value != inv.price) revert InvalidNativePayment();
+        if (msg.sender != inv.buyer) revert InvalidBuyer();
         if (inv.state != INITIATED) revert InvalidInvoiceState();
 
         address escrowAddress = _create(
@@ -329,14 +340,11 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         inv.state = INITIATED;
         inv.metaInvoiceId = metaInvoiceId;
         inv.disputeWindow = param.disputeWindow;
+        inv.invoiceExpiryDuration = param.invoiceExpiryDuration;
 
         invoice[id] = inv;
         emit OpenedInvoice(id, inv);
         return inv;
-    }
-
-    function calculateFee(uint256 amount) public view returns (uint256) {
-        return _applyBasisPoints(amount, feeRate);
     }
 
     function _applyBasisPoints(uint256 amount, uint256 basisPoints) internal pure returns (uint256) {
@@ -351,6 +359,13 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         }
     }
 
+    function _processSellerPayout(Invoice memory inv, uint256 sellerReceivingValue) internal {
+        uint256 fee = _applyBasisPoints(sellerReceivingValue, feeRate);
+        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.seller, sellerReceivingValue - fee);
+
+        IEscrow(inv.escrow).withdraw(inv.paymentToken, feeReceiver, fee);
+    }
+
     function setFeeRate(uint256 _feeRate) public onlyOwner {
         feeRate = _feeRate;
     }
@@ -361,6 +376,10 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
 
     function setPaymentTokenState(address token, bool state) external onlyOwner {
         isAllowed[token] = state;
+    }
+
+    function setFeeReceiver(address feeReceiverAddress) public onlyOwner {
+        feeReceiver = feeReceiverAddress;
     }
 
     function _getInvoice(uint256 id) internal view returns (Invoice memory) {
