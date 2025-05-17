@@ -45,6 +45,10 @@ contract Escrow is IEscrow {
 
     // what about event ? Handle in processor?
 
+    function balanceOf(address token) external view returns (uint256) {
+        return token == address(0) ? address(this).balance : token.balanceOf(address(this));
+    }
+
     function withdraw(address token, address receiver, uint256 amount) external onlyPaymentProcessor {
         if (token == address(0)) {
             receiver.safeTransferETH(amount);

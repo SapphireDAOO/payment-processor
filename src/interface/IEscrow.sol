@@ -11,6 +11,8 @@ interface IEscrow {
     /// @notice Thrown when a fund transfer fails.
     error TransferFailed();
 
+    function balanceOf(address token) external view returns (uint256);
+
     function withdraw(address token, address receiver) external;
 
     function refundToPayer(address payer, uint256 amount) external;

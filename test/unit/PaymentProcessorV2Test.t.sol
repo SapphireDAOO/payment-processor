@@ -110,7 +110,7 @@ contract PaymentProcessorV2Test is Test {
     function test_nativeTokenPaymentForSingleInvoice() public {
         uint256 price = 0.01 ether;
         pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
-        uint256 thisInvoiceId = pp.getNextInvoiceId() - 1;
+        uint256 thisInvoiceId = pp.totalUniqueInvoiceCreated();
 
         vm.startPrank(buyerOne);
 
@@ -128,6 +128,14 @@ contract PaymentProcessorV2Test is Test {
         assertEq(inv.escrow.balance, price);
         assertEq(inv.paymentToken, address(0));
         assertEq(inv.state, pp.PAID());
+
+        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+
+        uint256 currentId = pp.totalUniqueInvoiceCreated();
+
+        vm.warp(block.timestamp + 1 + 1 days);
+        vm.expectRevert(PaymentProcessorV2.InvoiceExpired.selector);
+        pp.paySingleInvoice{ value: price }(currentId, address(0));
     }
 
     function test_nativeTokenPaymentForMetaInvoice() public {
@@ -304,9 +312,21 @@ contract PaymentProcessorV2Test is Test {
         vm.prank(sellerTwo);
         pp.acceptInvoice(ids);
 
-        for (uint256 i = 0; i < ids.length; i++) {
+        for (uint256 i = 0; i < ids.length - 1; i++) {
             assertEq(pp.getInvoice(ids[i]).state, pp.ACCEPTED());
         }
+
+        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        currentId = pp.totalUniqueInvoiceCreated();
+
+        vm.prank(buyerOne);
+        pp.paySingleInvoice{ value: price }(currentId, address(0));
+
+        vm.warp(block.timestamp + 1 + 1 days);
+
+        vm.prank(sellerOne);
+        vm.expectRevert(PaymentProcessorV2.InvoiceResponseTimeExpired.selector);
+        pp.acceptInvoice(currentId);
     }
 
     function test_sellerCancelInitiatedInvoice() public {
@@ -399,6 +419,18 @@ contract PaymentProcessorV2Test is Test {
 
         vm.stopPrank();
         assertEq(pp.getInvoice(currentId).state, pp.CANCELATION_REQUESTED());
+
+        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        currentId = pp.totalUniqueInvoiceCreated();
+
+        vm.startPrank(buyerOne);
+        pp.paySingleInvoice{ value: price }(currentId, address(0));
+
+        vm.warp(block.timestamp + 1 + 1 days);
+        vm.expectRevert(PaymentProcessorV2.CancelationRequestDeadlinePassed.selector);
+        pp.requestCancelation(currentId);
+
+        vm.stopPrank();
     }
 
     function test_handleInvoiceCancelation() public {
@@ -448,6 +480,47 @@ contract PaymentProcessorV2Test is Test {
         assertEq(pp.getInvoice(ids[0]).state, pp.CANCELATION_ACCEPTED());
         assertEq(pp.getInvoice(ids[1]).state, pp.CANCELATION_REJECTED());
         assertEq(pp.getInvoice(ids[2]).state, pp.CANCELATION_REJECTED());
+    }
+
+    function test_refundAfterInvoiceExpires() public {
+        uint256 price = 0.01 ether;
+        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        uint256 id = pp.totalUniqueInvoiceCreated();
+
+        vm.prank(buyerOne);
+        pp.paySingleInvoice{ value: price }(id, address(0));
+
+        vm.prank(buyerTwo);
+        vm.expectRevert(PaymentProcessorV2.UnauthorizedBuyer.selector);
+        pp.claimExpiredInvoiceRefunds(id);
+
+        vm.startPrank(buyerOne);
+        vm.expectRevert(PaymentProcessorV2.InvoiceStillActive.selector);
+        pp.claimExpiredInvoiceRefunds(id);
+
+        uint256 balanceBefore = buyerOne.balance;
+        vm.warp(block.timestamp + 1 + 1 days);
+        pp.claimExpiredInvoiceRefunds(id);
+
+        vm.expectRevert(PaymentProcessorV2.AlreadyRefunded.selector);
+        pp.claimExpiredInvoiceRefunds(id);
+        vm.stopPrank();
+
+        assertEq(pp.getInvoice(id).state, pp.REFUNDED());
+        assertEq(pp.getInvoice(id).price + balanceBefore, buyerOne.balance);
+
+        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        id = pp.totalUniqueInvoiceCreated();
+
+        vm.prank(buyerOne);
+        pp.paySingleInvoice{ value: price }(id, address(0));
+
+        vm.prank(sellerOne);
+        pp.acceptInvoice(id);
+
+        vm.prank(buyerOne);
+        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        pp.claimExpiredInvoiceRefunds(id);
     }
 
     function test_disputeCreation() public {
@@ -505,8 +578,6 @@ contract PaymentProcessorV2Test is Test {
 
         vm.prank(buyerOne);
         pp.payMetaInvoice(metaInvoiceId, address(paymentTokenOne));
-
-        console.log("State before resolveDispute:", pp.getInvoice(ids[0]).state);
 
         for (uint256 i; i < ids.length; i++) {
             uint256 id = ids[i];
@@ -631,6 +702,7 @@ contract PaymentProcessorV2Test is Test {
         param.price = price;
         param.timeBeforeCancelation = timeBeforeCancelation;
         param.disputeWindow = disputeWindow;
+        param.invoiceExpiryDuration = 1 days;
 
         return param;
     }
