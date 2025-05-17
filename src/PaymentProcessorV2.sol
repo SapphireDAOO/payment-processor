@@ -34,8 +34,8 @@ struct InvoiceCreationParam {
     address seller;
     address buyer;
     uint256 invoiceExpiryDuration;
-    uint256 timeBeforeCancelation; 
-    uint256 disputeWindow; /
+    uint256 timeBeforeCancelation;
+    uint256 disputeWindow;
     uint256 price;
 }
 
