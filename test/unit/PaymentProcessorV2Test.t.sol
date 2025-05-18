@@ -2,7 +2,8 @@
 pragma solidity 0.8.28;
 
 import { Test, console, Vm } from "forge-std/Test.sol";
-import { PaymentProcessorV2, Invoice, MetaInvoice, InvoiceCreationParam } from "../../src/PaymentProcessorV2.sol";
+import { PaymentProcessorV2 } from "../../src/PaymentProcessorV2.sol";
+import { IPaymentProcessorV2 } from "../../src/interface/IPaymentProcessorV2.sol";
 import { MockERC20 } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -52,12 +53,12 @@ contract PaymentProcessorV2Test is Test {
         uint256 price = 0.01 ether;
 
         vm.prank(buyerOne);
-        vm.expectRevert(PaymentProcessorV2.NotAuthorized.selector);
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        vm.expectRevert(IPaymentProcessorV2.NotAuthorized.selector);
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
 
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         uint256 nextInvoiceId = pp.getNextInvoiceId();
-        Invoice memory inv = pp.getInvoice(nextInvoiceId - 1);
+        IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(nextInvoiceId - 1);
         assertEq(inv.price, price);
         assertEq(inv.buyer, buyerOne);
         assertEq(inv.seller, sellerOne);
@@ -75,22 +76,24 @@ contract PaymentProcessorV2Test is Test {
         prices[0] = 0.01 ether;
         prices[1] = 0.02 ether;
 
-        uint256[] memory responseTime = new uint256[](2);
+        uint32[] memory responseTime = new uint32[](2);
         responseTime[0] = 1 days;
         responseTime[1] = 1 days;
 
-        uint256[] memory disputeWindow = new uint256[](2);
+        uint32[] memory disputeWindow = new uint32[](2);
         disputeWindow[0] = 2 days;
         disputeWindow[1] = 2 days;
 
         uint256 startInvoiceId = pp.getNextInvoiceId();
-        pp.openMetaInvoice(buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        pp.createMetaInvoice(
+            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
 
         uint256 thisMetaInvoiceId = pp.getNextMetaInvoiceId() - 1;
         uint256 upper = pp.getNextInvoiceId() - 1;
 
-        MetaInvoice memory metaInv = pp.getMetaInvoice(thisMetaInvoiceId);
-        Invoice memory inv = pp.getInvoice(upper);
+        IPaymentProcessorV2.MetaInvoice memory metaInv = pp.getMetaInvoice(thisMetaInvoiceId);
+        IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(upper);
 
         assertEq(inv.price, prices[1]);
         assertEq(inv.buyer, buyerOne);
@@ -109,32 +112,32 @@ contract PaymentProcessorV2Test is Test {
 
     function test_nativeTokenPaymentForSingleInvoice() public {
         uint256 price = 0.01 ether;
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         uint256 thisInvoiceId = pp.totalUniqueInvoiceCreated();
 
         vm.startPrank(buyerOne);
 
-        vm.expectRevert(PaymentProcessorV2.InvalidPaymentToken.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidPaymentToken.selector);
         pp.paySingleInvoice(thisInvoiceId, address(12));
 
-        vm.expectRevert(PaymentProcessorV2.InvalidNativePayment.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidNativePayment.selector);
         pp.paySingleInvoice{ value: 0.001 ether }(thisInvoiceId, address(0));
 
         pp.paySingleInvoice{ value: price }(thisInvoiceId, address(0));
         vm.stopPrank();
 
-        Invoice memory inv = pp.getInvoice(thisInvoiceId);
+        IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(thisInvoiceId);
 
         assertEq(inv.escrow.balance, price);
         assertEq(inv.paymentToken, address(0));
         assertEq(inv.state, pp.PAID());
 
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
 
         vm.warp(block.timestamp + 1 + 1 days);
-        vm.expectRevert(PaymentProcessorV2.InvoiceExpired.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvoiceExpired.selector);
         pp.paySingleInvoice{ value: price }(currentId, address(0));
     }
 
@@ -147,35 +150,37 @@ contract PaymentProcessorV2Test is Test {
         prices[0] = 0.01 ether;
         prices[1] = 0.02 ether;
 
-        uint256[] memory responseTime = new uint256[](2);
+        uint32[] memory responseTime = new uint32[](2);
         responseTime[0] = 1 days;
         responseTime[1] = 5 days;
 
-        uint256[] memory disputeWindow = new uint256[](2);
+        uint32[] memory disputeWindow = new uint32[](2);
         disputeWindow[0] = 1 days;
         disputeWindow[1] = 3 days;
 
         uint256 thisInvoiceId = pp.getNextInvoiceId();
-        pp.openMetaInvoice(buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        pp.createMetaInvoice(
+            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
 
-        vm.expectRevert(PaymentProcessorV2.InvoiceDoesNotExist.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvoiceDoesNotExist.selector);
         pp.payMetaInvoice{ value: 0.03 ether }(10, address(0));
 
-        vm.expectRevert(PaymentProcessorV2.InvalidBuyer.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidBuyer.selector);
         pp.payMetaInvoice{ value: 0.03 ether }(thisInvoiceId, address(0));
 
         vm.startPrank(buyerOne);
-        vm.expectRevert(PaymentProcessorV2.InvalidMetaInvoicePayment.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidMetaInvoicePayment.selector);
         pp.payMetaInvoice{ value: 0.01 ether }(thisInvoiceId, address(0));
 
-        vm.expectRevert(PaymentProcessorV2.InvalidPaymentToken.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidPaymentToken.selector);
         pp.payMetaInvoice(thisInvoiceId, address(12));
 
         pp.payMetaInvoice{ value: 0.03 ether }(thisInvoiceId, address(0));
 
         vm.stopPrank();
 
-        Invoice memory invOne = pp.getInvoice(thisInvoiceId);
+        IPaymentProcessorV2.Invoice memory invOne = pp.getInvoice(thisInvoiceId);
         address escrowOne = _getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
 
         assertEq(invOne.state, pp.PAID());
@@ -183,7 +188,7 @@ contract PaymentProcessorV2Test is Test {
         assertEq(invOne.escrow.balance, prices[0]);
         assertEq(invOne.paymentToken, address(0));
 
-        Invoice memory invTwo = pp.getInvoice(pp.getNextInvoiceId() - 1);
+        IPaymentProcessorV2.Invoice memory invTwo = pp.getInvoice(pp.getNextInvoiceId() - 1);
         address escrowTwo = _getEscrowAddress(invTwo.seller, invTwo.buyer, pp.getNextInvoiceId() - 1);
 
         assertEq(invTwo.state, pp.PAID());
@@ -194,21 +199,21 @@ contract PaymentProcessorV2Test is Test {
 
     function test_erc20PaymentForSingleInvoice() public {
         uint256 price = 0.01 ether;
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         uint256 thisInvoiceId = pp.getNextInvoiceId() - 1;
 
         vm.prank(buyerTwo);
-        vm.expectRevert(PaymentProcessorV2.InvalidBuyer.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidBuyer.selector);
         pp.paySingleInvoice(thisInvoiceId, address(paymentTokenOne));
 
         vm.prank(buyerOne);
         pp.paySingleInvoice(thisInvoiceId, address(paymentTokenOne));
 
         vm.prank(buyerOne);
-        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.paySingleInvoice(thisInvoiceId, address(paymentTokenOne));
 
-        Invoice memory inv = pp.getInvoice(thisInvoiceId);
+        IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(thisInvoiceId);
 
         assertEq(IERC20(paymentTokenOne).balanceOf(inv.escrow), price);
         assertEq(inv.paymentToken, address(paymentTokenOne));
@@ -224,22 +229,24 @@ contract PaymentProcessorV2Test is Test {
         prices[0] = 0.01 ether;
         prices[1] = 0.02 ether;
 
-        uint256[] memory responseTime = new uint256[](2);
+        uint32[] memory responseTime = new uint32[](2);
         responseTime[0] = 1 days;
         responseTime[1] = 1 days;
 
-        uint256[] memory disputeWindow = new uint256[](2);
+        uint32[] memory disputeWindow = new uint32[](2);
         disputeWindow[0] = 2 days;
         disputeWindow[1] = 2 days;
 
         uint256 thisInvoiceId = pp.getNextInvoiceId();
-        pp.openMetaInvoice(buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        pp.createMetaInvoice(
+            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
 
         vm.prank(buyerOne);
 
         pp.payMetaInvoice(thisInvoiceId, address(paymentTokenOne));
 
-        Invoice memory invOne = pp.getInvoice(thisInvoiceId);
+        IPaymentProcessorV2.Invoice memory invOne = pp.getInvoice(thisInvoiceId);
         address escrowOne = _getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
 
         assertEq(invOne.state, pp.PAID());
@@ -247,7 +254,7 @@ contract PaymentProcessorV2Test is Test {
         assertEq(IERC20(paymentTokenOne).balanceOf(invOne.escrow), prices[0]);
         assertEq(invOne.paymentToken, address(paymentTokenOne));
 
-        Invoice memory invTwo = pp.getInvoice(pp.getNextInvoiceId() - 1);
+        IPaymentProcessorV2.Invoice memory invTwo = pp.getInvoice(pp.getNextInvoiceId() - 1);
         address escrowTwo = _getEscrowAddress(invTwo.seller, invTwo.buyer, pp.getNextInvoiceId() - 1);
 
         assertEq(invTwo.state, pp.PAID());
@@ -260,12 +267,12 @@ contract PaymentProcessorV2Test is Test {
         // single Invoice
 
         uint256 price = 0.01 ether;
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
 
         vm.prank(sellerOne);
-        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.acceptInvoice(currentId);
 
         vm.prank(buyerOne);
@@ -274,7 +281,7 @@ contract PaymentProcessorV2Test is Test {
         assertEq(pp.getInvoice(currentId).state, pp.PAID());
 
         vm.prank(sellerTwo);
-        vm.expectRevert(PaymentProcessorV2.UnauthorizedSeller.selector);
+        vm.expectRevert(IPaymentProcessorV2.UnauthorizedSeller.selector);
         pp.acceptInvoice(currentId);
 
         vm.prank(sellerOne);
@@ -292,15 +299,17 @@ contract PaymentProcessorV2Test is Test {
         prices[0] = 0.01 ether;
         prices[1] = 0.02 ether;
 
-        uint256[] memory responseTime = new uint256[](2);
+        uint32[] memory responseTime = new uint32[](2);
         responseTime[0] = 1 days;
         responseTime[1] = 1 days;
 
-        uint256[] memory disputeWindow = new uint256[](2);
+        uint32[] memory disputeWindow = new uint32[](2);
         disputeWindow[0] = 2 days;
         disputeWindow[1] = 2 days;
 
-        pp.openMetaInvoice(buyerTwo, _getInvoiceCreationParams(buyerTwo, sellers, prices, responseTime, disputeWindow));
+        pp.createMetaInvoice(
+            buyerTwo, _getInvoiceCreationParams(buyerTwo, sellers, prices, responseTime, disputeWindow)
+        );
 
         uint256 currentMetaId = pp.totalMetaInvoiceCreated();
 
@@ -316,7 +325,7 @@ contract PaymentProcessorV2Test is Test {
             assertEq(pp.getInvoice(ids[i]).state, pp.ACCEPTED());
         }
 
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         currentId = pp.totalUniqueInvoiceCreated();
 
         vm.prank(buyerOne);
@@ -325,14 +334,14 @@ contract PaymentProcessorV2Test is Test {
         vm.warp(block.timestamp + 1 + 1 days);
 
         vm.prank(sellerOne);
-        vm.expectRevert(PaymentProcessorV2.InvoiceResponseTimeExpired.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvoiceResponseTimeExpired.selector);
         pp.acceptInvoice(currentId);
     }
 
     function test_sellerCancelInitiatedInvoice() public {
         // single invoice
         uint256 price = 0.01 ether;
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
 
@@ -342,19 +351,19 @@ contract PaymentProcessorV2Test is Test {
         uint256 buyersBalanceBeforeCancellation = buyerOne.balance;
 
         vm.prank(sellerTwo);
-        vm.expectRevert(PaymentProcessorV2.UnauthorizedSeller.selector);
+        vm.expectRevert(IPaymentProcessorV2.UnauthorizedSeller.selector);
         pp.cancelInvoice(currentId);
 
         vm.prank(sellerOne);
         pp.cancelInvoice(currentId);
 
         vm.prank(sellerOne);
-        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.cancelInvoice(currentId);
 
         uint256 buyersBalanceAfterCancellation = buyerOne.balance;
 
-        Invoice memory invOne = pp.getInvoice(currentId);
+        IPaymentProcessorV2.Invoice memory invOne = pp.getInvoice(currentId);
         assertEq(invOne.state, pp.CANCELED());
         assertEq(buyersBalanceAfterCancellation - buyersBalanceBeforeCancellation, price);
 
@@ -370,17 +379,19 @@ contract PaymentProcessorV2Test is Test {
         prices[1] = 0.02 ether;
         prices[2] = 0.02 ether;
 
-        uint256[] memory responseTime = new uint256[](3);
+        uint32[] memory responseTime = new uint32[](3);
         responseTime[0] = 1 days;
         responseTime[1] = 1 days;
         responseTime[2] = 1 days;
 
-        uint256[] memory disputeWindow = new uint256[](3);
+        uint32[] memory disputeWindow = new uint32[](3);
         disputeWindow[0] = 1 days;
         disputeWindow[1] = 4 days;
         disputeWindow[2] = 5 days;
 
-        pp.openMetaInvoice(buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        pp.createMetaInvoice(
+            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
 
         uint256 currentMetaInvoiceId = pp.totalMetaInvoiceCreated();
 
@@ -401,16 +412,16 @@ contract PaymentProcessorV2Test is Test {
 
     function test_invoiceCancelationRequest() public {
         uint256 price = 0.01 ether;
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
 
-        vm.expectRevert(PaymentProcessorV2.UnauthorizedBuyer.selector);
+        vm.expectRevert(IPaymentProcessorV2.UnauthorizedBuyer.selector);
         pp.requestCancelation(currentId);
 
         vm.startPrank(buyerOne);
 
-        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.requestCancelation(currentId);
 
         pp.paySingleInvoice{ value: price }(currentId, address(0));
@@ -420,14 +431,14 @@ contract PaymentProcessorV2Test is Test {
         vm.stopPrank();
         assertEq(pp.getInvoice(currentId).state, pp.CANCELATION_REQUESTED());
 
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         currentId = pp.totalUniqueInvoiceCreated();
 
         vm.startPrank(buyerOne);
         pp.paySingleInvoice{ value: price }(currentId, address(0));
 
         vm.warp(block.timestamp + 1 + 1 days);
-        vm.expectRevert(PaymentProcessorV2.CancelationRequestDeadlinePassed.selector);
+        vm.expectRevert(IPaymentProcessorV2.CancelationRequestDeadlinePassed.selector);
         pp.requestCancelation(currentId);
 
         vm.stopPrank();
@@ -444,17 +455,19 @@ contract PaymentProcessorV2Test is Test {
         prices[1] = 0.02 ether;
         prices[2] = 0.02 ether;
 
-        uint256[] memory responseTime = new uint256[](3);
+        uint32[] memory responseTime = new uint32[](3);
         responseTime[0] = 1 days;
         responseTime[1] = 1 days;
         responseTime[2] = 1 days;
 
-        uint256[] memory disputeWindow = new uint256[](3);
+        uint32[] memory disputeWindow = new uint32[](3);
         disputeWindow[0] = 1 days;
         disputeWindow[1] = 4 days;
         disputeWindow[2] = 5 days;
 
-        pp.openMetaInvoice(buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        pp.createMetaInvoice(
+            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
 
         uint256 currentMetaInvoiceId = pp.totalMetaInvoiceCreated();
 
@@ -484,32 +497,32 @@ contract PaymentProcessorV2Test is Test {
 
     function test_refundAfterInvoiceExpires() public {
         uint256 price = 0.01 ether;
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         uint256 id = pp.totalUniqueInvoiceCreated();
 
         vm.prank(buyerOne);
         pp.paySingleInvoice{ value: price }(id, address(0));
 
         vm.prank(buyerTwo);
-        vm.expectRevert(PaymentProcessorV2.UnauthorizedBuyer.selector);
+        vm.expectRevert(IPaymentProcessorV2.UnauthorizedBuyer.selector);
         pp.claimExpiredInvoiceRefunds(id);
 
         vm.startPrank(buyerOne);
-        vm.expectRevert(PaymentProcessorV2.InvoiceStillActive.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvoiceStillActive.selector);
         pp.claimExpiredInvoiceRefunds(id);
 
         uint256 balanceBefore = buyerOne.balance;
         vm.warp(block.timestamp + 1 + 1 days);
         pp.claimExpiredInvoiceRefunds(id);
 
-        vm.expectRevert(PaymentProcessorV2.AlreadyRefunded.selector);
+        vm.expectRevert(IPaymentProcessorV2.AlreadyRefunded.selector);
         pp.claimExpiredInvoiceRefunds(id);
         vm.stopPrank();
 
         assertEq(pp.getInvoice(id).state, pp.REFUNDED());
         assertEq(pp.getInvoice(id).price + balanceBefore, buyerOne.balance);
 
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         id = pp.totalUniqueInvoiceCreated();
 
         vm.prank(buyerOne);
@@ -519,20 +532,20 @@ contract PaymentProcessorV2Test is Test {
         pp.acceptInvoice(id);
 
         vm.prank(buyerOne);
-        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.claimExpiredInvoiceRefunds(id);
     }
 
     function test_disputeCreation() public {
         uint256 price = 0.01 ether;
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         uint256 id = pp.totalUniqueInvoiceCreated();
 
-        vm.expectRevert(PaymentProcessorV2.UnauthorizedBuyer.selector);
+        vm.expectRevert(IPaymentProcessorV2.UnauthorizedBuyer.selector);
         pp.createDispute(id);
 
         vm.startPrank(buyerOne);
-        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.createDispute(id);
 
         pp.paySingleInvoice{ value: price }(id, address(0));
@@ -544,7 +557,7 @@ contract PaymentProcessorV2Test is Test {
         vm.warp(block.timestamp + 25 hours);
 
         vm.startPrank(buyerOne);
-        vm.expectRevert(PaymentProcessorV2.DisputeWindowExpired.selector);
+        vm.expectRevert(IPaymentProcessorV2.DisputeWindowExpired.selector);
         pp.createDispute(id);
 
         vm.warp(block.timestamp - 20 hours);
@@ -563,15 +576,17 @@ contract PaymentProcessorV2Test is Test {
         prices[0] = 0.01 ether;
         prices[1] = 0.02 ether;
 
-        uint256[] memory responseTime = new uint256[](2);
+        uint32[] memory responseTime = new uint32[](2);
         responseTime[0] = 1 days;
         responseTime[1] = 1 days;
 
-        uint256[] memory disputeWindow = new uint256[](2);
+        uint32[] memory disputeWindow = new uint32[](2);
         disputeWindow[0] = 1 days;
         disputeWindow[1] = 4 days;
 
-        pp.openMetaInvoice(buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        pp.createMetaInvoice(
+            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
         uint256 metaInvoiceId = pp.totalMetaInvoiceCreated();
 
         uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(metaInvoiceId);
@@ -581,7 +596,7 @@ contract PaymentProcessorV2Test is Test {
 
         for (uint256 i; i < ids.length; i++) {
             uint256 id = ids[i];
-            Invoice memory inv = pp.getInvoice(id);
+            IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(id);
             vm.prank(inv.seller);
             pp.acceptInvoice(id);
 
@@ -589,11 +604,11 @@ contract PaymentProcessorV2Test is Test {
             pp.createDispute(id);
         }
 
-        uint256 dismissed = pp.DISPUTE_DISMISSED();
-        uint256 resolved = pp.DISPUTE_RESOLVED();
+        uint8 dismissed = pp.DISPUTE_DISMISSED();
+        uint8 resolved = pp.DISPUTE_RESOLVED();
 
         vm.prank(buyerOne);
-        vm.expectRevert(PaymentProcessorV2.NotAuthorized.selector);
+        vm.expectRevert(IPaymentProcessorV2.NotAuthorized.selector);
         pp.resolveDispute(ids[0], dismissed, 0);
 
         pp.resolveDispute(ids[0], dismissed, 0);
@@ -606,7 +621,7 @@ contract PaymentProcessorV2Test is Test {
 
     function test_settledDispute() public {
         uint256 price = 0.01 ether;
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
 
         uint256 id = pp.totalUniqueInvoiceCreated();
 
@@ -616,11 +631,11 @@ contract PaymentProcessorV2Test is Test {
         vm.prank(sellerOne);
         pp.acceptInvoice(id);
 
-        uint256 dismissed = pp.DISPUTE_DISMISSED();
         uint256 basisPoint = pp.BASIS_POINTS();
-        uint256 settled = pp.DISPUTE_SETTLED();
-        uint256 accepted = pp.ACCEPTED();
-        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        uint8 dismissed = pp.DISPUTE_DISMISSED();
+        uint8 settled = pp.DISPUTE_SETTLED();
+        uint8 accepted = pp.ACCEPTED();
+        vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.resolveDispute(id, dismissed, basisPoint);
 
         vm.prank(buyerOne);
@@ -631,10 +646,10 @@ contract PaymentProcessorV2Test is Test {
 
         uint256 sellerPercentage = 9000;
 
-        vm.expectRevert(PaymentProcessorV2.InvalidSellersPayoutShare.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidSellersPayoutShare.selector);
         pp.resolveDispute(id, settled, basisPoint + 1);
 
-        vm.expectRevert(PaymentProcessorV2.InvalidDisputeResolution.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidDisputeResolution.selector);
         pp.resolveDispute(id, accepted, sellerPercentage);
 
         pp.resolveDispute(id, settled, sellerPercentage);
@@ -651,17 +666,17 @@ contract PaymentProcessorV2Test is Test {
 
     function test_invoiceRelease() public {
         uint256 price = 0.01 ether;
-        pp.openInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
 
         uint256 id = pp.totalUniqueInvoiceCreated();
 
-        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.releasePayment(id);
 
         vm.prank(buyerOne);
         pp.paySingleInvoice{ value: price }(id, address(0));
 
-        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.releasePayment(id);
 
         vm.prank(sellerOne);
@@ -669,7 +684,7 @@ contract PaymentProcessorV2Test is Test {
 
         pp.releasePayment(id);
 
-        vm.expectRevert(PaymentProcessorV2.InvalidInvoiceState.selector);
+        vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.releasePayment(id);
 
         assertEq(pp.getInvoice(id).state, pp.RELEASED());
@@ -680,7 +695,7 @@ contract PaymentProcessorV2Test is Test {
     }
 
     function _getSubInvoiceIdsForMetaInvoice(uint256 metaInvoiceId) internal view returns (uint256[] memory) {
-        MetaInvoice memory meta = pp.getMetaInvoice(metaInvoiceId);
+        IPaymentProcessorV2.MetaInvoice memory meta = pp.getMetaInvoice(metaInvoiceId);
         uint256 count = meta.upper - meta.lower + 1;
         uint256[] memory ids = new uint256[](count);
 
@@ -700,10 +715,10 @@ contract PaymentProcessorV2Test is Test {
         address seller,
         address buyer,
         uint256 price,
-        uint256 timeBeforeCancelation,
-        uint256 disputeWindow
-    ) internal pure returns (InvoiceCreationParam memory) {
-        InvoiceCreationParam memory param;
+        uint32 timeBeforeCancelation,
+        uint32 disputeWindow
+    ) internal pure returns (IPaymentProcessorV2.InvoiceCreationParam memory) {
+        IPaymentProcessorV2.InvoiceCreationParam memory param;
         param.seller = seller;
         param.buyer = buyer;
         param.price = price;
@@ -718,11 +733,12 @@ contract PaymentProcessorV2Test is Test {
         address buyer,
         address[] memory sellers,
         uint256[] memory prices,
-        uint256[] memory timeBeforeCancelation,
-        uint256[] memory disputeWindow
-    ) internal pure returns (InvoiceCreationParam[] memory) {
+        uint32[] memory timeBeforeCancelation,
+        uint32[] memory disputeWindow
+    ) internal pure returns (IPaymentProcessorV2.InvoiceCreationParam[] memory) {
         uint256 numberOfInvoice = sellers.length;
-        InvoiceCreationParam[] memory params = new InvoiceCreationParam[](numberOfInvoice);
+        IPaymentProcessorV2.InvoiceCreationParam[] memory params =
+            new IPaymentProcessorV2.InvoiceCreationParam[](numberOfInvoice);
 
         for (uint256 i; i < numberOfInvoice; i++) {
             params[i] =
