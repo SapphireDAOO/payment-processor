@@ -7,6 +7,8 @@ import { IPaymentProcessorV2 } from "../../src/interface/IPaymentProcessorV2.sol
 import { MockERC20 } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+// check fee balance
+
 contract PaymentProcessorV2Test is Test {
     PaymentProcessorV2 pp;
     MockERC20 paymentTokenOne;
@@ -662,6 +664,7 @@ contract PaymentProcessorV2Test is Test {
         assertEq(pp.getInvoice(id).state, pp.DISPUTE_SETTLED());
         assertEq(IERC20(paymentTokenOne).balanceOf(sellerOne), sellerBalanceBefore + sellerShare - fee);
         assertEq(IERC20(paymentTokenOne).balanceOf(buyerOne), buyerBalanceBefore + buyerShare);
+         assertEq(IERC20(paymentTokenOne).balanceOf(feeReceiver), fee);
     }
 
     function test_invoiceRelease() public {
