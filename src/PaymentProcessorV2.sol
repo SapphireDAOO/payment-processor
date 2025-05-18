@@ -6,68 +6,16 @@ import { EscrowFactory } from "./EscrowFactory.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
-
-struct Invoice {
-    address seller;
-    address buyer;
-    uint256 createdAt;
-    uint256 price;
-    uint256 paidAt;
-    uint256 invoiceExpiryDuration;
-    uint256 timeBeforeCancelation;
-    uint256 disputeWindow;
-    uint256 state;
-    uint256 metaInvoiceId;
-    address paymentToken;
-    address escrow;
-}
-
-struct MetaInvoice {
-    uint256 price;
-    uint256 upper;
-    uint256 lower;
-    address paymentToken;
-    address escrow;
-}
-
-struct InvoiceCreationParam {
-    address seller;
-    address buyer;
-    uint256 invoiceExpiryDuration;
-    uint256 timeBeforeCancelation;
-    uint256 disputeWindow;
-    uint256 price;
-}
+import { IPaymentProcessorV2 } from "./interface/IPaymentProcessorV2.sol";
 
 // test
 // package struct
 // rearrange file (v1 + v2) ?
 // test
 
-contract PaymentProcessorV2 is EscrowFactory, Ownable {
-    error InvalidBuyer();
-    error InvalidMetaInvoicePayment();
-    error InvalidPaymentToken();
-    error InvalidNativePayment();
-    error EscrowAddressMismatch();
-    error NoSubInvoiceCancelled();
-    error InvalidInvoiceState();
-    error UnauthorizedSeller();
-    error InvoiceDoesNotExist();
-    error UnauthorizedBuyer();
-    error InvoiceResponseTimeExpired();
-    error DisputeWindowExpired();
-    error InvalidDisputeResolution();
-    error InvalidSellersPayoutShare();
-    error NoShareAllocatedToBuyer();
-    error NotAuthorized();
-    error InvoiceExpired();
-    error CancelationRequestDeadlinePassed();
-    error ZeroEscrowBalance();
-    error AlreadyRefunded();
-    error InvoiceStillActive();
-
+contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     using SafeTransferLib for address;
+    using SafeCastLib for uint256;
 
     uint256 private nextInvoiceId;
     uint256 private nextMetaInvoiceId;
@@ -76,22 +24,22 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
     address public marketplace;
     address private feeReceiver;
 
-    uint32 public constant INITIATED = 1;
-    uint32 public constant PAID = INITIATED + 1;
-    uint32 public constant REFUNDED = PAID + 1;
-    uint32 public constant ACCEPTED = REFUNDED + 1;
-    uint32 public constant CANCELED = ACCEPTED + 1;
-    uint32 public constant CANCELATION_REQUESTED = CANCELED + 1;
-    uint32 public constant CANCELATION_ACCEPTED = CANCELATION_REQUESTED + 1;
-    uint32 public constant CANCELATION_REJECTED = CANCELATION_ACCEPTED + 1;
-    uint32 public constant REJECTED = CANCELATION_REJECTED + 1;
-    uint32 public constant DISPUTED = REJECTED + 1;
+    uint8 public constant INITIATED = 1;
+    uint8 public constant PAID = INITIATED + 1;
+    uint8 public constant REFUNDED = PAID + 1;
+    uint8 public constant ACCEPTED = REFUNDED + 1;
+    uint8 public constant CANCELED = ACCEPTED + 1;
+    uint8 public constant CANCELATION_REQUESTED = CANCELED + 1;
+    uint8 public constant CANCELATION_ACCEPTED = CANCELATION_REQUESTED + 1;
+    uint8 public constant CANCELATION_REJECTED = CANCELATION_ACCEPTED + 1;
+    uint8 public constant REJECTED = CANCELATION_REJECTED + 1;
+    uint8 public constant DISPUTED = REJECTED + 1;
 
-    uint32 public constant DISPUTE_RESOLVED = DISPUTED + 1;
-    uint32 public constant DISPUTE_DISMISSED = DISPUTE_RESOLVED + 1;
-    uint32 public constant DISPUTE_SETTLED = DISPUTE_DISMISSED + 1;
+    uint8 public constant DISPUTE_RESOLVED = DISPUTED + 1;
+    uint8 public constant DISPUTE_DISMISSED = DISPUTE_RESOLVED + 1;
+    uint8 public constant DISPUTE_SETTLED = DISPUTE_DISMISSED + 1;
 
-    uint32 public constant RELEASED = DISPUTE_SETTLED + 1;
+    uint8 public constant RELEASED = DISPUTE_SETTLED + 1;
 
     uint256 public constant BASIS_POINTS = 10_000;
 
@@ -115,7 +63,11 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         nextMetaInvoiceId = 1;
     }
 
-    function openMetaInvoice(address buyer, InvoiceCreationParam[] memory param) public onlyMarketplace {
+    function createSingleInvoice(InvoiceCreationParam memory param) external onlyMarketplace {
+        _createInvoice(nextInvoiceId++, 0, param);
+    }
+
+    function createMetaInvoice(address buyer, InvoiceCreationParam[] memory param) external onlyMarketplace {
         uint256 totalPrice;
         uint256 thisMetaInvoiceId = nextMetaInvoiceId;
         uint256 startInvoiceId = nextInvoiceId;
@@ -128,7 +80,7 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
             param[i].buyer = buyer;
             totalPrice += param[i].price;
 
-            Invoice memory inv = _openInvoice(invoiceId, thisMetaInvoiceId, param[i]);
+            Invoice memory inv = _createInvoice(invoiceId, thisMetaInvoiceId, param[i]);
             metaInvoiceToSubInvoice[thisMetaInvoiceId][invoiceId] = inv;
             subInvoiceToMetaInvoiceId[invoiceId] = thisMetaInvoiceId;
         }
@@ -139,10 +91,6 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         nextInvoiceId += i;
 
         emit OpenedMetaInvoice(thisMetaInvoiceId, totalPrice);
-    }
-
-    function openInvoice(InvoiceCreationParam memory param) public onlyMarketplace {
-        _openInvoice(nextInvoiceId++, 0, param);
     }
 
     function paySingleInvoice(uint256 id, address paymentToken) external payable {
@@ -244,7 +192,7 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         _updateInvoice(id, inv);
     }
 
-    function resolveDispute(uint256 id, uint256 resolution, uint256 sellerShare) external onlyMarketplace {
+    function resolveDispute(uint256 id, uint8 resolution, uint256 sellerShare) external onlyMarketplace {
         Invoice memory inv = _getInvoice(id);
 
         if (inv.state != DISPUTED) revert InvalidInvoiceState();
@@ -299,8 +247,6 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.price);
     }
 
-    // may be allow multiple action on invoice in one?
-
     function _invoicePayment(Invoice memory inv, uint256 value, uint256 id, address paymentToken) internal {
         if (block.timestamp > inv.createdAt + inv.invoiceExpiryDuration) revert InvoiceExpired();
         if (value > 0 && value != inv.price) revert InvalidNativePayment();
@@ -319,7 +265,7 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
 
         inv.state = PAID;
         inv.escrow = escrowAddress;
-        inv.paidAt = block.timestamp;
+        inv.paidAt = (block.timestamp).toUint48();
 
         if (paymentToken != address(0)) {
             inv.paymentToken = paymentToken;
@@ -327,7 +273,7 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         }
     }
 
-    function _openInvoice(uint256 id, uint256 metaInvoiceId, InvoiceCreationParam memory param)
+    function _createInvoice(uint256 id, uint256 metaInvoiceId, InvoiceCreationParam memory param)
         internal
         returns (Invoice memory)
     {
@@ -335,7 +281,7 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
         inv.seller = param.seller;
         inv.buyer = param.buyer;
         inv.price = param.price;
-        inv.createdAt = block.timestamp;
+        inv.createdAt = (block.timestamp).toUint48();
         inv.timeBeforeCancelation = param.timeBeforeCancelation;
         inv.state = INITIATED;
         inv.metaInvoiceId = metaInvoiceId;
@@ -414,16 +360,6 @@ contract PaymentProcessorV2 is EscrowFactory, Ownable {
     function getMetaInvoiceIdForSub(uint256 id) external view returns (uint256) {
         return subInvoiceToMetaInvoiceId[id];
     }
-
-    event DisputeDismissed(uint256 indexed invoiceId);
-    event DisputeResolved(uint256 indexed invoiceId);
-    event InvoiceAccepted(uint256 indexed invoiceId);
-    event MetaInvoiceSubPaid(uint256 indexed id);
-    event OpenedMetaInvoice(uint256 indexed id, uint256 indexed price);
-    event OpenedInvoice(uint256 indexed invoiceId, Invoice invoice);
-    event InvoiceCanceled(uint256 indexed invoiceId);
-    event InvoiceRejected(uint256 indexed invoiceId);
-    event DisputeSettled(uint256 indexed id, uint256 sellerAmount, uint256 buyerAmount);
 
     // take the price input and the amount transferred should be equal to the price input
 }
