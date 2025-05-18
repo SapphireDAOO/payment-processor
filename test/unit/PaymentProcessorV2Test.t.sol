@@ -589,12 +589,19 @@ contract PaymentProcessorV2Test is Test {
             pp.createDispute(id);
         }
 
-        pp.resolveDispute(ids[0], pp.DISPUTE_DISMISSED(), 0);
+        uint256 dismissed = pp.DISPUTE_DISMISSED();
+        uint256 resolved = pp.DISPUTE_RESOLVED();
 
-        pp.resolveDispute(ids[1], pp.DISPUTE_RESOLVED(), 0);
+        vm.prank(buyerOne);
+        vm.expectRevert(PaymentProcessorV2.NotAuthorized.selector);
+        pp.resolveDispute(ids[0], dismissed, 0);
 
-        assertEq(pp.getInvoice(ids[0]).state, pp.DISPUTE_DISMISSED());
-        assertEq(pp.getInvoice(ids[1]).state, pp.DISPUTE_RESOLVED());
+        pp.resolveDispute(ids[0], dismissed, 0);
+
+        pp.resolveDispute(ids[1], resolved, 0);
+
+        assertEq(pp.getInvoice(ids[0]).state, dismissed);
+        assertEq(pp.getInvoice(ids[1]).state, resolved);
     }
 
     function test_settledDispute() public {
