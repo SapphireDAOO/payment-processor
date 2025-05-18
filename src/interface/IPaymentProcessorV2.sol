@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 interface IPaymentProcessorV2 {
     // ================================================================
-    //                              ERRORS                              
+    //                              ERRORS
     // ================================================================
 
     /// @notice Thrown when the caller is not the expected buyer.

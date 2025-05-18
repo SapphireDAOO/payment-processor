@@ -664,7 +664,7 @@ contract PaymentProcessorV2Test is Test {
         assertEq(pp.getInvoice(id).state, pp.DISPUTE_SETTLED());
         assertEq(IERC20(paymentTokenOne).balanceOf(sellerOne), sellerBalanceBefore + sellerShare - fee);
         assertEq(IERC20(paymentTokenOne).balanceOf(buyerOne), buyerBalanceBefore + buyerShare);
-         assertEq(IERC20(paymentTokenOne).balanceOf(feeReceiver), fee);
+        assertEq(IERC20(paymentTokenOne).balanceOf(feeReceiver), fee);
     }
 
     function test_invoiceRelease() public {
