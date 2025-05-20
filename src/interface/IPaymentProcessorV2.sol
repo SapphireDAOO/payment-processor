@@ -88,14 +88,16 @@ interface IPaymentProcessorV2 {
         uint48 paidAt;
         /// @notice Timestamp when the invoice was created.
         uint48 createdAt;
-        /// @notice Time window (in seconds) within which a dispute can be created after payment.
-        uint32 disputeWindow;
+        /// @notice Duration (in seconds) after payment before funds are auto-released unless disputed.
+        uint32 releaseWindow;
         /// @notice Time window (in seconds) after which the invoice expires if unpaid.
         uint32 invoiceExpiryDuration;
         /// @notice Time window (in seconds) after payment within which the seller must respond.
         uint32 timeBeforeCancelation;
-        /// @notice Price or amount to be paid for the invoice.
+        /// @notice Invoice amount expressed in USD
         uint256 price;
+        /// @notice The total amount paid by the buyer for this invoice, denominated in the payment token (native token if address(0)).
+        uint256 amountPaid;
         /// @notice Identifier linking the invoice to a meta invoice. Zero if not part of any meta invoice.
         uint256 metaInvoiceId;
     }
@@ -122,8 +124,8 @@ interface IPaymentProcessorV2 {
         uint32 invoiceExpiryDuration;
         /// @notice Duration (in seconds) after payment within which the seller must respond.
         uint32 timeBeforeCancelation;
-        /// @notice Duration (in seconds) after payment within which a dispute can be raised.
-        uint32 disputeWindow;
+        /// @notice Duration (in seconds) after payment before funds are auto-released unless disputed.
+        uint32 releaseWindow;
         /// @notice Price or amount to be paid for the invoice.
         uint256 price;
     }
@@ -266,12 +268,11 @@ interface IPaymentProcessorV2 {
     function setMarketplace(address marketplaceAddr) external;
 
     /**
-     * @notice Sets the allowance status of a given ERC20 token for payments.
-     * @dev Callable only by the contract owner.
+     * @notice Sets the Chainlink price feed aggregator address for a supported token.
      * @param token The address of the ERC20 token.
-     * @param state True to allow, false to disallow.
+     * @param aggregator The address of the Chainlink aggregator for the token.
      */
-    function setPaymentTokenState(address token, bool state) external;
+    function setPriceFeed(address token, address aggregator) external;
 
     /**
      * @notice Sets the address that will receive fees collected from transactions.

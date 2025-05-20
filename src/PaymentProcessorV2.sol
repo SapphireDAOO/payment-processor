@@ -1,18 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import { console } from "forge-std/Console.sol";
 import { IEscrow } from "./interface/IEscrow.sol";
 import { EscrowFactory } from "./EscrowFactory.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 import { IPaymentProcessorV2 } from "./interface/IPaymentProcessorV2.sol";
+import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+import { IERC20 } from "./interface/IERC20.sol";
 
 // introduce chainlink oracle for balanced prices
+
+// what of native token aggregator?
 
 contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     using SafeTransferLib for address;
     using SafeCastLib for uint256;
+    using SafeCastLib for int256;
 
     uint256 private nextInvoiceId;
     uint256 private nextMetaInvoiceId;
@@ -20,6 +27,8 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     uint256 private feeRate;
     address private marketplace;
     address private feeReceiver;
+
+    address private nativeTokenAggregator;
 
     /// @notice Invoice has been created but no payment has been made yet.
     uint8 public constant INITIATED = 1;
@@ -66,22 +75,44 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     /// @notice Total basis points used for percentage calculations. 10_000 = 100%.
     uint256 public constant BASIS_POINTS = 10_000;
 
+    /// @notice Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 = 1.0)
+    uint8 public constant DEFAULT_DECIMAL = 18;
+
     mapping(uint256 id => Invoice data) private invoice;
-    mapping(address token => bool allowed) private isAllowed;
     mapping(uint256 metaInvoiceId => MetaInvoice data) private metaInvoice;
+    mapping(address token => address aggregator) private priceFeed;
     mapping(uint256 subInvoiceId => uint256 metaInvoiceId) private subInvoiceToMetaInvoiceId;
     mapping(uint256 metaInvoiceId => mapping(uint256 subInvoiceId => Invoice invoices)) private metaInvoiceToSubInvoice;
 
+    /**
+     * @notice Restricts function access to the authorized marketplace address.
+     * @dev Reverts with NotAuthorized() if the caller is not the marketplace.
+     */
     modifier onlyMarketplace() {
         if (msg.sender != marketplace) revert NotAuthorized();
         _;
     }
 
-    constructor(address ownerAddress, address marketplaceAddress, uint256 newFeeRate, address feeReceiverAddress) {
+    /**
+     * @notice Initializes the PaymentProcessorV2 contract with required configuration.
+     * @param ownerAddress The address that will be set as the contract owner.
+     * @param marketplaceAddress The address authorized to create and manage invoices.
+     * @param newFeeRate The platform fee rate in basis points (BPS). 1 BPS = 0.01%.
+     * @param feeReceiverAddress The address that will receive collected platform fees.
+     * @param nativeTokenAggregatorAddress price
+     */
+    constructor(
+        address ownerAddress,
+        address marketplaceAddress,
+        uint256 newFeeRate,
+        address feeReceiverAddress,
+        address nativeTokenAggregatorAddress
+    ) {
         _initializeOwner(ownerAddress);
         setMarketplace(marketplaceAddress);
         setFeeRate(newFeeRate);
         setFeeReceiver(feeReceiverAddress);
+        nativeTokenAggregator = nativeTokenAggregatorAddress;
         nextInvoiceId = 1;
         nextMetaInvoiceId = 1;
     }
@@ -120,7 +151,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
 
     /// @inheritdoc IPaymentProcessorV2
     function paySingleInvoice(uint256 id, address paymentToken) external payable {
-        if (paymentToken != address(0) && !isAllowed[paymentToken]) revert InvalidPaymentToken();
+        if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
 
         Invoice memory inv = invoice[id];
         _invoicePayment(inv, msg.value, id, paymentToken);
@@ -129,18 +160,19 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
 
     /// @inheritdoc IPaymentProcessorV2
     function payMetaInvoice(uint256 id, address paymentToken) external payable {
-        if (paymentToken != address(0) && !isAllowed[paymentToken]) revert InvalidPaymentToken();
+        if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
         MetaInvoice memory meta = metaInvoice[id];
         if (meta.price == 0) revert InvoiceDoesNotExist();
 
-        if (msg.value != meta.price && msg.value > 0) revert InvalidMetaInvoicePayment();
+        uint256 price = getTokenValueFromUsd(paymentToken, meta.price);
+        if (msg.value != price && msg.value > 0) revert InvalidMetaInvoicePayment();
         if (msg.sender != metaInvoiceToSubInvoice[id][meta.lower].buyer) revert InvalidBuyer();
 
         for (uint256 i = meta.lower; i <= meta.upper; i++) {
             Invoice memory inv = metaInvoiceToSubInvoice[id][i];
             if (inv.state != INITIATED) continue;
-
-            _invoicePayment(inv, inv.price, i, paymentToken);
+            uint256 invPrice = getTokenValueFromUsd(paymentToken, inv.price);
+            _invoicePayment(inv, invPrice, i, paymentToken);
             metaInvoiceToSubInvoice[id][i] = inv;
 
             emit MetaInvoiceSubPaid(i);
@@ -160,7 +192,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         inv.state = accept ? CANCELATION_ACCEPTED : CANCELATION_REJECTED;
         _updateInvoice(id, inv);
         if (inv.state == CANCELATION_ACCEPTED) {
-            IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.price);
+            IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.amountPaid);
         }
     }
 
@@ -183,7 +215,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         Invoice memory inv = _getInvoice(id);
         if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
         if (inv.state != ACCEPTED) revert InvalidInvoiceState();
-        if (block.timestamp > inv.paidAt + inv.disputeWindow) revert DisputeWindowExpired();
+        if (block.timestamp > inv.paidAt + inv.releaseWindow) revert DisputeWindowExpired();
 
         inv.state = DISPUTED;
         _updateInvoice(id, inv);
@@ -209,10 +241,10 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         }
 
         if (resolution == DISPUTE_SETTLED) {
-            uint256 sellerReceivingValue = _applyBasisPoints(inv.price, sellerShare);
+            uint256 sellerReceivingValue = _applyBasisPoints(inv.amountPaid, sellerShare);
             uint256 buyerReceivingValue;
             if (sellerShare != BASIS_POINTS) {
-                buyerReceivingValue = _applyBasisPoints(inv.price, BASIS_POINTS - sellerShare);
+                buyerReceivingValue = _applyBasisPoints(inv.amountPaid, BASIS_POINTS - sellerShare);
                 IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, buyerReceivingValue);
             }
 
@@ -230,7 +262,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
 
         inv.state = RELEASED;
         _updateInvoice(id, inv);
-        _processSellerPayout(inv, inv.price);
+        _processSellerPayout(inv, inv.amountPaid);
     }
 
     /// @inheritdoc IPaymentProcessorV2
@@ -244,7 +276,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         inv.state = REFUNDED;
         _updateInvoice(id, inv);
 
-        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.price);
+        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.amountPaid);
     }
 
     /// @inheritdoc IPaymentProcessorV2
@@ -256,7 +288,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
 
         inv.state = CANCELED;
         _updateInvoice(id, inv);
-        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.price);
+        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.amountPaid);
 
         emit InvoiceCanceled(id);
     }
@@ -286,8 +318,8 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorV2
-    function setPaymentTokenState(address token, bool state) external onlyOwner {
-        isAllowed[token] = state;
+    function setPriceFeed(address token, address aggregator) external onlyOwner {
+        priceFeed[token] = aggregator;
     }
 
     /// @inheritdoc IPaymentProcessorV2
@@ -306,8 +338,10 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     }
 
     function _invoicePayment(Invoice memory inv, uint256 value, uint256 id, address paymentToken) internal {
+        uint256 price = getTokenValueFromUsd(paymentToken, inv.price);
+
         if (block.timestamp > inv.createdAt + inv.invoiceExpiryDuration) revert InvoiceExpired();
-        if (value > 0 && value != inv.price) revert InvalidNativePayment();
+        if (value > 0 && value != price) revert InvalidNativePayment();
         if (msg.sender != inv.buyer) revert InvalidBuyer();
         if (inv.state != INITIATED) revert InvalidInvoiceState();
 
@@ -324,11 +358,23 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         inv.state = PAID;
         inv.escrow = escrowAddress;
         inv.paidAt = (block.timestamp).toUint48();
+        inv.amountPaid = price;
 
         if (paymentToken != address(0)) {
             inv.paymentToken = paymentToken;
-            paymentToken.safeTransferFrom(msg.sender, escrowAddress, inv.price);
+            paymentToken.safeTransferFrom(msg.sender, escrowAddress, price);
         }
+    }
+
+    function getTokenValueFromUsd(address paymentToken, uint256 price) public view returns (uint256) {
+        address aggregator = paymentToken == address(0) ? nativeTokenAggregator : priceFeed[paymentToken];
+        (, int256 answer,,,) = AggregatorV3Interface(aggregator).latestRoundData();
+        uint256 usdPerToken = answer.toUint256();
+
+        uint8 tokenDecimals = paymentToken == address(0) ? DEFAULT_DECIMAL : IERC20(paymentToken).decimals();
+        uint256 valueInPaymentToken = (price * (10 ** tokenDecimals)) / (usdPerToken);
+
+        return valueInPaymentToken;
     }
 
     function _createInvoice(uint256 id, uint256 metaInvoiceId, InvoiceCreationParam memory param)
@@ -343,7 +389,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         inv.timeBeforeCancelation = param.timeBeforeCancelation;
         inv.state = INITIATED;
         inv.metaInvoiceId = metaInvoiceId;
-        inv.disputeWindow = param.disputeWindow;
+        inv.releaseWindow = param.releaseWindow;
         inv.invoiceExpiryDuration = param.invoiceExpiryDuration;
 
         invoice[id] = inv;
