@@ -3,9 +3,11 @@ pragma solidity 0.8.28;
 
 import { Test, console } from "forge-std/Test.sol";
 import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
+import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 
 abstract contract SetUp is Test {
     PaymentProcessorV1 pp;
+    PaymentProcessorStorage ppStorage;
 
     address owner;
     address feeReceiver;
@@ -33,8 +35,9 @@ abstract contract SetUp is Test {
         vm.deal(payerOne, PAYER_ONE_INITIAL_BALANCE);
         vm.deal(payerTwo, PAYER_TWO_INITIAL_BALANCE);
 
+        ppStorage = new PaymentProcessorStorage(feeReceiver, FEE_RATE);
         vm.prank(owner);
-        pp = new PaymentProcessorV1(feeReceiver, FEE_RATE, DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
+        pp = new PaymentProcessorV1(address(ppStorage), DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
         vm.stopPrank();
     }
 }

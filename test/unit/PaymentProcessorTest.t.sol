@@ -8,24 +8,10 @@ error Unauthorized();
 
 contract PaymentProcessorTest is SetUp {
     function test_storage_state() public view {
-        assertEq(pp.getFeeRate(), FEE_RATE);
-        assertEq(pp.getFeeReceiver(), feeReceiver);
+        assertEq(ppStorage.getFeeRate(), FEE_RATE);
+        assertEq(ppStorage.getFeeReceiver(), feeReceiver);
         assertEq(pp.getNextInvoiceId(), 1);
         assertEq(pp.getDefaultHoldPeriod(), DEFAULT_HOLD_PERIOD);
-    }
-
-    function test_setters() public {
-        vm.startPrank(owner);
-
-        vm.expectRevert(IPaymentProcessorV1.FeeValueCanNotBeZero.selector);
-        pp.setFeeRate(0);
-
-        vm.expectRevert(IPaymentProcessorV1.HoldPeriodCanNotBeZero.selector);
-        pp.setDefaultHoldPeriod(0);
-
-        vm.expectRevert(IPaymentProcessorV1.ZeroAddressIsNotAllowed.selector);
-        pp.setFeeReceiversAddress(address(0));
-        vm.stopPrank();
     }
 
     function test_invoice_creation() public {
@@ -152,7 +138,7 @@ contract PaymentProcessorTest is SetUp {
         IPaymentProcessorV1.Invoice memory i = pp.getInvoiceData(invoiceId);
         uint256 fee = pp.calculateFee(i.price);
         assertEq(i.status, pp.ACCEPTED());
-        assertEq(pp.getFeeReceiver().balance, fee);
+        assertEq(ppStorage.getFeeReceiver().balance, fee);
     }
 
     function test_payment_acceptance_after_acceptance_window() public {

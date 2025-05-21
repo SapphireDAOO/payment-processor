@@ -4,14 +4,17 @@ pragma solidity 0.8.28;
 import { Test, console, Vm } from "forge-std/Test.sol";
 import { PaymentProcessorV2 } from "../../src/PaymentProcessorV2.sol";
 import { IPaymentProcessorV2 } from "../../src/interface/IPaymentProcessorV2.sol";
-import { MockERC20 } from "../mock/mERC20.sol";
+import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
+import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 
 // check fee balance
 
 contract PaymentProcessorV2Test is Test {
     PaymentProcessorV2 pp;
-    MockERC20 paymentTokenOne;
+    MockUsdc mockUsdc;
+    MockWbtc mockWBtc;
 
     address admin = address(1);
     address buyerOne = address(2);
@@ -22,28 +25,50 @@ contract PaymentProcessorV2Test is Test {
 
     uint256 public constant FEE = 500;
 
+    int256 constant INITIAL_USDC_PRICE = 1e8;
+    int256 constant INITIAL_WBTC_PRICE = 90_000e8;
+    int256 constant INITIAL_POL_PRICE = 0.6e8;
+
+    uint256 constant DEFAULT_BALANCE = 100_000 ether;
+
     function setUp() public {
         vm.startPrank(admin);
-        pp = new PaymentProcessorV2(admin, address(this), FEE, feeReceiver);
-        paymentTokenOne = new MockERC20("Payment token", "PTK");
 
-        pp.setPaymentTokenState(address(paymentTokenOne), true);
+        PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(feeReceiver, FEE);
+
+        MockV3Aggregator mockUsdcPriceFeed = new MockV3Aggregator(8, INITIAL_USDC_PRICE);
+        MockV3Aggregator mockWbtcPriceFeed = new MockV3Aggregator(8, INITIAL_WBTC_PRICE);
+        MockV3Aggregator mockNativePriceFeed = new MockV3Aggregator(8, INITIAL_POL_PRICE);
+
+        pp = new PaymentProcessorV2(address(ppStorage), admin, address(this), address(mockNativePriceFeed));
+        mockUsdc = new MockUsdc("Mock Usdc", "mUsdc");
+        mockWBtc = new MockWbtc("Mock WBtc", "mWBtc");
+
+        pp.setPriceFeed(address(mockUsdc), address(mockUsdcPriceFeed));
+        pp.setPriceFeed(address(mockWBtc), address(mockWbtcPriceFeed));
         vm.stopPrank();
 
-        paymentTokenOne.mint(buyerOne, 100_000 ether);
-        paymentTokenOne.mint(buyerTwo, 100_000 ether);
+        mockUsdc.mint(buyerOne, DEFAULT_BALANCE);
+        mockUsdc.mint(buyerTwo, DEFAULT_BALANCE);
 
-        vm.prank(buyerOne);
-        IERC20(paymentTokenOne).approve(address(pp), type(uint256).max);
+        mockWBtc.mint(buyerOne, DEFAULT_BALANCE);
+        mockWBtc.mint(buyerTwo, DEFAULT_BALANCE);
 
-        vm.prank(buyerTwo);
-        IERC20(paymentTokenOne).approve(address(pp), type(uint256).max);
+        vm.startPrank(buyerOne);
+        IERC20(mockUsdc).approve(address(pp), type(uint256).max);
+        IERC20(mockWBtc).approve(address(pp), type(uint256).max);
+        vm.stopPrank();
 
-        vm.deal(buyerOne, 100 ether);
-        vm.deal(sellerOne, 100 ether);
+        vm.startPrank(buyerTwo);
+        IERC20(mockUsdc).approve(address(pp), type(uint256).max);
+        IERC20(mockWBtc).approve(address(pp), type(uint256).max);
+        vm.stopPrank();
 
-        vm.deal(buyerTwo, 100 ether);
-        vm.deal(sellerTwo, 100 ether);
+        vm.deal(buyerOne, DEFAULT_BALANCE);
+        vm.deal(sellerOne, DEFAULT_BALANCE);
+
+        vm.deal(buyerTwo, DEFAULT_BALANCE);
+        vm.deal(sellerTwo, DEFAULT_BALANCE);
     }
 
     function test_Initialization() public view {
@@ -52,7 +77,7 @@ contract PaymentProcessorV2Test is Test {
     }
 
     function test_singleInvoiceCreation() public {
-        uint256 price = 0.01 ether;
+        uint256 price = 100e8;
 
         vm.prank(buyerOne);
         vm.expectRevert(IPaymentProcessorV2.NotAuthorized.selector);
@@ -113,7 +138,7 @@ contract PaymentProcessorV2Test is Test {
     }
 
     function test_nativeTokenPaymentForSingleInvoice() public {
-        uint256 price = 0.01 ether;
+        uint256 price = 100e8;
         pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         uint256 thisInvoiceId = pp.totalUniqueInvoiceCreated();
 
@@ -125,12 +150,13 @@ contract PaymentProcessorV2Test is Test {
         vm.expectRevert(IPaymentProcessorV2.InvalidNativePayment.selector);
         pp.paySingleInvoice{ value: 0.001 ether }(thisInvoiceId, address(0));
 
-        pp.paySingleInvoice{ value: price }(thisInvoiceId, address(0));
+        uint256 amountInToken = pp.getTokenValueFromUsd(address(0), price);
+        pp.paySingleInvoice{ value: amountInToken }(thisInvoiceId, address(0));
         vm.stopPrank();
 
         IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(thisInvoiceId);
 
-        assertEq(inv.escrow.balance, price);
+        assertEq(inv.escrow.balance, amountInToken);
         assertEq(inv.paymentToken, address(0));
         assertEq(inv.state, pp.PAID());
 
@@ -149,8 +175,8 @@ contract PaymentProcessorV2Test is Test {
         sellers[1] = sellerTwo;
 
         uint256[] memory prices = new uint256[](2);
-        prices[0] = 0.01 ether;
-        prices[1] = 0.02 ether;
+        prices[0] = 150e8;
+        prices[1] = 250e8;
 
         uint32[] memory responseTime = new uint32[](2);
         responseTime[0] = 1 days;
@@ -165,11 +191,13 @@ contract PaymentProcessorV2Test is Test {
             buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
         );
 
+        uint256 tokenAmount = pp.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
+
         vm.expectRevert(IPaymentProcessorV2.InvoiceDoesNotExist.selector);
         pp.payMetaInvoice{ value: 0.03 ether }(10, address(0));
 
         vm.expectRevert(IPaymentProcessorV2.InvalidBuyer.selector);
-        pp.payMetaInvoice{ value: 0.03 ether }(thisInvoiceId, address(0));
+        pp.payMetaInvoice{ value: tokenAmount }(thisInvoiceId, address(0));
 
         vm.startPrank(buyerOne);
         vm.expectRevert(IPaymentProcessorV2.InvalidMetaInvoicePayment.selector);
@@ -178,7 +206,7 @@ contract PaymentProcessorV2Test is Test {
         vm.expectRevert(IPaymentProcessorV2.InvalidPaymentToken.selector);
         pp.payMetaInvoice(thisInvoiceId, address(12));
 
-        pp.payMetaInvoice{ value: 0.03 ether }(thisInvoiceId, address(0));
+        pp.payMetaInvoice{ value: tokenAmount }(thisInvoiceId, address(0));
 
         vm.stopPrank();
 
@@ -187,7 +215,7 @@ contract PaymentProcessorV2Test is Test {
 
         assertEq(invOne.state, pp.PAID());
         assertEq(invOne.escrow, escrowOne);
-        assertEq(invOne.escrow.balance, prices[0]);
+        assertEq(invOne.escrow.balance, pp.getTokenValueFromUsd(address(0), prices[0]));
         assertEq(invOne.paymentToken, address(0));
 
         IPaymentProcessorV2.Invoice memory invTwo = pp.getInvoice(pp.getNextInvoiceId() - 1);
@@ -195,30 +223,32 @@ contract PaymentProcessorV2Test is Test {
 
         assertEq(invTwo.state, pp.PAID());
         assertEq(invTwo.escrow, escrowTwo);
-        assertEq(invTwo.escrow.balance, prices[1]);
+        assertEq(invTwo.escrow.balance, pp.getTokenValueFromUsd(address(0), prices[1]));
         assertEq(invTwo.paymentToken, address(0));
     }
 
     function test_erc20PaymentForSingleInvoice() public {
-        uint256 price = 0.01 ether;
+        uint256 price = 100e8;
         pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
-        uint256 thisInvoiceId = pp.getNextInvoiceId() - 1;
+        uint256 invoiceId = pp.getNextInvoiceId() - 1;
 
         vm.prank(buyerTwo);
         vm.expectRevert(IPaymentProcessorV2.InvalidBuyer.selector);
-        pp.paySingleInvoice(thisInvoiceId, address(paymentTokenOne));
+        pp.paySingleInvoice(invoiceId, address(mockUsdc));
 
         vm.prank(buyerOne);
-        pp.paySingleInvoice(thisInvoiceId, address(paymentTokenOne));
+        pp.paySingleInvoice(invoiceId, address(mockUsdc));
 
         vm.prank(buyerOne);
         vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
-        pp.paySingleInvoice(thisInvoiceId, address(paymentTokenOne));
+        pp.paySingleInvoice(invoiceId, address(mockUsdc));
 
-        IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(thisInvoiceId);
+        IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(invoiceId);
 
-        assertEq(IERC20(paymentTokenOne).balanceOf(inv.escrow), price);
-        assertEq(inv.paymentToken, address(paymentTokenOne));
+        uint256 tokenValue = pp.getTokenValueFromUsd(address(mockUsdc), price);
+
+        assertEq(IERC20(mockUsdc).balanceOf(inv.escrow), tokenValue);
+        assertEq(inv.paymentToken, address(mockUsdc));
         assertEq(inv.state, pp.PAID());
     }
 
@@ -246,29 +276,29 @@ contract PaymentProcessorV2Test is Test {
 
         vm.prank(buyerOne);
 
-        pp.payMetaInvoice(thisInvoiceId, address(paymentTokenOne));
+        pp.payMetaInvoice(thisInvoiceId, address(mockWBtc));
 
         IPaymentProcessorV2.Invoice memory invOne = pp.getInvoice(thisInvoiceId);
         address escrowOne = _getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
 
         assertEq(invOne.state, pp.PAID());
         assertEq(invOne.escrow, escrowOne);
-        assertEq(IERC20(paymentTokenOne).balanceOf(invOne.escrow), prices[0]);
-        assertEq(invOne.paymentToken, address(paymentTokenOne));
+        assertEq(IERC20(mockWBtc).balanceOf(invOne.escrow), pp.getTokenValueFromUsd(address(mockWBtc), prices[0]));
+        assertEq(invOne.paymentToken, address(mockWBtc));
 
         IPaymentProcessorV2.Invoice memory invTwo = pp.getInvoice(pp.getNextInvoiceId() - 1);
         address escrowTwo = _getEscrowAddress(invTwo.seller, invTwo.buyer, pp.getNextInvoiceId() - 1);
 
         assertEq(invTwo.state, pp.PAID());
         assertEq(invTwo.escrow, escrowTwo);
-        assertEq(IERC20(paymentTokenOne).balanceOf(invTwo.escrow), prices[1]);
-        assertEq(invTwo.paymentToken, address(paymentTokenOne));
+        assertEq(IERC20(mockWBtc).balanceOf(invTwo.escrow), pp.getTokenValueFromUsd(address(mockWBtc), prices[1]));
+        assertEq(invTwo.paymentToken, address(mockWBtc));
     }
 
     function test_sellerAcceptsInvoice() public {
         // single Invoice
 
-        uint256 price = 0.01 ether;
+        uint256 price = 100e8;
         pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
@@ -277,8 +307,10 @@ contract PaymentProcessorV2Test is Test {
         vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.acceptInvoice(currentId);
 
+        uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
+
         vm.prank(buyerOne);
-        pp.paySingleInvoice{ value: price }(currentId, address(0));
+        pp.paySingleInvoice{ value: tokenValue }(currentId, address(0));
 
         assertEq(pp.getInvoice(currentId).state, pp.PAID());
 
@@ -298,8 +330,8 @@ contract PaymentProcessorV2Test is Test {
         sellers[1] = sellerTwo;
 
         uint256[] memory prices = new uint256[](2);
-        prices[0] = 0.01 ether;
-        prices[1] = 0.02 ether;
+        prices[0] = 5000e8;
+        prices[1] = 3000e8;
 
         uint32[] memory responseTime = new uint32[](2);
         responseTime[0] = 1 days;
@@ -315,8 +347,10 @@ contract PaymentProcessorV2Test is Test {
 
         uint256 currentMetaId = pp.totalMetaInvoiceCreated();
 
+        uint256 metaInvoiceTokenValue = pp.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
+
         vm.prank(buyerTwo);
-        pp.payMetaInvoice{ value: 0.03 ether }(currentMetaId, address(0));
+        pp.payMetaInvoice{ value: metaInvoiceTokenValue }(currentMetaId, address(0));
 
         uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(currentMetaId);
 
@@ -331,7 +365,7 @@ contract PaymentProcessorV2Test is Test {
         currentId = pp.totalUniqueInvoiceCreated();
 
         vm.prank(buyerOne);
-        pp.paySingleInvoice{ value: price }(currentId, address(0));
+        pp.paySingleInvoice{ value: tokenValue }(currentId, address(0));
 
         vm.warp(block.timestamp + 1 + 1 days);
 
@@ -342,13 +376,15 @@ contract PaymentProcessorV2Test is Test {
 
     function test_sellerCancelInitiatedInvoice() public {
         // single invoice
-        uint256 price = 0.01 ether;
+        uint256 price = 100e8;
         pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
 
+        uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
+
         vm.prank(buyerOne);
-        pp.paySingleInvoice{ value: price }(currentId, address(0));
+        pp.paySingleInvoice{ value: tokenValue }(currentId, address(0));
 
         uint256 buyersBalanceBeforeCancellation = buyerOne.balance;
 
@@ -367,7 +403,7 @@ contract PaymentProcessorV2Test is Test {
 
         IPaymentProcessorV2.Invoice memory invOne = pp.getInvoice(currentId);
         assertEq(invOne.state, pp.CANCELED());
-        assertEq(buyersBalanceAfterCancellation - buyersBalanceBeforeCancellation, price);
+        assertEq(buyersBalanceAfterCancellation - buyersBalanceBeforeCancellation, tokenValue);
 
         // meta invoice
 
@@ -377,9 +413,9 @@ contract PaymentProcessorV2Test is Test {
         sellers[2] = sellerOne;
 
         uint256[] memory prices = new uint256[](3);
-        prices[0] = 0.01 ether;
-        prices[1] = 0.02 ether;
-        prices[2] = 0.02 ether;
+        prices[0] = price;
+        prices[1] = 500e8;
+        prices[2] = 1400e8;
 
         uint32[] memory responseTime = new uint32[](3);
         responseTime[0] = 1 days;
@@ -397,8 +433,10 @@ contract PaymentProcessorV2Test is Test {
 
         uint256 currentMetaInvoiceId = pp.totalMetaInvoiceCreated();
 
+        tokenValue = pp.getTokenValueFromUsd(address(0), prices[0] + prices[1] + prices[2]);
+
         vm.prank(buyerOne);
-        pp.payMetaInvoice{ value: 0.05 ether }(currentMetaInvoiceId, address(0));
+        pp.payMetaInvoice{ value: tokenValue }(currentMetaInvoiceId, address(0));
         buyersBalanceBeforeCancellation = buyerOne.balance;
 
         uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(currentMetaInvoiceId);
@@ -409,14 +447,16 @@ contract PaymentProcessorV2Test is Test {
         for (uint256 i = 0; i < ids.length; i++) {
             assertEq(pp.getInvoice(ids[i]).state, pp.CANCELED());
         }
-        assertEq(buyerOne.balance, buyersBalanceBeforeCancellation + 0.05 ether);
+
+        assertApproxEqAbs(buyerOne.balance - buyersBalanceBeforeCancellation, tokenValue, 1);
     }
 
     function test_invoiceCancelationRequest() public {
-        uint256 price = 0.01 ether;
+        uint256 price = 100e8;
         pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
+        uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
 
         vm.expectRevert(IPaymentProcessorV2.UnauthorizedBuyer.selector);
         pp.requestCancelation(currentId);
@@ -426,7 +466,7 @@ contract PaymentProcessorV2Test is Test {
         vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.requestCancelation(currentId);
 
-        pp.paySingleInvoice{ value: price }(currentId, address(0));
+        pp.paySingleInvoice{ value: tokenValue }(currentId, address(0));
 
         pp.requestCancelation(currentId);
 
@@ -437,7 +477,7 @@ contract PaymentProcessorV2Test is Test {
         currentId = pp.totalUniqueInvoiceCreated();
 
         vm.startPrank(buyerOne);
-        pp.paySingleInvoice{ value: price }(currentId, address(0));
+        pp.paySingleInvoice{ value: tokenValue }(currentId, address(0));
 
         vm.warp(block.timestamp + 1 + 1 days);
         vm.expectRevert(IPaymentProcessorV2.CancelationRequestDeadlinePassed.selector);
@@ -453,9 +493,9 @@ contract PaymentProcessorV2Test is Test {
         sellers[2] = sellerOne;
 
         uint256[] memory prices = new uint256[](3);
-        prices[0] = 0.01 ether;
-        prices[1] = 0.02 ether;
-        prices[2] = 0.02 ether;
+        prices[0] = 50e8;
+        prices[1] = 2500e8;
+        prices[2] = 100e8;
 
         uint32[] memory responseTime = new uint32[](3);
         responseTime[0] = 1 days;
@@ -471,10 +511,13 @@ contract PaymentProcessorV2Test is Test {
             buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
         );
 
+        uint256 totalPrice = prices[0] + prices[1] + prices[2];
+
         uint256 currentMetaInvoiceId = pp.totalMetaInvoiceCreated();
+        uint256 tokenValue = pp.getTokenValueFromUsd(address(0), totalPrice);
 
         vm.startPrank(buyerOne);
-        pp.payMetaInvoice{ value: 0.05 ether }(currentMetaInvoiceId, address(0));
+        pp.payMetaInvoice{ value: tokenValue }(currentMetaInvoiceId, address(0));
 
         uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(currentMetaInvoiceId);
         pp.requestCancelation(ids);
@@ -491,19 +534,21 @@ contract PaymentProcessorV2Test is Test {
             pp.handleCancelationRequest(ids[i], accept[i]);
         }
 
-        assertEq(buyerOne.balance, buyersBalanceBefore + prices[0]);
+        assertEq(buyerOne.balance, buyersBalanceBefore + pp.getTokenValueFromUsd(address(0), prices[0]));
         assertEq(pp.getInvoice(ids[0]).state, pp.CANCELATION_ACCEPTED());
         assertEq(pp.getInvoice(ids[1]).state, pp.CANCELATION_REJECTED());
         assertEq(pp.getInvoice(ids[2]).state, pp.CANCELATION_REJECTED());
     }
 
     function test_refundAfterInvoiceExpires() public {
-        uint256 price = 0.01 ether;
+        uint256 price = 100e8;
         pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         uint256 id = pp.totalUniqueInvoiceCreated();
 
+        uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
+
         vm.prank(buyerOne);
-        pp.paySingleInvoice{ value: price }(id, address(0));
+        pp.paySingleInvoice{ value: tokenValue }(id, address(0));
 
         vm.prank(buyerTwo);
         vm.expectRevert(IPaymentProcessorV2.UnauthorizedBuyer.selector);
@@ -522,13 +567,13 @@ contract PaymentProcessorV2Test is Test {
         vm.stopPrank();
 
         assertEq(pp.getInvoice(id).state, pp.REFUNDED());
-        assertEq(pp.getInvoice(id).price + balanceBefore, buyerOne.balance);
+        assertEq(pp.getInvoice(id).amountPaid + balanceBefore, buyerOne.balance);
 
         pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         id = pp.totalUniqueInvoiceCreated();
 
         vm.prank(buyerOne);
-        pp.paySingleInvoice{ value: price }(id, address(0));
+        pp.paySingleInvoice{ value: tokenValue }(id, address(0));
 
         vm.prank(sellerOne);
         pp.acceptInvoice(id);
@@ -539,9 +584,10 @@ contract PaymentProcessorV2Test is Test {
     }
 
     function test_disputeCreation() public {
-        uint256 price = 0.01 ether;
+        uint256 price = 100e8;
         pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
         uint256 id = pp.totalUniqueInvoiceCreated();
+        uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
 
         vm.expectRevert(IPaymentProcessorV2.UnauthorizedBuyer.selector);
         pp.createDispute(id);
@@ -550,7 +596,7 @@ contract PaymentProcessorV2Test is Test {
         vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.createDispute(id);
 
-        pp.paySingleInvoice{ value: price }(id, address(0));
+        pp.paySingleInvoice{ value: tokenValue }(id, address(0));
         vm.stopPrank();
 
         vm.prank(sellerOne);
@@ -594,7 +640,7 @@ contract PaymentProcessorV2Test is Test {
         uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(metaInvoiceId);
 
         vm.prank(buyerOne);
-        pp.payMetaInvoice(metaInvoiceId, address(paymentTokenOne));
+        pp.payMetaInvoice(metaInvoiceId, address(mockUsdc));
 
         for (uint256 i; i < ids.length; i++) {
             uint256 id = ids[i];
@@ -622,13 +668,13 @@ contract PaymentProcessorV2Test is Test {
     }
 
     function test_settledDispute() public {
-        uint256 price = 0.01 ether;
+        uint256 price = 100e8;
         pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
-
         uint256 id = pp.totalUniqueInvoiceCreated();
+        uint256 tokenValue = pp.getTokenValueFromUsd(address(mockUsdc), price);
 
         vm.prank(buyerOne);
-        pp.paySingleInvoice(id, address(paymentTokenOne));
+        pp.paySingleInvoice(id, address(mockUsdc));
 
         vm.prank(sellerOne);
         pp.acceptInvoice(id);
@@ -643,8 +689,10 @@ contract PaymentProcessorV2Test is Test {
         vm.prank(buyerOne);
         pp.createDispute(id);
 
-        uint256 buyerBalanceBefore = IERC20(paymentTokenOne).balanceOf(buyerOne);
-        uint256 sellerBalanceBefore = IERC20(paymentTokenOne).balanceOf(sellerOne);
+        uint256 buyerBalanceBefore = IERC20(mockUsdc).balanceOf(buyerOne);
+        uint256 sellerBalanceBefore = IERC20(mockUsdc).balanceOf(sellerOne);
+
+        console.log("balances before", buyerBalanceBefore, sellerBalanceBefore);
 
         uint256 sellerPercentage = 9000;
 
@@ -656,20 +704,24 @@ contract PaymentProcessorV2Test is Test {
 
         pp.resolveDispute(id, settled, sellerPercentage);
 
-        uint256 buyerShare = _applyBasisPoints(price, pp.BASIS_POINTS() - sellerPercentage);
+        uint256 buyerShare = _applyBasisPoints(tokenValue, pp.BASIS_POINTS() - sellerPercentage);
 
-        uint256 sellerShare = _applyBasisPoints(price, sellerPercentage);
+        uint256 sellerShare = _applyBasisPoints(tokenValue, sellerPercentage);
         uint256 fee = _applyBasisPoints(sellerShare, FEE);
 
+        console.log("balances after", IERC20(mockUsdc).balanceOf(buyerOne), IERC20(mockUsdc).balanceOf(sellerOne));
+
         assertEq(pp.getInvoice(id).state, pp.DISPUTE_SETTLED());
-        assertEq(IERC20(paymentTokenOne).balanceOf(sellerOne), sellerBalanceBefore + sellerShare - fee);
-        assertEq(IERC20(paymentTokenOne).balanceOf(buyerOne), buyerBalanceBefore + buyerShare);
-        assertEq(IERC20(paymentTokenOne).balanceOf(feeReceiver), fee);
+        assertEq(IERC20(mockUsdc).balanceOf(sellerOne), sellerBalanceBefore + sellerShare - fee);
+        assertEq(IERC20(mockUsdc).balanceOf(buyerOne), buyerBalanceBefore + buyerShare);
+        assertEq(IERC20(mockUsdc).balanceOf(feeReceiver), fee);
     }
 
+    // @audit time factor
     function test_invoiceRelease() public {
-        uint256 price = 0.01 ether;
+        uint256 price = 100e8;
         pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
 
         uint256 id = pp.totalUniqueInvoiceCreated();
 
@@ -677,7 +729,7 @@ contract PaymentProcessorV2Test is Test {
         pp.releasePayment(id);
 
         vm.prank(buyerOne);
-        pp.paySingleInvoice{ value: price }(id, address(0));
+        pp.paySingleInvoice{ value: tokenValue }(id, address(0));
 
         vm.expectRevert(IPaymentProcessorV2.InvalidInvoiceState.selector);
         pp.releasePayment(id);
@@ -691,6 +743,11 @@ contract PaymentProcessorV2Test is Test {
         pp.releasePayment(id);
 
         assertEq(pp.getInvoice(id).state, pp.RELEASED());
+    }
+
+    function test_justRandom() public view {
+        uint256 value = pp.getTokenValueFromUsd(address(mockUsdc), 100e8);
+        console.log("Value is", value);
     }
 
     function _applyBasisPoints(uint256 amount, uint256 basisPoints) internal view returns (uint256) {
@@ -719,14 +776,14 @@ contract PaymentProcessorV2Test is Test {
         address buyer,
         uint256 price,
         uint32 timeBeforeCancelation,
-        uint32 disputeWindow
+        uint32 releaseWindow
     ) internal pure returns (IPaymentProcessorV2.InvoiceCreationParam memory) {
         IPaymentProcessorV2.InvoiceCreationParam memory param;
         param.seller = seller;
         param.buyer = buyer;
         param.price = price;
         param.timeBeforeCancelation = timeBeforeCancelation;
-        param.disputeWindow = disputeWindow;
+        param.releaseWindow = releaseWindow;
         param.invoiceExpiryDuration = 1 days;
 
         return param;
