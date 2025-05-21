@@ -41,10 +41,6 @@ contract Escrow is IEscrow {
         emit FundsDeposited(_invoiceId, msg.value);
     }
 
-    // what should the escrow do ?
-
-    // what about event ? Handle in processor?
-
     function balanceOf(address token) external view returns (uint256) {
         return token == address(0) ? address(this).balance : token.balanceOf(address(this));
     }

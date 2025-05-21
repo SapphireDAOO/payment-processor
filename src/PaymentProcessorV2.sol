@@ -11,23 +11,25 @@ import { IPaymentProcessorV2 } from "./interface/IPaymentProcessorV2.sol";
 import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { IERC20 } from "./interface/IERC20.sol";
+import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
 
-// introduce chainlink oracle for balanced prices
-
-// what of native token aggregator?
+// proper events
+// deployment script
 
 contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     using SafeTransferLib for address;
     using SafeCastLib for uint256;
     using SafeCastLib for int256;
 
-    uint256 private nextInvoiceId;
+    IPaymentProcessorStorage public ppStorage;
+
+    /// @notice The next available meta-invoice ID to be assigned.
     uint256 private nextMetaInvoiceId;
 
-    uint256 private feeRate;
+    /// @notice Address authorized to interact with invoice creation and specific management functions.
     address private marketplace;
-    address private feeReceiver;
 
+    /// @notice Chainlink price feed aggregator for the native token.
     address private nativeTokenAggregator;
 
     /// @notice Invoice has been created but no payment has been made yet.
@@ -78,10 +80,34 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     /// @notice Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 = 1.0)
     uint8 public constant DEFAULT_DECIMAL = 18;
 
+    /**
+     * @notice Mapping from unique invoice ID to its invoice data.
+     * @dev Used for standalone invoices (not part of a meta-invoice).
+     */
     mapping(uint256 id => Invoice data) private invoice;
+
+    /**
+     * @notice Mapping from unique meta-invoice ID to its aggregate meta-invoice data.
+     * @dev Stores metadata for invoices that are grouped into a single payment.
+     */
     mapping(uint256 metaInvoiceId => MetaInvoice data) private metaInvoice;
+
+    /**
+     * @notice Mapping of payment tokens to their Chainlink price feed aggregator.
+     * @dev Used for converting USD prices to the appropriate payment token amounts.
+     */
     mapping(address token => address aggregator) private priceFeed;
+
+    /**
+     * @notice Mapping from sub-invoice ID to its parent meta-invoice ID.
+     * @dev Enables quick lookup to determine which meta-invoice a sub-invoice belongs to.
+     */
     mapping(uint256 subInvoiceId => uint256 metaInvoiceId) private subInvoiceToMetaInvoiceId;
+
+    /**
+     * @notice Mapping from a meta-invoice ID and its sub-invoice ID to the actual sub-invoice data.
+     * @dev Used to access invoice data that is part of a grouped (meta) payment.
+     */
     mapping(uint256 metaInvoiceId => mapping(uint256 subInvoiceId => Invoice invoices)) private metaInvoiceToSubInvoice;
 
     /**
@@ -92,41 +118,37 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         if (msg.sender != marketplace) revert NotAuthorized();
         _;
     }
-
     /**
-     * @notice Initializes the PaymentProcessorV2 contract with required configuration.
-     * @param ownerAddress The address that will be set as the contract owner.
-     * @param marketplaceAddress The address authorized to create and manage invoices.
-     * @param newFeeRate The platform fee rate in basis points (BPS). 1 BPS = 0.01%.
-     * @param feeReceiverAddress The address that will receive collected platform fees.
-     * @param nativeTokenAggregatorAddress price
+     * @notice Initializes the PaymentProcessorV2 contract with core configuration.
+     * @param paymentProcessorStorageAddress The address of the shared payment processor storage contract.
+     * @param ownerAddress The address to be set as the contract owner.
+     * @param marketplaceAddress The address authorized to manage invoice operations.
+     * @param nativeTokenAggregatorAddress The Chainlink aggregator address for the native token (e.g., ETH/USD).
      */
+
     constructor(
+        address paymentProcessorStorageAddress,
         address ownerAddress,
         address marketplaceAddress,
-        uint256 newFeeRate,
-        address feeReceiverAddress,
         address nativeTokenAggregatorAddress
     ) {
+        ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
         _initializeOwner(ownerAddress);
-        setMarketplace(marketplaceAddress);
-        setFeeRate(newFeeRate);
-        setFeeReceiver(feeReceiverAddress);
+        marketplace = marketplaceAddress;
         nativeTokenAggregator = nativeTokenAggregatorAddress;
-        nextInvoiceId = 1;
         nextMetaInvoiceId = 1;
     }
 
     /// @inheritdoc IPaymentProcessorV2
     function createSingleInvoice(InvoiceCreationParam memory param) external onlyMarketplace {
-        _createInvoice(nextInvoiceId++, 0, param);
+        _createInvoice(ppStorage.updateInvoiceId(1), 0, param);
     }
 
     /// @inheritdoc IPaymentProcessorV2
     function createMetaInvoice(address buyer, InvoiceCreationParam[] memory param) external onlyMarketplace {
         uint256 totalPrice;
         uint256 thisMetaInvoiceId = nextMetaInvoiceId;
-        uint256 startInvoiceId = nextInvoiceId;
+        uint256 startInvoiceId = ppStorage.getNextInvoiceId();
         uint256 i = 0;
 
         MetaInvoice storage metaInv = metaInvoice[thisMetaInvoiceId];
@@ -144,7 +166,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         metaInv.upper = startInvoiceId + i - 1;
         metaInv.price = totalPrice;
         nextMetaInvoiceId++;
-        nextInvoiceId += i;
+        ppStorage.updateInvoiceId(i);
 
         emit OpenedMetaInvoice(thisMetaInvoiceId, totalPrice);
     }
@@ -284,7 +306,6 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         Invoice memory inv = _getInvoice(id);
         if (msg.sender != inv.seller) revert UnauthorizedSeller();
         if (inv.state != PAID) revert InvalidInvoiceState();
-        // time check?
 
         inv.state = CANCELED;
         _updateInvoice(id, inv);
@@ -323,20 +344,35 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorV2
-    function setFeeReceiver(address feeReceiverAddress) public onlyOwner {
-        feeReceiver = feeReceiverAddress;
-    }
-
-    /// @inheritdoc IPaymentProcessorV2
-    function setFeeRate(uint256 _feeRate) public onlyOwner {
-        feeRate = _feeRate;
-    }
-
-    /// @inheritdoc IPaymentProcessorV2
     function setMarketplace(address marketplaceAddr) public onlyOwner {
         marketplace = marketplaceAddr;
     }
 
+    /// @inheritdoc IPaymentProcessorV2
+    function getTokenValueFromUsd(address paymentToken, uint256 price) public view returns (uint256) {
+        address aggregator = paymentToken == address(0) ? nativeTokenAggregator : priceFeed[paymentToken];
+        (, int256 answer,,,) = AggregatorV3Interface(aggregator).latestRoundData();
+        uint256 usdPerToken = answer.toUint256();
+
+        uint8 tokenDecimals = paymentToken == address(0) ? DEFAULT_DECIMAL : IERC20(paymentToken).decimals();
+        uint256 valueInPaymentToken = (price * (10 ** tokenDecimals)) / (usdPerToken);
+
+        return valueInPaymentToken;
+    }
+
+    /**
+     * @notice Handles payment for an invoice, performs validation, and initializes escrow.
+     * @param inv The invoice to be paid.
+     * @param value The amount of native token (if any) sent with the transaction.
+     * @param id The ID of the invoice being paid.
+     * @param paymentToken The address of the payment token (use address(0) for the native token).
+     *
+     * @dev
+     * - Converts the USD price to payment token amount using Chainlink oracles.
+     * - Validates invoice state, sender, and expiration.
+     * - Creates an escrow contract and updates the invoice with payment info.
+     * - Transfers tokens to escrow if the payment is in ERC20.
+     */
     function _invoicePayment(Invoice memory inv, uint256 value, uint256 id, address paymentToken) internal {
         uint256 price = getTokenValueFromUsd(paymentToken, inv.price);
 
@@ -366,17 +402,13 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         }
     }
 
-    function getTokenValueFromUsd(address paymentToken, uint256 price) public view returns (uint256) {
-        address aggregator = paymentToken == address(0) ? nativeTokenAggregator : priceFeed[paymentToken];
-        (, int256 answer,,,) = AggregatorV3Interface(aggregator).latestRoundData();
-        uint256 usdPerToken = answer.toUint256();
-
-        uint8 tokenDecimals = paymentToken == address(0) ? DEFAULT_DECIMAL : IERC20(paymentToken).decimals();
-        uint256 valueInPaymentToken = (price * (10 ** tokenDecimals)) / (usdPerToken);
-
-        return valueInPaymentToken;
-    }
-
+    /**
+     * @notice Creates a new invoice and stores it in contract state.
+     * @param id The unique ID to assign to the new invoice.
+     * @param metaInvoiceId The ID of the parent meta-invoice, or 0 if this is a standalone invoice.
+     * @param param The parameters required to create the invoice.
+     * @return inv The newly created invoice.
+     */
     function _createInvoice(uint256 id, uint256 metaInvoiceId, InvoiceCreationParam memory param)
         internal
         returns (Invoice memory)
@@ -397,10 +429,21 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         return inv;
     }
 
+    /**
+     * @notice Calculates a portion of an amount using basis points.
+     * @param amount The base amount to apply the percentage to.
+     * @param basisPoints The percentage value in basis points (1 BPS = 0.01%).
+     * @return The resulting value after applying basis points.
+     */
     function _applyBasisPoints(uint256 amount, uint256 basisPoints) internal pure returns (uint256) {
         return (amount * basisPoints) / BASIS_POINTS;
     }
 
+    /**
+     * @notice Updates an invoice in storage, either single or sub-invoice in a meta-invoice.
+     * @param id The unique invoice ID.
+     * @param inv The updated invoice data to be stored.
+     */
     function _updateInvoice(uint256 id, Invoice memory inv) internal {
         if (inv.metaInvoiceId == 0) {
             invoice[id] = inv;
@@ -409,13 +452,23 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         }
     }
 
+    /**
+     * @notice Distributes the seller's payout from the escrow, applying platform fees.
+     * @param inv The invoice data containing escrow and recipient info.
+     * @param sellerReceivingValue The gross amount owed to the seller before fees.
+     */
     function _processSellerPayout(Invoice memory inv, uint256 sellerReceivingValue) internal {
-        uint256 fee = _applyBasisPoints(sellerReceivingValue, feeRate);
+        uint256 fee = _applyBasisPoints(sellerReceivingValue, ppStorage.getFeeRate());
         IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.seller, sellerReceivingValue - fee);
 
-        IEscrow(inv.escrow).withdraw(inv.paymentToken, feeReceiver, fee);
+        IEscrow(inv.escrow).withdraw(inv.paymentToken, ppStorage.getFeeReceiver(), fee);
     }
 
+    /**
+     * @notice Retrieves invoice data by ID, resolving whether it is standalone or part of a meta-invoice.
+     * @param id The ID of the invoice to retrieve.
+     * @return The invoice struct for the given ID.
+     */
     function _getInvoice(uint256 id) internal view returns (Invoice memory) {
         uint256 metaInvoiceId = subInvoiceToMetaInvoiceId[id];
         return metaInvoiceId == 0 ? invoice[id] : metaInvoiceToSubInvoice[metaInvoiceId][id];
@@ -433,7 +486,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
 
     /// @inheritdoc IPaymentProcessorV2
     function totalUniqueInvoiceCreated() external view returns (uint256) {
-        return nextInvoiceId - 1;
+        return ppStorage.totalInvoiceCreated();
     }
 
     /// @inheritdoc IPaymentProcessorV2
@@ -443,7 +496,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
 
     /// @inheritdoc IPaymentProcessorV2
     function getNextInvoiceId() external view returns (uint256) {
-        return nextInvoiceId;
+        return ppStorage.getNextInvoiceId();
     }
 
     /// @inheritdoc IPaymentProcessorV2

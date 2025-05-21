@@ -5,18 +5,12 @@ import { Ownable } from "solady/auth/Ownable.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { IEscrow, Escrow } from "./Escrow.sol";
 import { IPaymentProcessorV1 } from "./interface/IPaymentProcessorV1.sol";
+import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
 
 contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
     using SafeCastLib for uint256;
 
-    /// @notice The address that receives the fees collected for creating invoices.
-    address private feeReceiver;
-
-    /// @notice Fee rate applied to transactions, expressed in basis points (1% = 100).
-    uint256 private feeRate;
-
-    /// @notice The current invoice ID counter used to assign unique IDs to newly created invoices.s
-    uint256 private currentInvoiceId;
+    IPaymentProcessorStorage public ppStorage;
 
     /// @notice The default hold period for funds in escrow, measured in seconds.
     uint256 private defaultHoldPeriod;
@@ -65,36 +59,28 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
     /**
      * @notice Initializes the payment processor with owner, fee settings, and default hold period.
      * @dev Sets the fee receiver address, the fee rate (in basis points), and the default escrow hold time.
-     * @param _feeReceiversAddress The address that will receive collected fees.
-     * @param _feeRate The initial fee rate to apply on invoice payments (in basis points, 1% = 100).
+     * @param paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      * @param _defaultHoldPeriod The default period (in seconds) to hold funds in escrow after acceptance.
      * * @param _minimumInvoicePrice The new minimum default invoice value to set (in wei).
      */
-    constructor(
-        address _feeReceiversAddress,
-        uint256 _feeRate,
-        uint256 _defaultHoldPeriod,
-        uint256 _minimumInvoicePrice
-    ) {
-        currentInvoiceId = 1;
+    constructor(address paymentProcessorStorageAddress, uint256 _defaultHoldPeriod, uint256 _minimumInvoicePrice) {
+        ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
         _initializeOwner(msg.sender);
-        setFeeRate(_feeRate);
         setDefaultHoldPeriod(_defaultHoldPeriod);
-        setFeeReceiversAddress(_feeReceiversAddress);
         setMinimumInvoiceValue(_minimumInvoicePrice);
     }
 
     /// @inheritdoc IPaymentProcessorV1
     function createInvoice(uint256 _invoicePrice) external returns (uint256) {
         if (_invoicePrice < minimumInvoiceValue) revert ValueIsTooLow();
-        uint256 thisInvoiceId = currentInvoiceId;
-        Invoice memory invoice = invoiceData[thisInvoiceId];
+        Invoice memory invoice;
         invoice.creator = msg.sender;
         invoice.createdAt = (block.timestamp).toUint32();
         invoice.price = _invoicePrice;
         invoice.status = CREATED;
+
+        uint256 thisInvoiceId = ppStorage.updateInvoiceId(1);
         invoiceData[thisInvoiceId] = invoice;
-        currentInvoiceId++;
 
         emit InvoiceCreated(thisInvoiceId, msg.sender, _invoicePrice);
 
@@ -208,7 +194,7 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
         invoiceData[_invoiceId] = invoice;
 
         uint256 feeValue = calculateFee(invoice.price);
-        IEscrow(invoice.escrow).payFee(feeReceiver, _invoiceId, feeValue);
+        IEscrow(invoice.escrow).payFee(ppStorage.getFeeReceiver(), _invoiceId, feeValue);
 
         emit InvoiceAccepted(_invoiceId);
     }
@@ -246,13 +232,7 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
 
     /// @inheritdoc IPaymentProcessorV1
     function calculateFee(uint256 _amount) public view returns (uint256) {
-        return (_amount * feeRate) / BASIS_POINTS;
-    }
-
-    /// @inheritdoc IPaymentProcessorV1
-    function setFeeReceiversAddress(address _newFeeReceiver) public onlyOwner {
-        if (_newFeeReceiver == address(0)) revert ZeroAddressIsNotAllowed();
-        feeReceiver = _newFeeReceiver;
+        return (_amount * ppStorage.getFeeRate()) / BASIS_POINTS;
     }
 
     /// @inheritdoc IPaymentProcessorV1
@@ -262,35 +242,18 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorV1
-    function setFeeRate(uint256 _feeRate) public onlyOwner {
-        if (_feeRate == 0) revert FeeValueCanNotBeZero();
-        if (_feeRate > BASIS_POINTS) revert FeeTooHigh();
-        feeRate = _feeRate;
-    }
-
-    /// @inheritdoc IPaymentProcessorV1
     function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) public onlyOwner {
         minimumInvoiceValue = _minimumInvoiceValue;
     }
 
     /// @inheritdoc IPaymentProcessorV1
-    function getFeeRate() external view returns (uint256) {
-        return feeRate;
-    }
-
-    /// @inheritdoc IPaymentProcessorV1
-    function getFeeReceiver() external view returns (address) {
-        return feeReceiver;
-    }
-
-    /// @inheritdoc IPaymentProcessorV1
     function getNextInvoiceId() external view returns (uint256) {
-        return currentInvoiceId;
+        return ppStorage.getNextInvoiceId();
     }
 
     /// @inheritdoc IPaymentProcessorV1
     function totalInvoiceCreated() external view returns (uint256) {
-        return currentInvoiceId - 1;
+        return ppStorage.totalInvoiceCreated();
     }
 
     /// @inheritdoc IPaymentProcessorV1
