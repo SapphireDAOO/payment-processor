@@ -254,13 +254,6 @@ interface IPaymentProcessorV2 {
     function claimExpiredInvoiceRefunds(uint256 id) external;
 
     /**
-     * @notice Updates the fee rate for seller payouts.
-     * @dev Callable only by the contract owner.
-     * @param _feeRate The new fee rate in basis points (1% = 100 basis points).
-     */
-    function setFeeRate(uint256 _feeRate) external;
-
-    /**
      * @notice Updates the marketplace address allowed to perform privileged operations.
      * @dev Callable only by the contract owner.
      * @param marketplaceAddr The new marketplace address.
@@ -273,13 +266,6 @@ interface IPaymentProcessorV2 {
      * @param aggregator The address of the Chainlink aggregator for the token.
      */
     function setPriceFeed(address token, address aggregator) external;
-
-    /**
-     * @notice Sets the address that will receive fees collected from transactions.
-     * @dev Callable only by the contract owner.
-     * @param feeReceiverAddress The address to receive protocol fees.
-     */
-    function setFeeReceiver(address feeReceiverAddress) external;
 
     /**
      * @notice Retrieves the invoice data for a specific invoice ID.
@@ -325,6 +311,14 @@ interface IPaymentProcessorV2 {
      * @return The ID of the meta-invoice that includes the given sub-invoice.
      */
     function getMetaInvoiceIdForSub(uint256 id) external view returns (uint256);
+
+    /**
+     * @notice Converts a USD-denominated price to the equivalent amount in the specified payment token.
+     * @param paymentToken The address of the payment token (use address(0) for the native token).
+     * @param price The USD amount to convert, expressed in 8 decimals (e.g., 100e8 = $100).
+     * @return The equivalent amount in the payment token's smallest unit (according to its decimals).
+     */
+    function getTokenValueFromUsd(address paymentToken, uint256 price) external view returns (uint256);
 
     // ================================================================
     //                              EVENTS

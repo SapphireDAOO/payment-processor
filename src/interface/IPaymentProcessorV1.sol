@@ -133,13 +133,6 @@ interface IPaymentProcessorV1 {
     function setInvoiceReleaseTime(uint256 _invoiceId, uint32 _holdPeriod) external;
 
     /**
-     * @notice Updates the address of the fee receiver.
-     * @dev Only callable by the contract owner.
-     * @param _newFeeReceiver The new address to receive fees.
-     */
-    function setFeeReceiversAddress(address _newFeeReceiver) external;
-
-    /**
      *  @notice Updates the minimum allowed invoice value required for creating an invoice.
      * @dev Should only be callable by the contract owner or an authorized role.
      * @param _minimumInvoiceValue The new minimum invoice value to set (in wei).
@@ -161,24 +154,6 @@ interface IPaymentProcessorV1 {
      * @param _newDefaultHoldPeriod The new default hold period in seconds.
      */
     function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) external;
-
-    /**
-     * @notice Sets the transaction fee rate
-     * @param _feeRate New fee rate in basis points (1% = 100)
-     */
-    function setFeeRate(uint256 _feeRate) external;
-
-    /**
-     * @notice Gets the current fee for invoice creation.
-     * @return The fee amount in wei.
-     */
-    function getFeeRate() external view returns (uint256);
-
-    /**
-     * @notice Gets the current fee receiver address.
-     * @return The address of the fee receiver.
-     */
-    function getFeeReceiver() external view returns (address);
 
     /**
      * @notice Gets the current invoice ID counter.
