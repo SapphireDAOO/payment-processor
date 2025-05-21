@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { console } from "forge-std/Console.sol";
 import { IEscrow } from "./interface/IEscrow.sol";
 import { EscrowFactory } from "./EscrowFactory.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
