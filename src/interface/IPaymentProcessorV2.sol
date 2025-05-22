@@ -94,7 +94,7 @@ interface IPaymentProcessorV2 {
         uint32 invoiceExpiryDuration;
         /// @notice Time window (in seconds) after payment within which the seller must respond.
         uint32 timeBeforeCancelation;
-        /// @notice Invoice amount expressed in USD
+        /// @notice Invoice amount expressed in USD (8 decimals)
         uint256 price;
         /// @notice The total amount paid by the buyer for this invoice, denominated in the payment token (native token if address(0)).
         uint256 amountPaid;
@@ -103,6 +103,8 @@ interface IPaymentProcessorV2 {
     }
 
     struct MetaInvoice {
+        /// @notice Address of the seller.
+        address buyer;
         /// @notice Total price of all sub-invoices under this meta invoice.
         uint256 price;
         /// @notice Upper bound invoice ID within this meta invoice.
@@ -111,8 +113,6 @@ interface IPaymentProcessorV2 {
         uint256 lower;
         /// @notice Token used for payment. Address zero for native currency.
         address paymentToken;
-        /// @notice Address of the escrow contract managing the meta invoice.
-        address escrow;
     }
 
     struct InvoiceCreationParam {
@@ -343,24 +343,18 @@ interface IPaymentProcessorV2 {
     event InvoiceAccepted(uint256 indexed invoiceId);
 
     /**
-     * @notice Emitted when a sub-invoice under a meta-invoice is paid successfully.
-     * @param id The ID of the sub-invoice paid.
-     */
-    event MetaInvoiceSubPaid(uint256 indexed id);
-
-    /**
      * @notice Emitted when a new meta-invoice is created.
-     * @param id The ID of the newly created meta-invoice.
-     * @param price The total price of all sub-invoices under this meta-invoice.
+     * @param id The unique identifier of the newly created meta-invoice.
+     * @param metaInvoice The full meta-invoice struct containing aggregated price and related configuration.
      */
-    event OpenedMetaInvoice(uint256 indexed id, uint256 indexed price);
+    event MetaInvoiceCreated(uint256 indexed id, MetaInvoice metaInvoice);
 
     /**
      * @notice Emitted when a new invoice is created.
      * @param invoiceId The ID of the newly created invoice.
      * @param invoice The invoice data.
      */
-    event OpenedInvoice(uint256 indexed invoiceId, Invoice invoice);
+    event InvoiceCreated(uint256 indexed invoiceId, Invoice invoice);
 
     /**
      * @notice Emitted when an invoice is canceled by the seller and the buyer is refunded.
@@ -381,4 +375,44 @@ interface IPaymentProcessorV2 {
      * @param buyerAmount The amount refunded to the buyer.
      */
     event DisputeSettled(uint256 indexed id, uint256 sellerAmount, uint256 buyerAmount);
+
+    /**
+     * @notice Emitted when a buyer initiates a cancellation request for an invoice.
+     * @param invoiceId The ID of the invoice for which cancellation was requested.
+     */
+    event CancelationRequested(uint256 indexed invoiceId);
+
+    /**
+     * @notice Emitted when an invoice has been successfully paid and escrow is created.
+     * @param invoiceId The ID of the paid invoice.
+     * @param paymentToken The address of the token used for payment (use address(0) for native token).
+     * @param escrowAddress The address of the newly created escrow contract holding the funds.
+     * @param amount The amount paid in the token's smallest denomination (based on token decimals).
+     */
+    event InvoicePaid(uint256 indexed invoiceId, address paymentToken, address escrowAddress, uint256 amount);
+
+    /**
+     * @notice Emitted when a cancellation request is either accepted or rejected by the seller.
+     * @param invoiceId The ID of the invoice under consideration.
+     * @param accepted Whether the cancellation request was accepted (true) or rejected (false).
+     */
+    event CancelationRequestHandled(uint256 indexed invoiceId, bool indexed accepted);
+
+    /**
+     * @notice Emitted when the payment is released to the seller.
+     * @param invoiceId The ID of the invoice for which payment was released.
+     */
+    event PaymentReleased(uint256 indexed invoiceId);
+
+    /**
+     * @notice Emitted when a dispute is raised for an invoice by the buyer.
+     * @param invoiceId The ID of the disputed invoice.
+     */
+    event DisputeCreated(uint256 indexed invoiceId);
+
+    /**
+     * @notice Emitted when a refund is claimed for an expired invoice.
+     * @param invoiceId The ID of the expired invoice that was refunded.
+     */
+    event ExpiredInvoiceRefunded(uint256 indexed invoiceId);
 }

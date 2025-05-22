@@ -12,7 +12,6 @@ import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { IERC20 } from "./interface/IERC20.sol";
 import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
 
-// proper events
 // deployment script
 
 contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
@@ -150,7 +149,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         uint256 startInvoiceId = ppStorage.getNextInvoiceId();
         uint256 i = 0;
 
-        MetaInvoice storage metaInv = metaInvoice[thisMetaInvoiceId];
+        MetaInvoice memory metaInv;
         metaInv.lower = startInvoiceId;
         for (; i < param.length; i++) {
             uint256 invoiceId = startInvoiceId + i;
@@ -164,10 +163,12 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
 
         metaInv.upper = startInvoiceId + i - 1;
         metaInv.price = totalPrice;
+        metaInv.buyer = msg.sender;
+        metaInvoice[thisMetaInvoiceId] = metaInv;
         nextMetaInvoiceId++;
         ppStorage.updateInvoiceId(i);
 
-        emit OpenedMetaInvoice(thisMetaInvoiceId, totalPrice);
+        emit MetaInvoiceCreated(thisMetaInvoiceId, metaInv);
     }
 
     /// @inheritdoc IPaymentProcessorV2
@@ -182,21 +183,20 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     /// @inheritdoc IPaymentProcessorV2
     function payMetaInvoice(uint256 id, address paymentToken) external payable {
         if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
-        MetaInvoice memory meta = metaInvoice[id];
-        if (meta.price == 0) revert InvoiceDoesNotExist();
+        MetaInvoice memory metaInv = metaInvoice[id];
+        uint256 price = getTokenValueFromUsd(paymentToken, metaInv.price);
 
-        uint256 price = getTokenValueFromUsd(paymentToken, meta.price);
+        if (metaInv.price == 0) revert InvoiceDoesNotExist();
         if (msg.value != price && msg.value > 0) revert InvalidMetaInvoicePayment();
-        if (msg.sender != metaInvoiceToSubInvoice[id][meta.lower].buyer) revert InvalidBuyer();
+        if (msg.sender != metaInvoiceToSubInvoice[id][metaInv.lower].buyer) revert InvalidBuyer();
 
-        for (uint256 i = meta.lower; i <= meta.upper; i++) {
+        metaInv.paymentToken = paymentToken;
+        for (uint256 i = metaInv.lower; i <= metaInv.upper; i++) {
             Invoice memory inv = metaInvoiceToSubInvoice[id][i];
             if (inv.state != INITIATED) continue;
             uint256 invPrice = getTokenValueFromUsd(paymentToken, inv.price);
             _invoicePayment(inv, invPrice, i, paymentToken);
             metaInvoiceToSubInvoice[id][i] = inv;
-
-            emit MetaInvoiceSubPaid(i);
         }
     }
 
@@ -215,6 +215,8 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         if (inv.state == CANCELATION_ACCEPTED) {
             IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.amountPaid);
         }
+
+        emit CancelationRequestHandled(id, accept);
     }
 
     /// @inheritdoc IPaymentProcessorV2
@@ -240,6 +242,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
 
         inv.state = DISPUTED;
         _updateInvoice(id, inv);
+        emit DisputeCreated(id);
     }
 
     /// @inheritdoc IPaymentProcessorV2
@@ -284,6 +287,8 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         inv.state = RELEASED;
         _updateInvoice(id, inv);
         _processSellerPayout(inv, inv.amountPaid);
+
+        emit PaymentReleased(id);
     }
 
     /// @inheritdoc IPaymentProcessorV2
@@ -298,6 +303,8 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         _updateInvoice(id, inv);
 
         IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.amountPaid);
+
+        emit ExpiredInvoiceRefunded(id);
     }
 
     /// @inheritdoc IPaymentProcessorV2
@@ -335,6 +342,8 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
 
         inv.state = CANCELATION_REQUESTED;
         _updateInvoice(id, inv);
+
+        emit CancelationRequested(id);
     }
 
     /// @inheritdoc IPaymentProcessorV2
@@ -399,6 +408,9 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
             inv.paymentToken = paymentToken;
             paymentToken.safeTransferFrom(msg.sender, escrowAddress, price);
         }
+
+        // add escrow
+        emit InvoicePaid(id, paymentToken, escrowAddress, price);
     }
 
     /**
@@ -424,7 +436,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         inv.invoiceExpiryDuration = param.invoiceExpiryDuration;
 
         invoice[id] = inv;
-        emit OpenedInvoice(id, inv);
+        emit InvoiceCreated(id, inv);
         return inv;
     }
 
@@ -506,5 +518,9 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     /// @inheritdoc IPaymentProcessorV2
     function getMetaInvoiceIdForSub(uint256 id) external view returns (uint256) {
         return subInvoiceToMetaInvoiceId[id];
+    }
+
+    function getMarketplace() external view returns (address) {
+        return marketplace;
     }
 }
