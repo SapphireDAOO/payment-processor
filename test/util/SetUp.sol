@@ -1,43 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { Test, console } from "forge-std/Test.sol";
-import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
+import { Test, console } from "forge-std/Test.sol";
 
 abstract contract SetUp is Test {
-    PaymentProcessorV1 pp;
     PaymentProcessorStorage ppStorage;
 
-    address owner;
-    address feeReceiver;
+    address internal admin = address(1);
+    address internal buyerOne = address(2);
+    address internal buyerTwo = address(3);
+    address internal sellerOne = address(4);
+    address internal sellerTwo = address(5);
+    address internal feeReceiver = address(6);
 
-    address creatorOne;
-    address creatorTwo;
-    address payerOne;
-    address payerTwo;
+    uint256 constant INITIAL_BALANCE = 100_000 ether;
+    uint256 public constant FEE = 500;
 
-    uint256 constant DEFAULT_HOLD_PERIOD = 1 days;
-    uint256 constant PAYER_ONE_INITIAL_BALANCE = 10_000 ether;
-    uint256 constant FEE_RATE = 700;
-    uint256 constant PAYER_TWO_INITIAL_BALANCE = 5_000 ether;
+    function initialize() public virtual {
+        vm.deal(buyerOne, INITIAL_BALANCE);
+        vm.deal(sellerOne, INITIAL_BALANCE);
 
-    uint256 constant MINIMUM_INVOICE_VALUE = 1 ether;
+        vm.deal(buyerTwo, INITIAL_BALANCE);
+        vm.deal(sellerTwo, INITIAL_BALANCE);
 
-    function setUp() public virtual {
-        owner = makeAddr("owner");
-        feeReceiver = makeAddr("feeReceiver");
-        creatorOne = makeAddr("creatorOne");
-        creatorTwo = makeAddr("creatorTwo");
-        payerOne = makeAddr("payerOne");
-        payerTwo = makeAddr("payerTwo");
-
-        vm.deal(payerOne, PAYER_ONE_INITIAL_BALANCE);
-        vm.deal(payerTwo, PAYER_TWO_INITIAL_BALANCE);
-
-        ppStorage = new PaymentProcessorStorage(feeReceiver, FEE_RATE);
-        vm.prank(owner);
-        pp = new PaymentProcessorV1(address(ppStorage), DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
-        vm.stopPrank();
+        ppStorage = new PaymentProcessorStorage(feeReceiver, FEE);
     }
 }

@@ -1,76 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { Test, console, Vm } from "forge-std/Test.sol";
-import { PaymentProcessorV2 } from "../../src/PaymentProcessorV2.sol";
 import { IPaymentProcessorV2 } from "../../src/interface/IPaymentProcessorV2.sol";
-import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
-import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
+import { console } from "forge-std/console.sol";
+
+import { V2 } from "../util/V2.sol";
 
 // check fee balance
 
-contract PaymentProcessorV2Test is Test {
-    PaymentProcessorV2 pp;
-    MockUsdc mockUsdc;
-    MockWbtc mockWBtc;
-
-    address admin = address(1);
-    address buyerOne = address(2);
-    address buyerTwo = address(3);
-    address sellerOne = address(4);
-    address sellerTwo = address(5);
-    address feeReceiver = address(6);
-
-    uint256 public constant FEE = 500;
-
-    int256 constant INITIAL_USDC_PRICE = 1e8;
-    int256 constant INITIAL_WBTC_PRICE = 90_000e8;
-    int256 constant INITIAL_POL_PRICE = 0.6e8;
-
-    uint256 constant DEFAULT_BALANCE = 100_000 ether;
-
-    function setUp() public {
-        vm.startPrank(admin);
-
-        PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(feeReceiver, FEE);
-
-        MockV3Aggregator mockUsdcPriceFeed = new MockV3Aggregator(8, INITIAL_USDC_PRICE);
-        MockV3Aggregator mockWbtcPriceFeed = new MockV3Aggregator(8, INITIAL_WBTC_PRICE);
-        MockV3Aggregator mockNativePriceFeed = new MockV3Aggregator(8, INITIAL_POL_PRICE);
-
-        pp = new PaymentProcessorV2(address(ppStorage), admin, address(this), address(mockNativePriceFeed));
-        mockUsdc = new MockUsdc("Mock Usdc", "mUsdc");
-        mockWBtc = new MockWbtc("Mock WBtc", "mWBtc");
-
-        pp.setPriceFeed(address(mockUsdc), address(mockUsdcPriceFeed));
-        pp.setPriceFeed(address(mockWBtc), address(mockWbtcPriceFeed));
-        vm.stopPrank();
-
-        mockUsdc.mint(buyerOne, DEFAULT_BALANCE);
-        mockUsdc.mint(buyerTwo, DEFAULT_BALANCE);
-
-        mockWBtc.mint(buyerOne, DEFAULT_BALANCE);
-        mockWBtc.mint(buyerTwo, DEFAULT_BALANCE);
-
-        vm.startPrank(buyerOne);
-        IERC20(mockUsdc).approve(address(pp), type(uint256).max);
-        IERC20(mockWBtc).approve(address(pp), type(uint256).max);
-        vm.stopPrank();
-
-        vm.startPrank(buyerTwo);
-        IERC20(mockUsdc).approve(address(pp), type(uint256).max);
-        IERC20(mockWBtc).approve(address(pp), type(uint256).max);
-        vm.stopPrank();
-
-        vm.deal(buyerOne, DEFAULT_BALANCE);
-        vm.deal(sellerOne, DEFAULT_BALANCE);
-
-        vm.deal(buyerTwo, DEFAULT_BALANCE);
-        vm.deal(sellerTwo, DEFAULT_BALANCE);
-    }
-
+contract PaymentProcessorV2Test is V2 {
     function test_Initialization() public view {
         assertEq(pp.getNextInvoiceId(), 1);
         assertEq(pp.getNextMetaInvoiceId(), 1);

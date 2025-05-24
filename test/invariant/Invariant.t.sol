@@ -1,25 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../../src/PaymentProcessorV1.sol";
 import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { Test, console } from "forge-std/Test.sol";
-import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 
-import { Handler } from "./Handler.t.sol";
+import { HandlerV1 } from "./handlers/HandlerV1.sol";
 
-import { SetUp } from "../util/SetUp.sol";
+import { V1 } from "../util/V1.sol";
 
-contract Invariant is StdInvariant, Test, SetUp {
-    Handler handler;
+contract Invariant is StdInvariant, Test, V1 {
+    HandlerV1 handler;
 
     address creator;
     address payer;
 
-    uint256 constant FEE = 1 ether;
-
     function setUp() public override {
         super.setUp();
-        handler = new Handler(pp);
+        handler = new HandlerV1(pp);
 
         bytes4[] memory selectors = new bytes4[](6);
         selectors[0] = handler.createInvoice.selector;
