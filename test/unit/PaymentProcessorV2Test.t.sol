@@ -7,8 +7,6 @@ import { console } from "forge-std/console.sol";
 
 import { V2 } from "../util/V2.sol";
 
-// check fee balance
-
 contract PaymentProcessorV2Test is V2 {
     function test_Initialization() public view {
         assertEq(pp.getNextInvoiceId(), 1);

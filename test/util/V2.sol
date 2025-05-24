@@ -6,8 +6,8 @@ import { PaymentProcessorV2 } from "../../src/PaymentProcessorV2.sol";
 import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
 import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { Test } from "forge-std/Test.sol";
 import { SetUp } from "./SetUp.sol";
+import { console } from "forge-std/console.sol";
 
 struct Addr {
     address usdcPriceFeed;
@@ -36,14 +36,27 @@ abstract contract V2 is SetUp {
     uint256 constant LOCAL_CHAIN_ID = 31337;
     uint256 constant MAINNET_CHAIN_ID = 137;
 
-    function setUp() public {
+    // fork test
+    address constant WTBC_BUYER = 0x0AFF6665bB45bF349489B20E225A6c5D78E2280F;
+    address constant USDC_BUYER = 0x4B6f17856215eab57c29ebfA18B0a0F74A3627bb;
+    address constant NATIVE_TOKEN_BUYER = 0x5e86A14B06a4001cA83688cc06568A0c07425f63;
+
+    function setUp() public virtual {
         initialize();
 
         Addr memory addr = _setUp();
 
         pp = new PaymentProcessorV2(address(ppStorage), admin, address(this), address(addr.nativeTokenPriceFeed));
 
-        _mintAndApproveTokens();
+        if (block.chainid == MAINNET_CHAIN_ID) {
+            vm.makePersistent(address(pp), address(ppStorage));
+        }
+
+        _mintAndApproveTokens(address(pp));
+
+        console.log("TOKEN IS", addr.usdc, addr.wbtc);
+        console.log("FEED", addr.usdcPriceFeed, addr.wbtcPriceFeed);
+        console.log("ALLOWANCE", IERC20(WBTC).allowance(WTBC_BUYER, address(pp)));
 
         vm.startPrank(admin);
         pp.setPriceFeed(address(addr.usdc), address(addr.usdcPriceFeed));
@@ -82,21 +95,31 @@ abstract contract V2 is SetUp {
         revert();
     }
 
-    function _mintAndApproveTokens() internal {
-        mockUsdc.mint(buyerOne, INITIAL_BALANCE);
-        mockUsdc.mint(buyerTwo, INITIAL_BALANCE);
+    function _mintAndApproveTokens(address spender) internal {
+        if (block.chainid == LOCAL_CHAIN_ID) {
+            mockUsdc.mint(buyerOne, INITIAL_BALANCE);
+            mockUsdc.mint(buyerTwo, INITIAL_BALANCE);
 
-        mockWBtc.mint(buyerOne, INITIAL_BALANCE);
-        mockWBtc.mint(buyerTwo, INITIAL_BALANCE);
+            mockWBtc.mint(buyerOne, INITIAL_BALANCE);
+            mockWBtc.mint(buyerTwo, INITIAL_BALANCE);
 
-        vm.startPrank(buyerOne);
-        IERC20(mockUsdc).approve(address(pp), type(uint256).max);
-        IERC20(mockWBtc).approve(address(pp), type(uint256).max);
-        vm.stopPrank();
+            vm.startPrank(buyerOne);
+            IERC20(mockUsdc).approve(spender, type(uint256).max);
+            IERC20(mockWBtc).approve(spender, type(uint256).max);
+            vm.stopPrank();
 
-        vm.startPrank(buyerTwo);
-        IERC20(mockUsdc).approve(address(pp), type(uint256).max);
-        IERC20(mockWBtc).approve(address(pp), type(uint256).max);
-        vm.stopPrank();
+            vm.startPrank(buyerTwo);
+            IERC20(mockUsdc).approve(spender, type(uint256).max);
+            IERC20(mockWBtc).approve(spender, type(uint256).max);
+            vm.stopPrank();
+        }
+
+        if (block.chainid == MAINNET_CHAIN_ID) {
+            vm.prank(WTBC_BUYER);
+            IERC20(WBTC).approve(spender, type(uint256).max);
+
+            vm.prank(USDC_BUYER);
+            IERC20(USDC).approve(spender, type(uint256).max);
+        }
     }
 }
