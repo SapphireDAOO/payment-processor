@@ -7,7 +7,6 @@ import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
 import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SetUp } from "./SetUp.sol";
-import { console } from "forge-std/console.sol";
 
 struct Addr {
     address usdcPriceFeed;
@@ -53,10 +52,6 @@ abstract contract V2 is SetUp {
         }
 
         _mintAndApproveTokens(address(pp));
-
-        console.log("TOKEN IS", addr.usdc, addr.wbtc);
-        console.log("FEED", addr.usdcPriceFeed, addr.wbtcPriceFeed);
-        console.log("ALLOWANCE", IERC20(WBTC).allowance(WTBC_BUYER, address(pp)));
 
         vm.startPrank(admin);
         pp.setPriceFeed(address(addr.usdc), address(addr.usdcPriceFeed));
