@@ -1,23 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { IEscrow } from "./interface/IEscrow.sol";
 import { EscrowFactory } from "./EscrowFactory.sol";
-import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
-import { Ownable } from "solady/auth/Ownable.sol";
-import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
-import { IPaymentProcessorV2 } from "./interface/IPaymentProcessorV2.sol";
+
 import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";
-import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+
 import { IERC20 } from "./interface/IERC20.sol";
+import { IEscrow } from "./interface/IEscrow.sol";
 import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
+import { IPaymentProcessorV2 } from "./interface/IPaymentProcessorV2.sol";
+import { Ownable } from "solady/auth/Ownable.sol";
+
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
+import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 
 // deployment script
-
 contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
-    using SafeTransferLib for address;
-    using SafeCastLib for uint256;
-    using SafeCastLib for int256;
+    using { SafeTransferLib.safeTransferFrom } for address;
+    using { SafeCastLib.toUint48 } for uint256;
+    using { SafeCastLib.toUint256 } for int256;
 
     IPaymentProcessorStorage public ppStorage;
 
@@ -409,7 +411,6 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
             paymentToken.safeTransferFrom(msg.sender, escrowAddress, price);
         }
 
-        // add escrow
         emit InvoicePaid(id, paymentToken, escrowAddress, price);
     }
 
@@ -520,6 +521,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         return subInvoiceToMetaInvoiceId[id];
     }
 
+    /// @inheritdoc IPaymentProcessorV2
     function getMarketplace() external view returns (address) {
         return marketplace;
     }

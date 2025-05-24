@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import { CREATE3 } from "solady/utils/CREATE3.sol";
 
-import { IEscrow, Escrow } from "./Escrow.sol";
+import { Escrow, IEscrow } from "./Escrow.sol";
 import { IEscrowFactory } from "./interface/IEscrowFactory.sol";
 
 abstract contract EscrowFactory is IEscrowFactory {

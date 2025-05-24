@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import { Escrow, IEscrow } from "./Escrow.sol";
+
+import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
+import { IPaymentProcessorV1 } from "./interface/IPaymentProcessorV1.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
-import { IEscrow, Escrow } from "./Escrow.sol";
-import { IPaymentProcessorV1 } from "./interface/IPaymentProcessorV1.sol";
-import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
 
 contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
     using SafeCastLib for uint256;
 
-    IPaymentProcessorStorage public ppStorage;
+    IPaymentProcessorStorage public immutable ppStorage;
 
     /// @notice The default hold period for funds in escrow, measured in seconds.
     uint256 private defaultHoldPeriod;

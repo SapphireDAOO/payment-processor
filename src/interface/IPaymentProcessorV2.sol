@@ -320,6 +320,12 @@ interface IPaymentProcessorV2 {
      */
     function getTokenValueFromUsd(address paymentToken, uint256 price) external view returns (uint256);
 
+    /**
+     * @notice Returns the address of the authorized marketplace contract.
+     * @return The marketplace address allowed to manage invoice creation and updates.
+     */
+    function getMarketplace() external view returns (address);
+
     // ================================================================
     //                              EVENTS
     // ================================================================
