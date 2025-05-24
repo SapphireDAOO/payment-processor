@@ -20,6 +20,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     using { SafeTransferLib.safeTransferFrom } for address;
     using { SafeCastLib.toUint48 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
+    using { FixedPointMathLib.mulDiv } for uint256;
 
     IPaymentProcessorStorage public ppStorage;
 
@@ -362,12 +363,11 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
     function getTokenValueFromUsd(address paymentToken, uint256 price) public view returns (uint256) {
         address aggregator = paymentToken == address(0) ? nativeTokenAggregator : priceFeed[paymentToken];
         (, int256 answer,,,) = AggregatorV3Interface(aggregator).latestRoundData();
-        uint256 usdPerToken = answer.toUint256();
+        uint256 usdPerToken = answer.toUint256(); // 8 decimals from Chainlink
 
         uint8 tokenDecimals = paymentToken == address(0) ? DEFAULT_DECIMAL : IERC20(paymentToken).decimals();
-        uint256 valueInPaymentToken = (price * (10 ** tokenDecimals)) / (usdPerToken);
 
-        return valueInPaymentToken;
+        return price.mulDiv(10 ** tokenDecimals, usdPerToken);
     }
 
     /**
