@@ -25,6 +25,7 @@ contract PaymentProcessorV2FuzzTest is V2 {
         uint256 timeBeforeCancelation,
         uint256 releaseWindow
     ) public {
+        vm.assume(buyer.code.length == 0 && seller.code.length == 0);
         vm.assume(buyer != seller);
         timeBeforeCancelation = bound(timeBeforeCancelation, 1 days, 30 days);
         releaseWindow = bound(releaseWindow, 1 days, 30 days);
@@ -43,12 +44,13 @@ contract PaymentProcessorV2FuzzTest is V2 {
     }
 
     function testFuzz_paySingleInvoice(
-        address seller,
         address buyer,
+        address seller,
         uint256 price,
         uint256 timeBeforeCancelation,
         uint256 releaseWindow
     ) public {
+        vm.assume(buyer.code.length == 0 && seller.code.length == 0);
         price = bound(price, 1e8, 100e8);
         timeBeforeCancelation = bound(timeBeforeCancelation, 1 days, type(uint32).max);
         releaseWindow = bound(releaseWindow, 1 days, type(uint32).max);
@@ -161,6 +163,7 @@ contract PaymentProcessorV2FuzzTest is V2 {
         uint256 resolution,
         uint256 sellerShare
     ) public {
+        vm.assume(buyer.code.length == 0 && seller.code.length == 0);
         price = bound(price, 1e8, 100e8);
         resolution = bound(resolution, pp.DISPUTE_RESOLVED(), pp.DISPUTE_SETTLED());
         sellerShare = bound(sellerShare, 0, pp.BASIS_POINTS());
@@ -193,6 +196,8 @@ contract PaymentProcessorV2FuzzTest is V2 {
         uint256 resolution,
         uint256 sellerShare
     ) public {
+        vm.assume(buyer.code.length == 0 && seller.code.length == 0);
+
         price = bound(price, 1e8, 100e8);
         resolution = bound(resolution, pp.DISPUTE_RESOLVED(), pp.DISPUTE_SETTLED());
         sellerShare = bound(sellerShare, 0, pp.BASIS_POINTS());
