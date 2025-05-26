@@ -12,7 +12,6 @@ import { SimplePaymentProcessorSetUp } from "../util/SimplePaymentProcessorSetUp
 
 contract Invariant is StdInvariant, Test, SimplePaymentProcessorSetUp {
     SimplePaymentProcessorHandler handler;
-    
 
     address creator;
     address payer;

@@ -59,7 +59,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[1] = 2 days;
 
         uint256 startInvoiceId = advancedPP.getNextInvoiceId();
-        advancedPP.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        advancedPP.createMetaInvoice(
+            buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
 
         uint256 thisMetaInvoiceId = advancedPP.getNextMetaInvoiceId() - 1;
         uint256 upper = advancedPP.getNextInvoiceId() - 1;
@@ -132,7 +134,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[1] = 3 days;
 
         uint256 thisInvoiceId = advancedPP.getNextInvoiceId();
-        advancedPP.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        advancedPP.createMetaInvoice(
+            buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
 
         uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
 
@@ -213,7 +217,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[1] = 2 days;
 
         uint256 thisInvoiceId = advancedPP.getNextInvoiceId();
-        advancedPP.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        advancedPP.createMetaInvoice(
+            buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
 
         vm.prank(buyerOne);
 
@@ -224,7 +230,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         assertEq(invOne.state, advancedPP.PAID());
         assertEq(invOne.escrow, escrowOne);
-        assertEq(IERC20(mockWBtc).balanceOf(invOne.escrow), advancedPP.getTokenValueFromUsd(address(mockWBtc), prices[0]));
+        assertEq(
+            IERC20(mockWBtc).balanceOf(invOne.escrow), advancedPP.getTokenValueFromUsd(address(mockWBtc), prices[0])
+        );
         assertEq(invOne.paymentToken, address(mockWBtc));
 
         IAdvancedPaymentProcessor.Invoice memory invTwo = advancedPP.getInvoice(advancedPP.getNextInvoiceId() - 1);
@@ -232,7 +240,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         assertEq(invTwo.state, advancedPP.PAID());
         assertEq(invTwo.escrow, escrowTwo);
-        assertEq(IERC20(mockWBtc).balanceOf(invTwo.escrow), advancedPP.getTokenValueFromUsd(address(mockWBtc), prices[1]));
+        assertEq(
+            IERC20(mockWBtc).balanceOf(invTwo.escrow), advancedPP.getTokenValueFromUsd(address(mockWBtc), prices[1])
+        );
         assertEq(invTwo.paymentToken, address(mockWBtc));
     }
 
@@ -282,7 +292,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[0] = 2 days;
         disputeWindow[1] = 2 days;
 
-        advancedPP.createMetaInvoice(buyerTwo, getInvoiceCreationParams(buyerTwo, sellers, prices, responseTime, disputeWindow));
+        advancedPP.createMetaInvoice(
+            buyerTwo, getInvoiceCreationParams(buyerTwo, sellers, prices, responseTime, disputeWindow)
+        );
 
         uint256 currentMetaId = advancedPP.totalMetaInvoiceCreated();
 
@@ -366,7 +378,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[1] = 4 days;
         disputeWindow[2] = 5 days;
 
-        advancedPP.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        advancedPP.createMetaInvoice(
+            buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
 
         uint256 currentMetaInvoiceId = advancedPP.totalMetaInvoiceCreated();
 
@@ -444,7 +458,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[1] = 4 days;
         disputeWindow[2] = 5 days;
 
-        advancedPP.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        advancedPP.createMetaInvoice(
+            buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
 
         uint256 totalPrice = prices[0] + prices[1] + prices[2];
 
@@ -567,7 +583,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[0] = 1 days;
         disputeWindow[1] = 4 days;
 
-        advancedPP.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
+        advancedPP.createMetaInvoice(
+            buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
+        );
         uint256 metaInvoiceId = advancedPP.totalMetaInvoiceCreated();
 
         uint256[] memory ids = advancedPP.getSubInvoiceIdsForMetaInvoice(metaInvoiceId);

@@ -25,7 +25,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
     function test_nativeTokenPaymentForSingleInvoice() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(sellerOne, NATIVE_TOKEN_BUYER, price, 1 days, 1 days));
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(NATIVE_TOKEN_BUYER, sellerOne, price, 1 days, 1 days));
         uint256 thisInvoiceId = advancedPP.totalUniqueInvoiceCreated();
 
         uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
@@ -88,7 +88,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
     function test_erc20PaymentForSingleInvoice() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(sellerOne, USDC_BUYER, price, 1 days, 1 days));
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(USDC_BUYER, sellerOne, price, 1 days, 1 days));
         uint256 invoiceId = advancedPP.getNextInvoiceId() - 1;
 
         vm.prank(USDC_BUYER);
@@ -150,7 +150,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
     function test_sellerCancelInitiatedInvoice() public {
         // single invoice
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(sellerOne, NATIVE_TOKEN_BUYER, price, 1 days, 1 days));
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(NATIVE_TOKEN_BUYER, sellerOne, price, 1 days, 1 days));
 
         uint256 currentId = advancedPP.totalUniqueInvoiceCreated();
 
@@ -276,7 +276,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
     function test_refundAfterInvoiceExpires() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(sellerOne, NATIVE_TOKEN_BUYER, price, 1 days, 1 days));
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(NATIVE_TOKEN_BUYER, sellerOne, price, 1 days, 1 days));
         uint256 id = advancedPP.totalUniqueInvoiceCreated();
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
@@ -296,7 +296,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
     function test_settledDispute() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(sellerOne, USDC_BUYER, price, 1 days, 1 days));
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(USDC_BUYER, sellerOne, price, 1 days, 1 days));
         uint256 id = advancedPP.totalUniqueInvoiceCreated();
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(USDC), price);
 
@@ -331,7 +331,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
     function test_invoiceRelease() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(sellerOne, NATIVE_TOKEN_BUYER, price, 1 days, 1 days));
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(NATIVE_TOKEN_BUYER, sellerOne, price, 1 days, 1 days));
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         uint256 id = advancedPP.totalUniqueInvoiceCreated();

@@ -42,7 +42,10 @@ function applyBasisPoints(AdvancedPaymentProcessor pp, uint256 amount, uint256 b
     return (amount * basisPoints) / pp.BASIS_POINTS();
 }
 
-function getSubInvoiceIdsForMetaInvoice(AdvancedPaymentProcessor pp, uint256 metaInvoiceId) view returns (uint256[] memory) {
+function getSubInvoiceIdsForMetaInvoice(AdvancedPaymentProcessor pp, uint256 metaInvoiceId)
+    view
+    returns (uint256[] memory)
+{
     IAdvancedPaymentProcessor.MetaInvoice memory meta = pp.getMetaInvoice(metaInvoiceId);
     uint256 count = meta.upper - meta.lower + 1;
     uint256[] memory ids = new uint256[](count);
