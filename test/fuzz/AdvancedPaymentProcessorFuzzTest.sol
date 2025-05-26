@@ -2,16 +2,16 @@
 pragma solidity 0.8.28;
 
 import { Test } from "forge-std/Test.sol";
-import { IPaymentProcessorV2, PaymentProcessorV2 } from "../../src/PaymentProcessorV2.sol";
+import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
 import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 import { getInvoiceCreationParam, getInvoiceCreationParams } from "../util/InvoiceTestHelpers.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
-import { V2 } from "../util/V2.sol";
+import { AdvancedPaymentProcessorSetUp } from "../util/AdvancedPaymentProcessorSetUp.sol";
 
-contract PaymentProcessorV2FuzzTest is V2 {
+contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
     using SafeCastLib for uint256;
 
     function setUp() public override {
@@ -25,17 +25,16 @@ contract PaymentProcessorV2FuzzTest is V2 {
         uint256 timeBeforeCancelation,
         uint256 releaseWindow
     ) public {
-        vm.assume(buyer.code.length == 0 && seller.code.length == 0);
         vm.assume(buyer != seller);
         timeBeforeCancelation = bound(timeBeforeCancelation, 1 days, 30 days);
         releaseWindow = bound(releaseWindow, 1 days, 30 days);
 
-        pp.createSingleInvoice(
+        advancedPP.createSingleInvoice(
             getInvoiceCreationParam(buyer, seller, price, timeBeforeCancelation.toUint32(), releaseWindow.toUint32())
         );
 
-        uint256 nextInvoiceId = pp.getNextInvoiceId();
-        IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(nextInvoiceId - 1);
+        uint256 nextInvoiceId = advancedPP.getNextInvoiceId();
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(nextInvoiceId - 1);
         assertEq(inv.price, price);
         assertEq(inv.buyer, buyer);
         assertEq(inv.seller, seller);
@@ -55,22 +54,22 @@ contract PaymentProcessorV2FuzzTest is V2 {
         timeBeforeCancelation = bound(timeBeforeCancelation, 1 days, type(uint32).max);
         releaseWindow = bound(releaseWindow, 1 days, type(uint32).max);
 
-        pp.createSingleInvoice(
+        advancedPP.createSingleInvoice(
             getInvoiceCreationParam(buyer, seller, price, timeBeforeCancelation.toUint32(), releaseWindow.toUint32())
         );
 
-        uint256 id = pp.totalUniqueInvoiceCreated();
+        uint256 id = advancedPP.totalUniqueInvoiceCreated();
 
-        uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
+        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
         vm.deal(buyer, tokenValue);
         vm.prank(buyer);
-        pp.paySingleInvoice{ value: tokenValue }(id, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(id, address(0));
 
-        IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(id);
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(id);
 
         assertEq(inv.escrow.balance, tokenValue);
         assertEq(inv.paymentToken, address(0));
-        assertEq(inv.state, pp.PAID());
+        assertEq(inv.state, advancedPP.PAID());
     }
 
     function testFuzz_createMetaInvoice(
@@ -104,11 +103,11 @@ contract PaymentProcessorV2FuzzTest is V2 {
         releaseWindows[0] = releaseWindow.toUint32();
         releaseWindows[1] = releaseWindow.toUint32();
 
-        pp.createMetaInvoice(buyer, getInvoiceCreationParams(buyer, sellers, prices, responseTime, releaseWindows));
+        advancedPP.createMetaInvoice(buyer, getInvoiceCreationParams(buyer, sellers, prices, responseTime, releaseWindows));
 
-        uint256 id = pp.totalMetaInvoiceCreated();
+        uint256 id = advancedPP.totalMetaInvoiceCreated();
 
-        IPaymentProcessorV2.MetaInvoice memory metaInv = pp.getMetaInvoice(id);
+        IAdvancedPaymentProcessor.MetaInvoice memory metaInv = advancedPP.getMetaInvoice(id);
 
         assertEq(id, 1);
         assertEq(metaInv.price, priceO + priceT);
@@ -145,15 +144,15 @@ contract PaymentProcessorV2FuzzTest is V2 {
         releaseWindows[0] = releaseWindow.toUint32();
         releaseWindows[1] = releaseWindow.toUint32();
 
-        pp.createMetaInvoice(buyer, getInvoiceCreationParams(buyer, sellers, prices, responseTime, releaseWindows));
+        advancedPP.createMetaInvoice(buyer, getInvoiceCreationParams(buyer, sellers, prices, responseTime, releaseWindows));
 
-        uint256 id = pp.totalMetaInvoiceCreated();
+        uint256 id = advancedPP.totalMetaInvoiceCreated();
 
-        uint256 tokenValue = pp.getTokenValueFromUsd(address(mockUsdc), priceO + priceT);
+        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(mockUsdc), priceO + priceT);
 
         _executePayment(buyer, id, tokenValue);
 
-        assertApproxEqAbs(mockUsdc.allowance(buyer, address(pp)), 0, 2);
+        assertApproxEqAbs(mockUsdc.allowance(buyer, address(advancedPP)), 0, 2);
     }
 
     function testFuzz_releasePayment(
@@ -165,27 +164,27 @@ contract PaymentProcessorV2FuzzTest is V2 {
     ) public {
         vm.assume(buyer.code.length == 0 && seller.code.length == 0);
         price = bound(price, 1e8, 100e8);
-        resolution = bound(resolution, pp.DISPUTE_RESOLVED(), pp.DISPUTE_SETTLED());
-        sellerShare = bound(sellerShare, 0, pp.BASIS_POINTS());
+        resolution = bound(resolution, advancedPP.DISPUTE_RESOLVED(), advancedPP.DISPUTE_SETTLED());
+        sellerShare = bound(sellerShare, 0, advancedPP.BASIS_POINTS());
 
-        pp.createSingleInvoice(getInvoiceCreationParam(buyer, seller, price, 1 days, 2 days));
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyer, seller, price, 1 days, 2 days));
 
-        uint256 id = pp.totalUniqueInvoiceCreated();
+        uint256 id = advancedPP.totalUniqueInvoiceCreated();
 
-        uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
+        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
         vm.deal(buyer, tokenValue);
         vm.prank(buyer);
-        pp.paySingleInvoice{ value: tokenValue }(id, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(id, address(0));
 
         vm.prank(seller);
-        pp.acceptInvoice(id);
+        advancedPP.acceptInvoice(id);
 
-        pp.releasePayment(id);
+        advancedPP.releasePayment(id);
 
-        uint256 expectedValue = tokenValue - ((tokenValue * FEE) / pp.BASIS_POINTS());
+        uint256 expectedValue = tokenValue - ((tokenValue * FEE) / advancedPP.BASIS_POINTS());
 
-        IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(id);
-        assertEq(inv.state, pp.RELEASED());
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(id);
+        assertEq(inv.state, advancedPP.RELEASED());
         assertEq(seller.balance, expectedValue);
     }
 
@@ -199,33 +198,33 @@ contract PaymentProcessorV2FuzzTest is V2 {
         vm.assume(buyer.code.length == 0 && seller.code.length == 0);
 
         price = bound(price, 1e8, 100e8);
-        resolution = bound(resolution, pp.DISPUTE_RESOLVED(), pp.DISPUTE_SETTLED());
-        sellerShare = bound(sellerShare, 0, pp.BASIS_POINTS());
+        resolution = bound(resolution, advancedPP.DISPUTE_RESOLVED(), advancedPP.DISPUTE_SETTLED());
+        sellerShare = bound(sellerShare, 0, advancedPP.BASIS_POINTS());
 
-        pp.createSingleInvoice(getInvoiceCreationParam(buyer, seller, price, 1 days, 2 days));
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyer, seller, price, 1 days, 2 days));
 
-        uint256 id = pp.totalUniqueInvoiceCreated();
+        uint256 id = advancedPP.totalUniqueInvoiceCreated();
 
-        uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
+        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
         vm.deal(buyer, tokenValue);
         vm.prank(buyer);
-        pp.paySingleInvoice{ value: tokenValue }(id, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(id, address(0));
 
         vm.prank(seller);
-        pp.acceptInvoice(id);
+        advancedPP.acceptInvoice(id);
 
         vm.prank(buyer);
-        pp.createDispute(id);
+        advancedPP.createDispute(id);
 
-        pp.resolveDispute(id, resolution.toUint8(), sellerShare);
+        advancedPP.resolveDispute(id, resolution.toUint8(), sellerShare);
 
-        IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(id);
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(id);
         assertEq(inv.state, resolution);
     }
 
     function testFuzz_getTokenValueFromUsd(uint256 price) public view {
         price = bound(price, 1e8, type(uint256).max / 1e18);
-        uint256 val = pp.getTokenValueFromUsd(address(0), price);
+        uint256 val = advancedPP.getTokenValueFromUsd(address(0), price);
         assertGt(val, 0);
     }
 
@@ -233,8 +232,8 @@ contract PaymentProcessorV2FuzzTest is V2 {
         mockUsdc.mint(buyer, INITIAL_BALANCE);
 
         vm.startPrank(buyer);
-        mockUsdc.approve(address(pp), tokenValue);
-        pp.payMetaInvoice(id, address(mockUsdc));
+        mockUsdc.approve(address(advancedPP), tokenValue);
+        advancedPP.payMetaInvoice(id, address(mockUsdc));
         vm.stopPrank();
     }
 }

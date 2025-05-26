@@ -8,15 +8,15 @@ import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";
 import { IERC20 } from "./interface/IERC20.sol";
 import { IEscrow } from "./interface/IEscrow.sol";
 import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
-import { IPaymentProcessorV2 } from "./interface/IPaymentProcessorV2.sol";
+import { IAdvancedPaymentProcessor } from "./interface/IAdvancedPaymentProcessor.sol";
+
 import { Ownable } from "solady/auth/Ownable.sol";
 
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 
-// deployment script
-contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
+contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, Ownable {
     using { SafeTransferLib.safeTransferFrom } for address;
     using { SafeCastLib.toUint48 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
@@ -120,7 +120,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         _;
     }
     /**
-     * @notice Initializes the PaymentProcessorV2 contract with core configuration.
+     * @notice Initializes the AdvancedPaymentProcessor contract with core configuration.
      * @param paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      * @param ownerAddress The address to be set as the contract owner.
      * @param marketplaceAddress The address authorized to manage invoice operations.
@@ -140,12 +140,12 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         nextMetaInvoiceId = 1;
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function createSingleInvoice(InvoiceCreationParam memory param) external onlyMarketplace {
         _createInvoice(ppStorage.updateInvoiceId(1), 0, param);
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function createMetaInvoice(address buyer, InvoiceCreationParam[] memory param) external onlyMarketplace {
         uint256 totalPrice;
         uint256 thisMetaInvoiceId = nextMetaInvoiceId;
@@ -174,7 +174,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         emit MetaInvoiceCreated(thisMetaInvoiceId, metaInv);
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function paySingleInvoice(uint256 id, address paymentToken) external payable {
         if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
 
@@ -183,7 +183,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         invoice[id] = inv;
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function payMetaInvoice(uint256 id, address paymentToken) external payable {
         if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
         MetaInvoice memory metaInv = metaInvoice[id];
@@ -203,14 +203,14 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         }
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function acceptInvoice(uint256[] calldata ids) external {
         for (uint256 i = 0; i < ids.length; i++) {
             acceptInvoice(ids[i]);
         }
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function handleCancelationRequest(uint256 id, bool accept) external {
         Invoice memory inv = _getInvoice(id);
         inv.state = accept ? CANCELATION_ACCEPTED : CANCELATION_REJECTED;
@@ -222,21 +222,21 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         emit CancelationRequestHandled(id, accept);
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function requestCancelation(uint256[] memory ids) external {
         for (uint256 i = 0; i < ids.length; i++) {
             requestCancelation(ids[i]);
         }
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function cancelInvoice(uint256[] memory ids) external {
         for (uint256 i; i < ids.length; i++) {
             cancelInvoice(ids[i]);
         }
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function createDispute(uint256 id) external {
         Invoice memory inv = _getInvoice(id);
         if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
@@ -248,7 +248,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         emit DisputeCreated(id);
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function resolveDispute(uint256 id, uint8 resolution, uint256 sellerShare) external onlyMarketplace {
         Invoice memory inv = _getInvoice(id);
 
@@ -281,7 +281,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         }
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function releasePayment(uint256 id) external onlyMarketplace {
         Invoice memory inv = _getInvoice(id);
         if (inv.state == RELEASED) revert InvalidInvoiceState();
@@ -294,7 +294,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         emit PaymentReleased(id);
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function claimExpiredInvoiceRefunds(uint256 id) external {
         Invoice memory inv = _getInvoice(id);
         if (inv.state > REFUNDED) revert InvalidInvoiceState();
@@ -310,7 +310,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         emit ExpiredInvoiceRefunded(id);
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function cancelInvoice(uint256 id) public {
         Invoice memory inv = _getInvoice(id);
         if (msg.sender != inv.seller) revert UnauthorizedSeller();
@@ -323,7 +323,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         emit InvoiceCanceled(id);
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function acceptInvoice(uint256 id) public {
         Invoice memory inv = _getInvoice(id);
         if (inv.seller != msg.sender) revert UnauthorizedSeller();
@@ -336,7 +336,7 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         emit InvoiceAccepted(id);
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function requestCancelation(uint256 id) public {
         Invoice memory inv = _getInvoice(id);
         if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
@@ -349,17 +349,17 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         emit CancelationRequested(id);
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function setPriceFeed(address token, address aggregator) external onlyOwner {
         priceFeed[token] = aggregator;
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function setMarketplace(address marketplaceAddr) public onlyOwner {
         marketplace = marketplaceAddr;
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function getTokenValueFromUsd(address paymentToken, uint256 price) public view returns (uint256) {
         address aggregator = paymentToken == address(0) ? nativeTokenAggregator : priceFeed[paymentToken];
         (, int256 answer,,,) = AggregatorV3Interface(aggregator).latestRoundData();
@@ -486,42 +486,42 @@ contract PaymentProcessorV2 is IPaymentProcessorV2, EscrowFactory, Ownable {
         return metaInvoiceId == 0 ? invoice[id] : metaInvoiceToSubInvoice[metaInvoiceId][id];
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function getInvoice(uint256 id) external view returns (Invoice memory) {
         return _getInvoice(id);
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function getMetaInvoice(uint256 id) external view returns (MetaInvoice memory) {
         return metaInvoice[id];
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function totalUniqueInvoiceCreated() external view returns (uint256) {
         return ppStorage.totalInvoiceCreated();
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function totalMetaInvoiceCreated() external view returns (uint256) {
         return nextMetaInvoiceId - 1;
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function getNextInvoiceId() external view returns (uint256) {
         return ppStorage.getNextInvoiceId();
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function getNextMetaInvoiceId() external view returns (uint256) {
         return nextMetaInvoiceId;
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function getMetaInvoiceIdForSub(uint256 id) external view returns (uint256) {
         return subInvoiceToMetaInvoiceId[id];
     }
 
-    /// @inheritdoc IPaymentProcessorV2
+    /// @inheritdoc IAdvancedPaymentProcessor
     function getMarketplace() external view returns (address) {
         return marketplace;
     }

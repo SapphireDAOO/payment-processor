@@ -5,7 +5,7 @@ pragma solidity 0.8.28;
  * @title Payment processor interface
  * @notice This interface provides functionality for creating and managing invoices.
  */
-interface IPaymentProcessorV1 {
+interface ISimplePaymentProcessor {
     struct Invoice {
         /// @notice The address of the creator of the invoice.
         address creator;

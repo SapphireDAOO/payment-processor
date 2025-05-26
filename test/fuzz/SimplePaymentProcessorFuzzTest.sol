@@ -1,44 +1,44 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
-import { V1 } from "../util/V1.sol";
+import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
+import { SimplePaymentProcessorSetUp } from "../util/SimplePaymentProcessorSetUp.sol";
 import { console } from "forge-std/console.sol";
 
-contract PaymentProcessorFuzzTest is V1 {
+contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
     function testFuzz_invoice_creation(uint256 _amount) public {
         vm.assume(_amount > 1 ether);
         vm.prank(sellerOne);
-        pp.createInvoice(_amount);
-        IPaymentProcessorV1.Invoice memory invoiceData = pp.getInvoiceData(1);
+        simplePP.createInvoice(_amount);
+        ISimplePaymentProcessor.Invoice memory invoiceData = simplePP.getInvoiceData(1);
         assertEq(invoiceData.creator, sellerOne);
         assertEq(invoiceData.createdAt, block.timestamp);
         assertEq(invoiceData.paymentTime, 0);
         assertEq(invoiceData.price, _amount);
         assertEq(invoiceData.amountPaid, 0);
         assertEq(invoiceData.payer, address(0));
-        assertEq(invoiceData.status, pp.CREATED());
+        assertEq(invoiceData.status, simplePP.CREATED());
         assertEq(invoiceData.escrow, address(0));
-        assertEq(pp.getNextInvoiceId(), 2);
+        assertEq(simplePP.getNextInvoiceId(), 2);
     }
 
     function testFuzz_createAndPayInvoice(uint256 _invoicePrice) public {
         _invoicePrice = bound(_invoicePrice, 1 ether, 1000 ether);
 
         vm.prank(sellerOne);
-        uint256 invoiceId = pp.createInvoice(_invoicePrice);
+        uint256 invoiceId = simplePP.createInvoice(_invoicePrice);
 
-        IPaymentProcessorV1.Invoice memory invoice = pp.getInvoiceData(invoiceId);
+        ISimplePaymentProcessor.Invoice memory invoice = simplePP.getInvoiceData(invoiceId);
         assertEq(invoice.price, _invoicePrice);
-        assertEq(invoice.status, pp.CREATED());
+        assertEq(invoice.status, simplePP.CREATED());
 
         vm.prank(buyerOne);
-        address escrow = pp.makeInvoicePayment{ value: _invoicePrice }(invoiceId);
+        address escrow = simplePP.makeInvoicePayment{ value: _invoicePrice }(invoiceId);
 
-        IPaymentProcessorV1.Invoice memory updated = pp.getInvoiceData(invoiceId);
+        ISimplePaymentProcessor.Invoice memory updated = simplePP.getInvoiceData(invoiceId);
         assertEq(updated.payer, buyerOne);
         assertEq(updated.amountPaid, _invoicePrice);
-        assertEq(updated.status, pp.PAID());
+        assertEq(updated.status, simplePP.PAID());
         assertEq(updated.escrow, escrow);
     }
 }

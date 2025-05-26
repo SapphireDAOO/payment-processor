@@ -4,11 +4,11 @@ pragma solidity 0.8.28;
 import { Escrow, IEscrow } from "./Escrow.sol";
 
 import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
-import { IPaymentProcessorV1 } from "./interface/IPaymentProcessorV1.sol";
+import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 
-contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
+contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
     using SafeCastLib for uint256;
 
     IPaymentProcessorStorage public immutable ppStorage;
@@ -71,7 +71,7 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
         setMinimumInvoiceValue(_minimumInvoicePrice);
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function createInvoice(uint256 _invoicePrice) external returns (uint256) {
         if (_invoicePrice < minimumInvoiceValue) revert ValueIsTooLow();
         Invoice memory invoice;
@@ -88,7 +88,7 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
         return thisInvoiceId;
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function makeInvoicePayment(uint256 _invoiceId) external payable returns (address) {
         Invoice memory invoice = invoiceData[_invoiceId];
 
@@ -121,7 +121,7 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
         return escrow;
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function creatorsAction(uint256 _invoiceId, bool _state) external {
         Invoice memory invoice = invoiceData[_invoiceId];
         if (block.timestamp > invoice.paymentTime + ACCEPTANCE_WINDOW) {
@@ -136,7 +136,7 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
         _state ? _acceptInvoice(_invoiceId) : _rejectInvoice(_invoiceId, invoice);
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function cancelInvoice(uint256 _invoiceId) external {
         Invoice memory invoice = invoiceData[_invoiceId];
         if (invoice.creator != msg.sender) {
@@ -149,7 +149,7 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
         emit InvoiceCanceled(_invoiceId);
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function releaseInvoice(uint256 _invoiceId) external {
         Invoice memory invoice = invoiceData[_invoiceId];
 
@@ -169,7 +169,7 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
         emit InvoiceReleased(_invoiceId);
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function refundPayerAfterWindow(uint256 _invoiceId) external {
         Invoice memory invoice = invoiceData[_invoiceId];
         if (invoice.status != PAID || block.timestamp < invoice.paymentTime + ACCEPTANCE_WINDOW) {
@@ -214,7 +214,7 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
         emit InvoiceRejected(_invoiceId);
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function setInvoiceReleaseTime(uint256 _invoiceId, uint32 _holdPeriod) external onlyOwner {
         Invoice memory invoice = invoiceData[_invoiceId];
 
@@ -231,43 +231,43 @@ contract PaymentProcessorV1 is IPaymentProcessorV1, Ownable {
         emit UpdateHoldPeriod(_invoiceId, newReleaseTime);
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function calculateFee(uint256 _amount) public view returns (uint256) {
         return (_amount * ppStorage.getFeeRate()) / BASIS_POINTS;
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) public onlyOwner {
         if (_newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
         defaultHoldPeriod = _newDefaultHoldPeriod;
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) public onlyOwner {
         minimumInvoiceValue = _minimumInvoiceValue;
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function getNextInvoiceId() external view returns (uint256) {
         return ppStorage.getNextInvoiceId();
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function totalInvoiceCreated() external view returns (uint256) {
         return ppStorage.totalInvoiceCreated();
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function getDefaultHoldPeriod() external view returns (uint256) {
         return defaultHoldPeriod;
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function getInvoiceData(uint256 _invoiceId) external view returns (Invoice memory) {
         return invoiceData[_invoiceId];
     }
 
-    /// @inheritdoc IPaymentProcessorV1
+    /// @inheritdoc ISimplePaymentProcessor
     function getMinimumInvoiceValue() external view returns (uint256) {
         return minimumInvoiceValue;
     }

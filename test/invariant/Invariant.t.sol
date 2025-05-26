@@ -1,23 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
+import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { Test, console } from "forge-std/Test.sol";
 
-import { HandlerV1 } from "./handlers/HandlerV1.sol";
+import { AdvancedPaymentProcessorHandler } from "./handlers/AdvancedPaymentProcessorHandler.sol";
+import { SimplePaymentProcessorHandler } from "./handlers/SimplePaymentProcessorHandler.sol";
 
-import { V1 } from "../util/V1.sol";
+import { SimplePaymentProcessorSetUp } from "../util/SimplePaymentProcessorSetUp.sol";
 
-contract Invariant is StdInvariant, Test, V1 {
-    HandlerV1 handler;
+contract Invariant is StdInvariant, Test, SimplePaymentProcessorSetUp {
+    SimplePaymentProcessorHandler handler;
+    
 
     address creator;
     address payer;
 
     function setUp() public override {
         super.setUp();
-        handler = new HandlerV1(pp);
+        handler = new SimplePaymentProcessorHandler(simplePP);
 
         bytes4[] memory selectors = new bytes4[](6);
         selectors[0] = handler.createInvoice.selector;
@@ -32,7 +34,7 @@ contract Invariant is StdInvariant, Test, V1 {
     }
 
     function invariant_currentIdIsValid() public view {
-        assertEq(handler.totalInvoiceCreated(), pp.getNextInvoiceId());
+        assertEq(handler.totalInvoiceCreated(), simplePP.getNextInvoiceId());
     }
 
     function invariant_feeBalance() public view {
@@ -40,11 +42,11 @@ contract Invariant is StdInvariant, Test, V1 {
     }
 
     function invariant_invoiceStatusDoesNotRevert() public view {
-        uint256 count = pp.totalInvoiceCreated();
+        uint256 count = simplePP.totalInvoiceCreated();
         for (uint256 invoiceId = 1; invoiceId <= count; invoiceId++) {
-            IPaymentProcessorV1.Invoice memory i = pp.getInvoiceData(invoiceId);
-            assertTrue(i.status >= pp.CREATED());
-            assertTrue(i.status <= pp.RELEASED());
+            ISimplePaymentProcessor.Invoice memory i = simplePP.getInvoiceData(invoiceId);
+            assertTrue(i.status >= simplePP.CREATED());
+            assertTrue(i.status <= simplePP.RELEASED());
         }
     }
 

@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 import { Test, console } from "forge-std/Test.sol";
 
-abstract contract SetUp is Test {
+abstract contract BaseSetUp is Test {
     PaymentProcessorStorage ppStorage;
 
     address internal admin = address(1);

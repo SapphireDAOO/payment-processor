@@ -2,11 +2,11 @@
 pragma solidity 0.8.28;
 
 import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
-import { PaymentProcessorV2 } from "../../src/PaymentProcessorV2.sol";
+import { AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
 import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
 import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SetUp } from "./SetUp.sol";
+import { BaseSetUp } from "./BaseSetUp.sol";
 
 struct Addr {
     address usdcPriceFeed;
@@ -16,8 +16,8 @@ struct Addr {
     address wbtc;
 }
 
-abstract contract V2 is SetUp {
-    PaymentProcessorV2 pp;
+abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
+    AdvancedPaymentProcessor advancedPP;
     MockUsdc mockUsdc;
     MockWbtc mockWBtc;
 
@@ -45,17 +45,18 @@ abstract contract V2 is SetUp {
 
         Addr memory addr = _setUp();
 
-        pp = new PaymentProcessorV2(address(ppStorage), admin, address(this), address(addr.nativeTokenPriceFeed));
+        advancedPP =
+            new AdvancedPaymentProcessor(address(ppStorage), admin, address(this), address(addr.nativeTokenPriceFeed));
 
         if (block.chainid == MAINNET_CHAIN_ID) {
-            vm.makePersistent(address(pp), address(ppStorage));
+            vm.makePersistent(address(advancedPP), address(ppStorage));
         }
 
-        _mintAndApproveTokens(address(pp));
+        _mintAndApproveTokens(address(advancedPP));
 
         vm.startPrank(admin);
-        pp.setPriceFeed(address(addr.usdc), address(addr.usdcPriceFeed));
-        pp.setPriceFeed(address(addr.wbtc), address(addr.wbtcPriceFeed));
+        advancedPP.setPriceFeed(address(addr.usdc), address(addr.usdcPriceFeed));
+        advancedPP.setPriceFeed(address(addr.wbtc), address(addr.wbtcPriceFeed));
         vm.stopPrank();
     }
 

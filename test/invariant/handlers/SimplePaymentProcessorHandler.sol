@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../../src/PaymentProcessorV1.sol";
+import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../../src/SimplePaymentProcessor.sol";
 import { Test, console } from "forge-std/Test.sol";
 
-contract HandlerV1 is Test {
-    PaymentProcessorV1 public pp;
+contract SimplePaymentProcessorHandler is Test {
+    SimplePaymentProcessor public pp;
 
     uint256 public balance;
     uint256 public totalInvoiceCreated;
@@ -27,7 +27,7 @@ contract HandlerV1 is Test {
         _;
     }
 
-    constructor(PaymentProcessorV1 _pp) {
+    constructor(SimplePaymentProcessor _pp) {
         totalInvoiceCreated = 1;
         creator = address(1);
         payer = address(2);
@@ -73,7 +73,7 @@ contract HandlerV1 is Test {
     function acceptInvoice(uint256 _invoiceId) public countCall("acceptInvoice") {
         if (ids.length > 0) {
             _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            IPaymentProcessorV1.Invoice memory i = pp.getInvoiceData(_invoiceId);
+            ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(_invoiceId);
             if (i.status != pp.PAID()) return;
             uint256 fee = pp.calculateFee(i.price);
             vm.prank(creator);
