@@ -25,9 +25,8 @@ contract PaymentProcessorFuzzTest is V1 {
     function testFuzz_createAndPayInvoice(uint256 _invoicePrice) public {
         _invoicePrice = bound(_invoicePrice, 1 ether, 1000 ether);
 
-        vm.startPrank(sellerOne);
+        vm.prank(sellerOne);
         uint256 invoiceId = pp.createInvoice(_invoicePrice);
-        vm.stopPrank();
 
         IPaymentProcessorV1.Invoice memory invoice = pp.getInvoiceData(invoiceId);
         assertEq(invoice.price, _invoicePrice);
