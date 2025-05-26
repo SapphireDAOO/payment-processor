@@ -5,7 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { IPaymentProcessorV2, PaymentProcessorV2 } from "../../src/PaymentProcessorV2.sol";
 import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
-import { getInvoiceCreationParam, getInvoiceCreationParams } from "../util/InvoiceParamHelper.sol";
+import { getInvoiceCreationParam, getInvoiceCreationParams } from "../util/InvoiceTestHelpers.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
@@ -30,7 +30,7 @@ contract PaymentProcessorV2FuzzTest is V2 {
         releaseWindow = bound(releaseWindow, 1 days, 30 days);
 
         pp.createSingleInvoice(
-            getInvoiceCreationParam(seller, buyer, price, timeBeforeCancelation.toUint32(), releaseWindow.toUint32())
+            getInvoiceCreationParam(buyer, seller, price, timeBeforeCancelation.toUint32(), releaseWindow.toUint32())
         );
 
         uint256 nextInvoiceId = pp.getNextInvoiceId();
@@ -54,7 +54,7 @@ contract PaymentProcessorV2FuzzTest is V2 {
         releaseWindow = bound(releaseWindow, 1 days, type(uint32).max);
 
         pp.createSingleInvoice(
-            getInvoiceCreationParam(seller, buyer, price, timeBeforeCancelation.toUint32(), releaseWindow.toUint32())
+            getInvoiceCreationParam(buyer, seller, price, timeBeforeCancelation.toUint32(), releaseWindow.toUint32())
         );
 
         uint256 id = pp.totalUniqueInvoiceCreated();
@@ -149,13 +149,7 @@ contract PaymentProcessorV2FuzzTest is V2 {
 
         uint256 tokenValue = pp.getTokenValueFromUsd(address(mockUsdc), priceO + priceT);
 
-        mockUsdc.mint(buyer, INITIAL_BALANCE);
-
-        vm.startPrank(buyer);
-        mockUsdc.approve(address(pp), tokenValue);
-
-        pp.payMetaInvoice(id, address(mockUsdc));
-        vm.stopPrank();
+        _executePayment(buyer, id, tokenValue);
 
         assertApproxEqAbs(mockUsdc.allowance(buyer, address(pp)), 0, 2);
     }
@@ -171,7 +165,7 @@ contract PaymentProcessorV2FuzzTest is V2 {
         resolution = bound(resolution, pp.DISPUTE_RESOLVED(), pp.DISPUTE_SETTLED());
         sellerShare = bound(sellerShare, 0, pp.BASIS_POINTS());
 
-        pp.createSingleInvoice(getInvoiceCreationParam(seller, buyer, price, 1 days, 2 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyer, seller, price, 1 days, 2 days));
 
         uint256 id = pp.totalUniqueInvoiceCreated();
 
@@ -203,7 +197,7 @@ contract PaymentProcessorV2FuzzTest is V2 {
         resolution = bound(resolution, pp.DISPUTE_RESOLVED(), pp.DISPUTE_SETTLED());
         sellerShare = bound(sellerShare, 0, pp.BASIS_POINTS());
 
-        pp.createSingleInvoice(getInvoiceCreationParam(seller, buyer, price, 1 days, 2 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyer, seller, price, 1 days, 2 days));
 
         uint256 id = pp.totalUniqueInvoiceCreated();
 
@@ -228,5 +222,14 @@ contract PaymentProcessorV2FuzzTest is V2 {
         price = bound(price, 1e8, type(uint256).max / 1e18);
         uint256 val = pp.getTokenValueFromUsd(address(0), price);
         assertGt(val, 0);
+    }
+
+    function _executePayment(address buyer, uint256 id, uint256 tokenValue) internal {
+        mockUsdc.mint(buyer, INITIAL_BALANCE);
+
+        vm.startPrank(buyer);
+        mockUsdc.approve(address(pp), tokenValue);
+        pp.payMetaInvoice(id, address(mockUsdc));
+        vm.stopPrank();
     }
 }

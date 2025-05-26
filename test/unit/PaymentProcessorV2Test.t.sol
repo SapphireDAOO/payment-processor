@@ -1,13 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { IPaymentProcessorV2 } from "../../src/interface/IPaymentProcessorV2.sol";
+import { IPaymentProcessorV2, PaymentProcessorV2 } from "../../src/PaymentProcessorV2.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { console } from "forge-std/console.sol";
 
 import { V2 } from "../util/V2.sol";
 
+import {
+    getInvoiceCreationParam,
+    getInvoiceCreationParams,
+    applyBasisPoints,
+    getSubInvoiceIdsForMetaInvoice,
+    getEscrowAddress
+} from "../util/InvoiceTestHelpers.sol";
+
 contract PaymentProcessorV2Test is V2 {
+    using { applyBasisPoints, getSubInvoiceIdsForMetaInvoice, getEscrowAddress } for PaymentProcessorV2;
+
     function test_Initialization() public view {
         assertEq(pp.getNextInvoiceId(), 1);
         assertEq(pp.getNextMetaInvoiceId(), 1);
@@ -18,9 +28,9 @@ contract PaymentProcessorV2Test is V2 {
 
         vm.prank(buyerOne);
         vm.expectRevert(IPaymentProcessorV2.NotAuthorized.selector);
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         uint256 nextInvoiceId = pp.getNextInvoiceId();
         IPaymentProcessorV2.Invoice memory inv = pp.getInvoice(nextInvoiceId - 1);
         assertEq(inv.price, price);
@@ -49,9 +59,7 @@ contract PaymentProcessorV2Test is V2 {
         disputeWindow[1] = 2 days;
 
         uint256 startInvoiceId = pp.getNextInvoiceId();
-        pp.createMetaInvoice(
-            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
-        );
+        pp.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
 
         uint256 thisMetaInvoiceId = pp.getNextMetaInvoiceId() - 1;
         uint256 upper = pp.getNextInvoiceId() - 1;
@@ -76,7 +84,7 @@ contract PaymentProcessorV2Test is V2 {
 
     function test_nativeTokenPaymentForSingleInvoice() public {
         uint256 price = 100e8;
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         uint256 thisInvoiceId = pp.totalUniqueInvoiceCreated();
 
         vm.startPrank(buyerOne);
@@ -97,7 +105,7 @@ contract PaymentProcessorV2Test is V2 {
         assertEq(inv.paymentToken, address(0));
         assertEq(inv.state, pp.PAID());
 
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
 
@@ -124,9 +132,7 @@ contract PaymentProcessorV2Test is V2 {
         disputeWindow[1] = 3 days;
 
         uint256 thisInvoiceId = pp.getNextInvoiceId();
-        pp.createMetaInvoice(
-            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
-        );
+        pp.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
 
         uint256 tokenAmount = pp.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
 
@@ -148,7 +154,7 @@ contract PaymentProcessorV2Test is V2 {
         vm.stopPrank();
 
         IPaymentProcessorV2.Invoice memory invOne = pp.getInvoice(thisInvoiceId);
-        address escrowOne = _getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
+        address escrowOne = pp.getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
 
         assertEq(invOne.state, pp.PAID());
         assertEq(invOne.escrow, escrowOne);
@@ -156,7 +162,7 @@ contract PaymentProcessorV2Test is V2 {
         assertEq(invOne.paymentToken, address(0));
 
         IPaymentProcessorV2.Invoice memory invTwo = pp.getInvoice(pp.getNextInvoiceId() - 1);
-        address escrowTwo = _getEscrowAddress(invTwo.seller, invTwo.buyer, pp.getNextInvoiceId() - 1);
+        address escrowTwo = pp.getEscrowAddress(invTwo.seller, invTwo.buyer, pp.getNextInvoiceId() - 1);
 
         assertEq(invTwo.state, pp.PAID());
         assertEq(invTwo.escrow, escrowTwo);
@@ -166,7 +172,7 @@ contract PaymentProcessorV2Test is V2 {
 
     function test_erc20PaymentForSingleInvoice() public {
         uint256 price = 100e8;
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         uint256 invoiceId = pp.getNextInvoiceId() - 1;
 
         vm.prank(buyerTwo);
@@ -207,16 +213,14 @@ contract PaymentProcessorV2Test is V2 {
         disputeWindow[1] = 2 days;
 
         uint256 thisInvoiceId = pp.getNextInvoiceId();
-        pp.createMetaInvoice(
-            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
-        );
+        pp.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
 
         vm.prank(buyerOne);
 
         pp.payMetaInvoice(thisInvoiceId, address(mockWBtc));
 
         IPaymentProcessorV2.Invoice memory invOne = pp.getInvoice(thisInvoiceId);
-        address escrowOne = _getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
+        address escrowOne = pp.getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
 
         assertEq(invOne.state, pp.PAID());
         assertEq(invOne.escrow, escrowOne);
@@ -224,7 +228,7 @@ contract PaymentProcessorV2Test is V2 {
         assertEq(invOne.paymentToken, address(mockWBtc));
 
         IPaymentProcessorV2.Invoice memory invTwo = pp.getInvoice(pp.getNextInvoiceId() - 1);
-        address escrowTwo = _getEscrowAddress(invTwo.seller, invTwo.buyer, pp.getNextInvoiceId() - 1);
+        address escrowTwo = pp.getEscrowAddress(invTwo.seller, invTwo.buyer, pp.getNextInvoiceId() - 1);
 
         assertEq(invTwo.state, pp.PAID());
         assertEq(invTwo.escrow, escrowTwo);
@@ -236,7 +240,7 @@ contract PaymentProcessorV2Test is V2 {
         // single Invoice
 
         uint256 price = 100e8;
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
 
@@ -278,9 +282,7 @@ contract PaymentProcessorV2Test is V2 {
         disputeWindow[0] = 2 days;
         disputeWindow[1] = 2 days;
 
-        pp.createMetaInvoice(
-            buyerTwo, _getInvoiceCreationParams(buyerTwo, sellers, prices, responseTime, disputeWindow)
-        );
+        pp.createMetaInvoice(buyerTwo, getInvoiceCreationParams(buyerTwo, sellers, prices, responseTime, disputeWindow));
 
         uint256 currentMetaId = pp.totalMetaInvoiceCreated();
 
@@ -289,7 +291,7 @@ contract PaymentProcessorV2Test is V2 {
         vm.prank(buyerTwo);
         pp.payMetaInvoice{ value: metaInvoiceTokenValue }(currentMetaId, address(0));
 
-        uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(currentMetaId);
+        uint256[] memory ids = pp.getSubInvoiceIdsForMetaInvoice(currentMetaId);
 
         vm.prank(sellerTwo);
         pp.acceptInvoice(ids);
@@ -298,7 +300,7 @@ contract PaymentProcessorV2Test is V2 {
             assertEq(pp.getInvoice(ids[i]).state, pp.ACCEPTED());
         }
 
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         currentId = pp.totalUniqueInvoiceCreated();
 
         vm.prank(buyerOne);
@@ -314,7 +316,7 @@ contract PaymentProcessorV2Test is V2 {
     function test_sellerCancelInitiatedInvoice() public {
         // single invoice
         uint256 price = 100e8;
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
 
@@ -364,9 +366,7 @@ contract PaymentProcessorV2Test is V2 {
         disputeWindow[1] = 4 days;
         disputeWindow[2] = 5 days;
 
-        pp.createMetaInvoice(
-            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
-        );
+        pp.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
 
         uint256 currentMetaInvoiceId = pp.totalMetaInvoiceCreated();
 
@@ -376,7 +376,7 @@ contract PaymentProcessorV2Test is V2 {
         pp.payMetaInvoice{ value: tokenValue }(currentMetaInvoiceId, address(0));
         buyersBalanceBeforeCancellation = buyerOne.balance;
 
-        uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(currentMetaInvoiceId);
+        uint256[] memory ids = pp.getSubInvoiceIdsForMetaInvoice(currentMetaInvoiceId);
 
         vm.prank(sellerOne);
         pp.cancelInvoice(ids);
@@ -390,7 +390,7 @@ contract PaymentProcessorV2Test is V2 {
 
     function test_invoiceCancelationRequest() public {
         uint256 price = 100e8;
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
         uint256 currentId = pp.totalUniqueInvoiceCreated();
         uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
@@ -410,7 +410,7 @@ contract PaymentProcessorV2Test is V2 {
         vm.stopPrank();
         assertEq(pp.getInvoice(currentId).state, pp.CANCELATION_REQUESTED());
 
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         currentId = pp.totalUniqueInvoiceCreated();
 
         vm.startPrank(buyerOne);
@@ -444,9 +444,7 @@ contract PaymentProcessorV2Test is V2 {
         disputeWindow[1] = 4 days;
         disputeWindow[2] = 5 days;
 
-        pp.createMetaInvoice(
-            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
-        );
+        pp.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
 
         uint256 totalPrice = prices[0] + prices[1] + prices[2];
 
@@ -456,7 +454,7 @@ contract PaymentProcessorV2Test is V2 {
         vm.startPrank(buyerOne);
         pp.payMetaInvoice{ value: tokenValue }(currentMetaInvoiceId, address(0));
 
-        uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(currentMetaInvoiceId);
+        uint256[] memory ids = pp.getSubInvoiceIdsForMetaInvoice(currentMetaInvoiceId);
         pp.requestCancelation(ids);
 
         vm.startPrank(sellerOne);
@@ -479,7 +477,7 @@ contract PaymentProcessorV2Test is V2 {
 
     function test_refundAfterInvoiceExpires() public {
         uint256 price = 100e8;
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         uint256 id = pp.totalUniqueInvoiceCreated();
 
         uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
@@ -506,7 +504,7 @@ contract PaymentProcessorV2Test is V2 {
         assertEq(pp.getInvoice(id).state, pp.REFUNDED());
         assertEq(pp.getInvoice(id).amountPaid + balanceBefore, buyerOne.balance);
 
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         id = pp.totalUniqueInvoiceCreated();
 
         vm.prank(buyerOne);
@@ -522,7 +520,7 @@ contract PaymentProcessorV2Test is V2 {
 
     function test_disputeCreation() public {
         uint256 price = 100e8;
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         uint256 id = pp.totalUniqueInvoiceCreated();
         uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
 
@@ -569,12 +567,10 @@ contract PaymentProcessorV2Test is V2 {
         disputeWindow[0] = 1 days;
         disputeWindow[1] = 4 days;
 
-        pp.createMetaInvoice(
-            buyerOne, _getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
-        );
+        pp.createMetaInvoice(buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow));
         uint256 metaInvoiceId = pp.totalMetaInvoiceCreated();
 
-        uint256[] memory ids = _getSubInvoiceIdsForMetaInvoice(metaInvoiceId);
+        uint256[] memory ids = pp.getSubInvoiceIdsForMetaInvoice(metaInvoiceId);
 
         vm.prank(buyerOne);
         pp.payMetaInvoice(metaInvoiceId, address(mockUsdc));
@@ -606,7 +602,7 @@ contract PaymentProcessorV2Test is V2 {
 
     function test_settledDispute() public {
         uint256 price = 100e8;
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         uint256 id = pp.totalUniqueInvoiceCreated();
         uint256 tokenValue = pp.getTokenValueFromUsd(address(mockUsdc), price);
 
@@ -641,10 +637,10 @@ contract PaymentProcessorV2Test is V2 {
 
         pp.resolveDispute(id, settled, sellerPercentage);
 
-        uint256 buyerShare = _applyBasisPoints(tokenValue, pp.BASIS_POINTS() - sellerPercentage);
+        uint256 buyerShare = pp.applyBasisPoints(tokenValue, pp.BASIS_POINTS() - sellerPercentage);
 
-        uint256 sellerShare = _applyBasisPoints(tokenValue, sellerPercentage);
-        uint256 fee = _applyBasisPoints(sellerShare, FEE);
+        uint256 sellerShare = pp.applyBasisPoints(tokenValue, sellerPercentage);
+        uint256 fee = pp.applyBasisPoints(sellerShare, FEE);
 
         console.log("balances after", IERC20(mockUsdc).balanceOf(buyerOne), IERC20(mockUsdc).balanceOf(sellerOne));
 
@@ -657,7 +653,7 @@ contract PaymentProcessorV2Test is V2 {
     // @audit time factor
     function test_invoiceRelease() public {
         uint256 price = 100e8;
-        pp.createSingleInvoice(_getInvoiceCreationParam(sellerOne, buyerOne, price, 1 days, 1 days));
+        pp.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         uint256 tokenValue = pp.getTokenValueFromUsd(address(0), price);
 
         uint256 id = pp.totalUniqueInvoiceCreated();
@@ -680,67 +676,5 @@ contract PaymentProcessorV2Test is V2 {
         pp.releasePayment(id);
 
         assertEq(pp.getInvoice(id).state, pp.RELEASED());
-    }
-
-    function test_justRandom() public view {
-        uint256 value = pp.getTokenValueFromUsd(address(mockUsdc), 100e8);
-        console.log("Value is", value);
-    }
-
-    function _applyBasisPoints(uint256 amount, uint256 basisPoints) internal view returns (uint256) {
-        return (amount * basisPoints) / pp.BASIS_POINTS();
-    }
-
-    function _getSubInvoiceIdsForMetaInvoice(uint256 metaInvoiceId) internal view returns (uint256[] memory) {
-        IPaymentProcessorV2.MetaInvoice memory meta = pp.getMetaInvoice(metaInvoiceId);
-        uint256 count = meta.upper - meta.lower + 1;
-        uint256[] memory ids = new uint256[](count);
-
-        for (uint256 i = 0; i < count; i++) {
-            ids[i] = meta.lower + i;
-        }
-
-        return ids;
-    }
-
-    function _getEscrowAddress(address seller, address buyer, uint256 invoiceId) internal view returns (address) {
-        bytes32 salt = pp.computeSalt(seller, buyer, invoiceId);
-        return pp.getPredictedAddress(salt);
-    }
-
-    function _getInvoiceCreationParam(
-        address seller,
-        address buyer,
-        uint256 price,
-        uint32 timeBeforeCancelation,
-        uint32 releaseWindow
-    ) internal pure returns (IPaymentProcessorV2.InvoiceCreationParam memory) {
-        IPaymentProcessorV2.InvoiceCreationParam memory param;
-        param.seller = seller;
-        param.buyer = buyer;
-        param.price = price;
-        param.timeBeforeCancelation = timeBeforeCancelation;
-        param.releaseWindow = releaseWindow;
-        param.invoiceExpiryDuration = 1 days;
-
-        return param;
-    }
-
-    function _getInvoiceCreationParams(
-        address buyer,
-        address[] memory sellers,
-        uint256[] memory prices,
-        uint32[] memory timeBeforeCancelation,
-        uint32[] memory disputeWindow
-    ) internal pure returns (IPaymentProcessorV2.InvoiceCreationParam[] memory) {
-        uint256 numberOfInvoice = sellers.length;
-        IPaymentProcessorV2.InvoiceCreationParam[] memory params =
-            new IPaymentProcessorV2.InvoiceCreationParam[](numberOfInvoice);
-
-        for (uint256 i; i < numberOfInvoice; i++) {
-            params[i] =
-                _getInvoiceCreationParam(sellers[i], buyer, prices[i], timeBeforeCancelation[i], disputeWindow[i]);
-        }
-        return params;
     }
 }

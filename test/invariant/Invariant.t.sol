@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../../src/PaymentProcessorV1.sol";
+import { IPaymentProcessorV1, PaymentProcessorV1 } from "../../src/PaymentProcessorV1.sol";
 import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { Test, console } from "forge-std/Test.sol";
 
