@@ -4,11 +4,6 @@ pragma solidity 0.8.28;
 import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 
-// what do they have in common
-// events
-// some state variable
-// some set function
-
 contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /**
      * @notice The next available unique invoice ID.
@@ -27,14 +22,35 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
      */
     address private feeReceiver;
 
+    /**
+     * @notice Tracks whether an address is authorized to perform restricted actions.
+     *  @dev Maps an address to a boolean indicating its authorization status.
+     */
+    mapping(address => bool) private isAuthorized;
+
+    /**
+     * @notice Ensures that only authorized addresses can call the function.
+     * @dev Reverts with `NotAuthorized` if `msg.sender` is not authorized.
+     */
+    modifier onlyAuthorized() {
+        if (!isAuthorized[msg.sender]) revert NotAuthorized();
+        _;
+    }
+
+    /**
+     *  @notice Initializes the contract with the owner, fee receiver, and initial fee rate.
+     *  @param feeReceiverAddress The address that will receive platform fees.
+     *  @param initialFeeRate The initial fee rate in basis points (e.g., 100 = 1%).
+     */
     constructor(address feeReceiverAddress, uint256 initialFeeRate) {
+        _initializeOwner(msg.sender);
         feeReceiver = feeReceiverAddress;
         feeRate = initialFeeRate;
         nextInvoiceId = 1;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function updateInvoiceId(uint256 by) external returns (uint256) {
+    function updateInvoiceId(uint256 by) external onlyAuthorized returns (uint256) {
         nextInvoiceId += by;
         return totalInvoiceCreated();
     }
@@ -45,8 +61,13 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setFeeRate(uint256 _feeRate) external onlyOwner {
-        feeRate = _feeRate;
+    function setAuthorizedAddress(address authorizedAddress, bool authorized) external onlyOwner {
+        isAuthorized[authorizedAddress] = authorized;
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function setFeeRate(uint256 newFeeRate) external onlyOwner {
+        feeRate = newFeeRate;
     }
 
     /// @inheritdoc IPaymentProcessorStorage

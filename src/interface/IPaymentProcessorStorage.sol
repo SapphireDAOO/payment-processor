@@ -2,11 +2,22 @@
 pragma solidity 0.8.28;
 
 interface IPaymentProcessorStorage {
+    ///@notice Thrown when a caller attempts an action without the required authorization.
+    error NotAuthorized();
+
     /**
      * @notice Updates the invoice ID counter.
      * @dev Should be implemented to increment or modify the invoice ID tracker as needed.
      */
     function updateInvoiceId(uint256 by) external returns (uint256);
+
+    /**
+     * @notice Sets or revokes authorization for a specific address.
+     * @dev Only callable by the contract owner.
+     * @param authorizedAddress The address to authorize or deauthorize.
+     * @param authorized A boolean indicating whether to authorize (true) or deauthorize (false) the address.
+     */
+    function setAuthorizedAddress(address authorizedAddress, bool authorized) external;
 
     /**
      * @notice Sets the address that will receive fees collected from transactions.

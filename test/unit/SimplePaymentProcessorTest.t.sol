@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
-import { SimplePaymentProcessorSetUp } from "../util/SimplePaymentProcessorSetUp.sol";
+import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
 
 error Unauthorized();
 

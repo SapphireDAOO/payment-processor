@@ -6,6 +6,7 @@ interface IEscrowFactory {
         address seller;
         address buyer;
         uint256 invoiceId;
+        uint256 metaInvoiceId;
         uint256 value;
         address paymentToken;
     }
@@ -20,14 +21,19 @@ interface IEscrowFactory {
     function getPredictedAddress(bytes32 salt) external view returns (address);
 
     /**
-     * @notice Computes a unique salt value based on the provided parameters.
-     * @dev The salt is used to deterministically deploy or identify contracts via CREATE2.
-     * @param creator The address of the invoice creator.
-     * @param payer The address of the payer associated with the invoice.
-     * @param invoiceId The unique ID of the invoice.
-     * @return A `bytes32` salt value derived from the input parameters.
+     * @notice Computes a unique salt value for a sub-invoice within a meta-invoice context.
+     * @dev This salt is used to deterministically deploy or reference an Escrow contract via CREATE2,
+     *      ensuring uniqueness across both standard and meta-invoice deployments.
+     * @param seller The address of the seller (invoice recipient).
+     * @param buyer The address of the buyer (payer).
+     * @param invoiceId The ID of the individual sub-invoice.
+     * @param metaInvoiceId The ID of the parent meta-invoice this sub-invoice belongs to.
+     * @return A `bytes32` salt value uniquely derived from the input parameters.
      */
-    function computeSalt(address creator, address payer, uint256 invoiceId) external pure returns (bytes32);
+    function computeSalt(address seller, address buyer, uint256 invoiceId, uint256 metaInvoiceId)
+        external
+        view
+        returns (bytes32);
 
     /**
      * @notice Emitted when a new escrow contract is created.

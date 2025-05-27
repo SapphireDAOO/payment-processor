@@ -355,8 +355,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setMarketplace(address marketplaceAddr) public onlyOwner {
-        marketplace = marketplaceAddr;
+    function setMarketplace(address marketplaceAddress) public onlyOwner {
+        marketplace = marketplaceAddress;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -396,6 +396,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
                 seller: inv.seller,
                 buyer: inv.buyer,
                 invoiceId: id,
+                metaInvoiceId: inv.metaInvoiceId,
                 value: value,
                 paymentToken: paymentToken
             })

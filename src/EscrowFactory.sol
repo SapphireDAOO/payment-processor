@@ -8,8 +8,12 @@ import { IEscrowFactory } from "./interface/IEscrowFactory.sol";
 
 abstract contract EscrowFactory is IEscrowFactory {
     /// @inheritdoc IEscrowFactory
-    function computeSalt(address seller, address buyer, uint256 invoiceId) public pure returns (bytes32) {
-        return keccak256(abi.encode(seller, buyer, invoiceId));
+    function computeSalt(address seller, address buyer, uint256 invoiceId, uint256 metaInvoiceId)
+        public
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(seller, buyer, invoiceId, metaInvoiceId));
     }
 
     /// @inheritdoc IEscrowFactory
@@ -32,7 +36,7 @@ abstract contract EscrowFactory is IEscrowFactory {
      */
     function _create(EscrowCreationParams memory params) internal returns (address) {
         bytes memory constructorArg = abi.encode(params.invoiceId, params.seller, params.buyer, address(this));
-        bytes32 salt = computeSalt(params.seller, params.buyer, params.invoiceId);
+        bytes32 salt = computeSalt(params.seller, params.buyer, params.invoiceId, params.metaInvoiceId);
 
         if (params.paymentToken != address(0)) {
             params.value = 0;
@@ -42,7 +46,6 @@ abstract contract EscrowFactory is IEscrowFactory {
             CREATE3.deployDeterministic(params.value, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt);
 
         emit EscrowCreated(params.invoiceId, escrow);
-
         return escrow;
     }
 }

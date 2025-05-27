@@ -7,108 +7,103 @@ import { Test, console } from "forge-std/Test.sol";
 contract SimplePaymentProcessorHandler is Test {
     SimplePaymentProcessor public pp;
 
-    uint256 public balance;
-    uint256 public totalInvoiceCreated;
+    uint256 private totalInvoiceCreated;
 
-    address creator;
-    address payer;
-
-    uint256[] public ids;
+    address seller;
+    address buyer;
 
     uint256 constant INVOICE_PRICE = 1000 ether;
 
-    uint256 constant PAYERS_INITIAL_FUND = 10_000 ether;
+    uint256 constant buyerS_INITIAL_FUND = 10_000 ether;
 
-    mapping(bytes32 => uint256) public calls;
+    mapping(bytes4 => uint256) public calls;
     mapping(uint256 => uint256) public price;
 
-    modifier countCall(bytes32 key) {
+    modifier countCall(bytes4 key) {
         calls[key]++;
         _;
     }
 
-    constructor(SimplePaymentProcessor _pp) {
-        totalInvoiceCreated = 1;
-        creator = address(1);
-        payer = address(2);
-
-        vm.deal(payer, PAYERS_INITIAL_FUND);
-
-        pp = _pp;
+    modifier invoiceExists() {
+        if (totalInvoiceCreated == 1) return;
+        _;
     }
 
-    function createInvoice(uint256 _price) public countCall("createInvoice") {
+    constructor(SimplePaymentProcessor sPP, address buyersAddr, address sellersAddr) {
+        totalInvoiceCreated = 0;
+        seller = sellersAddr;
+        buyer = buyersAddr;
+
+        pp = sPP;
+    }
+
+    function createInvoice(uint256 _price) public countCall(this.createInvoice.selector) {
         _price = bound(_price, 1.01 ether, INVOICE_PRICE);
-        vm.prank(creator);
+        vm.prank(seller);
         uint256 invoiceId = pp.createInvoice(_price);
-        ids.push(invoiceId);
         price[invoiceId] = _price;
         totalInvoiceCreated++;
     }
 
-    function cancelInvoice(uint256 _invoiceId) public countCall("cancelInvoice") {
-        if (ids.length > 0) {
-            _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            if (pp.getInvoiceData(_invoiceId).status != pp.CREATED()) return;
-            vm.prank(creator);
-            pp.cancelInvoice(_invoiceId);
-        }
+    function cancelInvoice(uint256 _invoiceId) public invoiceExists countCall(this.cancelInvoice.selector) {
+        _invoiceId = bound(_invoiceId, 0, totalInvoiceCreated);
+        if (pp.getInvoiceData(_invoiceId).status != pp.CREATED()) return;
+        vm.prank(seller);
+        pp.cancelInvoice(_invoiceId);
     }
 
-    function makePayment(uint256 _invoiceId, uint256 _value) public countCall("makePayment") {
-        if (ids.length > 0) {
-            _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
+    function makePayment(uint256 _invoiceId, uint256 _value)
+        public
+        invoiceExists
+        countCall(this.makePayment.selector)
+    {
+        _invoiceId = bound(_invoiceId, 0, totalInvoiceCreated);
 
-            if (pp.getInvoiceData(_invoiceId).status != pp.CREATED()) return;
-            uint256 iPrice = pp.getInvoiceData(_invoiceId).price;
-            _value = bound(_value, iPrice, iPrice);
+        if (pp.getInvoiceData(_invoiceId).status != pp.CREATED()) return;
+        uint256 iPrice = pp.getInvoiceData(_invoiceId).price;
+        _value = bound(_value, iPrice, iPrice);
 
-            _value = bound(_value, 0, price[_invoiceId]);
+        _value = bound(_value, 0, price[_invoiceId]);
 
-            vm.prank(payer);
-            pp.makeInvoicePayment{ value: _value }(_invoiceId);
-        }
+        vm.prank(buyer);
+        pp.makeInvoicePayment{ value: _value }(_invoiceId);
     }
 
-    function acceptInvoice(uint256 _invoiceId) public countCall("acceptInvoice") {
-        if (ids.length > 0) {
-            _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(_invoiceId);
-            if (i.status != pp.PAID()) return;
-            uint256 fee = pp.calculateFee(i.price);
-            vm.prank(creator);
-            pp.creatorsAction(_invoiceId, true);
-            balance += fee;
-        }
+    function acceptInvoice(uint256 _invoiceId) public invoiceExists countCall(this.acceptInvoice.selector) {
+        _invoiceId = bound(_invoiceId, 0, totalInvoiceCreated);
+        ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(_invoiceId);
+        if (i.status != pp.PAID()) return;
+        vm.prank(seller);
+        pp.creatorsAction(_invoiceId, true);
     }
 
-    function rejectInvoice(uint256 _invoiceId) public countCall("rejectInvoice") {
-        if (ids.length > 0) {
-            _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            if (pp.getInvoiceData(_invoiceId).status != pp.PAID()) return;
-            vm.prank(creator);
-            pp.creatorsAction(_invoiceId, false);
-        }
+    function rejectInvoice(uint256 _invoiceId) public invoiceExists countCall(this.rejectInvoice.selector) {
+        _invoiceId = bound(_invoiceId, 0, totalInvoiceCreated);
+        if (pp.getInvoiceData(_invoiceId).status != pp.PAID()) return;
+        vm.prank(seller);
+        pp.creatorsAction(_invoiceId, false);
     }
 
-    function releaseInvoice(uint256 _invoiceId) public countCall("releaseInvoice") {
-        if (ids.length > 0) {
-            _invoiceId = ids[bound(_invoiceId, 0, ids.length - 1)];
-            if (pp.getInvoiceData(_invoiceId).status == pp.RELEASED()) return;
-            vm.assume(block.timestamp > block.timestamp + pp.ACCEPTANCE_WINDOW());
-            vm.prank(creator);
-            pp.releaseInvoice(_invoiceId);
-        }
+    function releaseInvoice(uint256 _invoiceId) public invoiceExists countCall(this.releaseInvoice.selector) {
+        _invoiceId = bound(_invoiceId, 0, totalInvoiceCreated);
+        if (pp.getInvoiceData(_invoiceId).status == pp.RELEASED()) return;
+        vm.assume(block.timestamp > block.timestamp + pp.ACCEPTANCE_WINDOW());
+        vm.prank(seller);
+        pp.releaseInvoice(_invoiceId);
+    }
+
+    function getTotalInvoiceCreated() external view returns (uint256) {
+        return totalInvoiceCreated;
     }
 
     function callSummary() external view {
-        console.log("Call summary:");
+        console.log("Simple Payment Processor Call Summary:");
         console.log("-------------------");
-        console.log("Create", calls["createInvoice"]);
-        console.log("Cancel", calls["cancelInvoice"]);
-        console.log("Payment", calls["makePayment"]);
-        console.log("Accept", calls["acceptInvoice"]);
-        console.log("Reject", calls["rejectInvoice"]);
-        console.log("Release", calls["releaseInvoice"]);
+        console.log("Create Invoice:", calls[this.createInvoice.selector]);
+        console.log("Cancel Invoice:", calls[this.cancelInvoice.selector]);
+        console.log("Make Payment:", calls[this.makePayment.selector]);
+        console.log("Accept Invoice:", calls[this.acceptInvoice.selector]);
+        console.log("Reject Invoice:", calls[this.rejectInvoice.selector]);
+        console.log("Release Invoice:", calls[this.releaseInvoice.selector]);
     }
 }
