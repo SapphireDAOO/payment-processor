@@ -3,14 +3,14 @@ pragma solidity 0.8.28;
 
 import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { AdvancedPaymentProcessorSetUp } from "../util/AdvancedPaymentProcessorSetUp.sol";
+import { AdvancedPaymentProcessorSetUp } from "../utils/AdvancedPaymentProcessorSetUp.sol";
 import {
     getInvoiceCreationParam,
     getInvoiceCreationParams,
     getEscrowAddress,
     getSubInvoiceIdsForMetaInvoice,
     applyBasisPoints
-} from "../util/InvoiceTestHelpers.sol";
+} from "../utils/InvoiceTestHelpers.sol";
 
 contract Interactions is AdvancedPaymentProcessorSetUp {
     using { getEscrowAddress, getSubInvoiceIdsForMetaInvoice, applyBasisPoints } for AdvancedPaymentProcessor;
@@ -70,7 +70,8 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         advancedPP.payMetaInvoice{ value: tokenAmount }(thisInvoiceId, address(0));
 
         IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(thisInvoiceId);
-        address escrowOne = advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
+        address escrowOne =
+            advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId, invOne.metaInvoiceId);
 
         assertEq(invOne.state, advancedPP.PAID());
         assertEq(invOne.escrow, escrowOne);
@@ -78,7 +79,9 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         assertEq(invOne.paymentToken, address(0));
 
         IAdvancedPaymentProcessor.Invoice memory invTwo = advancedPP.getInvoice(advancedPP.getNextInvoiceId() - 1);
-        address escrowTwo = advancedPP.getEscrowAddress(invTwo.seller, invTwo.buyer, advancedPP.getNextInvoiceId() - 1);
+        address escrowTwo = advancedPP.getEscrowAddress(
+            invTwo.seller, invTwo.buyer, advancedPP.getNextInvoiceId() - 1, invTwo.metaInvoiceId
+        );
 
         assertEq(invTwo.state, advancedPP.PAID());
         assertEq(invTwo.escrow, escrowTwo);
@@ -131,7 +134,8 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         vm.stopPrank();
 
         IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(thisInvoiceId);
-        address escrowOne = advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId);
+        address escrowOne =
+            advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId, invOne.metaInvoiceId);
 
         assertEq(invOne.state, advancedPP.PAID());
         assertEq(invOne.escrow, escrowOne);
@@ -139,7 +143,9 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         assertEq(invOne.paymentToken, address(WBTC));
 
         IAdvancedPaymentProcessor.Invoice memory invTwo = advancedPP.getInvoice(advancedPP.getNextInvoiceId() - 1);
-        address escrowTwo = advancedPP.getEscrowAddress(invTwo.seller, invTwo.buyer, advancedPP.getNextInvoiceId() - 1);
+        address escrowTwo = advancedPP.getEscrowAddress(
+            invTwo.seller, invTwo.buyer, advancedPP.getNextInvoiceId() - 1, invTwo.metaInvoiceId
+        );
 
         assertEq(invTwo.state, advancedPP.PAID());
         assertEq(invTwo.escrow, escrowTwo);
