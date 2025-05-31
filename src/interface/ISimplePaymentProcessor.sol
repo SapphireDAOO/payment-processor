@@ -7,10 +7,12 @@ pragma solidity 0.8.28;
  */
 interface ISimplePaymentProcessor {
     struct Invoice {
-        /// @notice The address of the creator of the invoice.
-        address creator;
-        /// @notice The address of the payer of the invoice.
-        address payer;
+        /// @notice A unique identifier assigned to this invoice, typically sequentially.
+        uint256 invoiceId;
+        /// @notice The address of the seller of the invoice.
+        address seller;
+        /// @notice The address of the buyer of the invoice.
+        address buyer;
         /// @notice The address of the escrow contract managing the funds for this invoice.
         address escrow;
         /// @notice The total price of the invoice in wei.
@@ -21,7 +23,7 @@ interface ISimplePaymentProcessor {
         uint32 createdAt;
         /// @notice The Unix timestamp when the payment was completed.
         uint32 paymentTime;
-        /// @notice The timestamp when funds in escrow can be released to the creator.
+        /// @notice The timestamp when funds in escrow can be released to the seller.
         uint32 releaseAt;
         /// @notice The current status of the invoice.
         uint32 status;
@@ -69,16 +71,16 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when an invoice has not been accepted
     error InvoiceHasNotBeenAccepted();
 
-    /// @notice Thrown when the creator attempts to take action on an invoice after the acceptance window has expired.
+    /// @notice Thrown when the seller attempts to take action on an invoice after the acceptance window has expired.
     error AcceptanceWindowExceeded();
 
     /// @notice Thrown when the calculated release time exceeds the maximum value allowed for a uint32.
     error ReleaseTimeOverflow();
 
-    /// @notice Thrown when the creator of an invoice attempts to pay for their own invoice.
-    error CreatorCannotPayOwnedInvoice();
+    /// @notice Thrown when the seller of an invoice attempts to pay for their own invoice.
+    error SellerCannotPayOwnedInvoice();
 
-    /// @notice Reverts when an invoice is not eligible for a refund to the creator.
+    /// @notice Reverts when an invoice is not eligible for a refund to the seller.
     error InvoiceNotEligibleForRefund();
 
     /// @notice Thrown when the hold period for an invoice has not yet been exceeded.
@@ -105,21 +107,21 @@ interface ISimplePaymentProcessor {
     function makeInvoicePayment(uint256 _invoiceId) external payable returns (address);
 
     /**
-     * @notice Allows the creator of the invoice to accept or reject it.
+     * @notice Allows the seller of the invoice to accept or reject it.
      * @param _invoiceId The ID of the invoice.
      * @param _state True to accept the invoice, false to reject.
      */
-    function creatorsAction(uint256 _invoiceId, bool _state) external;
+    function sellersAction(uint256 _invoiceId, bool _state) external;
 
     /**
      * @notice Cancels an existing invoice.
-     * @dev Only callable by the invoice creator.
+     * @dev Only callable by the invoice seller.
      * @param _invoiceId The ID of the invoice to cancel.
      */
     function cancelInvoice(uint256 _invoiceId) external;
 
     /**
-     * @notice Releases the funds held in escrow for a specific invoice to the creator.
+     * @notice Releases the funds held in escrow for a specific invoice to the seller.
      * @param _invoiceId The ID of the invoice for which funds are released.
      */
     function releaseInvoice(uint256 _invoiceId) external;
@@ -140,13 +142,13 @@ interface ISimplePaymentProcessor {
     function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) external;
 
     /**
-     * @notice Refunds the creator of a specific invoice.
-     * @dev This function allows the payer to be refund if the acceptance window has not been exceeded
+     * @notice Refunds the seller of a specific invoice.
+     * @dev This function allows the buyer to be refund if the acceptance window has not been exceeded
      *      and the invoice is eligible for a refund. The refund will be processed through the escrow contract.
      * @param _invoiceId The ID of the invoice to be refunded.
      *
      */
-    function refundPayerAfterWindow(uint256 _invoiceId) external;
+    function refundBuyerAfterWindow(uint256 _invoiceId) external;
 
     /**
      * @notice Updates the default hold period for all new invoices.
@@ -196,33 +198,33 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Emitted when a new invoice is created.
-     * @param creator The address of the invoice creator.
+     * @param seller The address of the invoice seller.
      * @param invoiceId The unique ID of the created invoice.
      * @param price The price of the invoice that was created.
      */
-    event InvoiceCreated(uint256 indexed invoiceId, address indexed creator, uint256 indexed price);
+    event InvoiceCreated(uint256 indexed invoiceId, address indexed seller, uint256 indexed price);
 
     /**
      * @notice Emitted when an invoice payment is made.
      * @param invoiceId The unique ID of the accepted invoice.
      * @param amountPaid The amount paid towards the invoice in wei.
      */
-    event InvoicePaid(uint256 indexed invoiceId, address indexed payer, uint256 indexed amountPaid);
+    event InvoicePaid(uint256 indexed invoiceId, address indexed buyer, uint256 indexed amountPaid);
 
     /**
-     * @notice Emitted when an invoice is rejected by the creator.
+     * @notice Emitted when an invoice is rejected by the seller.
      * @param invoiceId The unique ID of the rejected invoice.
      */
     event InvoiceRejected(uint256 indexed invoiceId);
 
     /**
-     * @notice Emitted when an invoice is refunded to the payer.
+     * @notice Emitted when an invoice is refunded to the buyer.
      * @param invoiceId The unique ID of the rejected invoice.
      */
     event InvoiceRefunded(uint256 indexed invoiceId);
 
     /**
-     * @notice Emitted when an invoice is accepted by the creator.
+     * @notice Emitted when an invoice is accepted by the seller.
      * @param invoiceId The unique ID of the accepted invoice.
      */
     event InvoiceAccepted(uint256 indexed invoiceId);
