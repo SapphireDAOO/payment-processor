@@ -9,16 +9,17 @@ contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
     function testFuzz_invoice_creation(uint256 _amount) public {
         vm.assume(_amount > 1 ether);
         vm.prank(sellerOne);
-        simplePP.createInvoice(_amount);
-        ISimplePaymentProcessor.Invoice memory invoiceData = simplePP.getInvoiceData(1);
-        assertEq(invoiceData.creator, sellerOne);
+        bytes32 invoiceKey = simplePP.createInvoice(_amount);
+        ISimplePaymentProcessor.Invoice memory invoiceData = simplePP.getInvoiceData(invoiceKey);
+        assertEq(invoiceData.seller, sellerOne);
         assertEq(invoiceData.createdAt, block.timestamp);
         assertEq(invoiceData.paymentTime, 0);
         assertEq(invoiceData.price, _amount);
         assertEq(invoiceData.amountPaid, 0);
-        assertEq(invoiceData.payer, address(0));
+        assertEq(invoiceData.buyer, address(0));
         assertEq(invoiceData.status, simplePP.CREATED());
         assertEq(invoiceData.escrow, address(0));
+        assertEq(invoiceData.invoiceId, 1);
         assertEq(simplePP.getNextInvoiceId(), 2);
     }
 
@@ -26,17 +27,17 @@ contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
         _invoicePrice = bound(_invoicePrice, 1 ether, 1000 ether);
 
         vm.prank(sellerOne);
-        uint256 invoiceId = simplePP.createInvoice(_invoicePrice);
+        bytes32 invoiceKey = simplePP.createInvoice(_invoicePrice);
 
-        ISimplePaymentProcessor.Invoice memory invoice = simplePP.getInvoiceData(invoiceId);
+        ISimplePaymentProcessor.Invoice memory invoice = simplePP.getInvoiceData(invoiceKey);
         assertEq(invoice.price, _invoicePrice);
         assertEq(invoice.status, simplePP.CREATED());
 
         vm.prank(buyerOne);
-        address escrow = simplePP.makeInvoicePayment{ value: _invoicePrice }(invoiceId);
+        address escrow = simplePP.makeInvoicePayment{ value: _invoicePrice }(invoiceKey);
 
-        ISimplePaymentProcessor.Invoice memory updated = simplePP.getInvoiceData(invoiceId);
-        assertEq(updated.payer, buyerOne);
+        ISimplePaymentProcessor.Invoice memory updated = simplePP.getInvoiceData(invoiceKey);
+        assertEq(updated.buyer, buyerOne);
         assertEq(updated.amountPaid, _invoicePrice);
         assertEq(updated.status, simplePP.PAID());
         assertEq(updated.escrow, escrow);
