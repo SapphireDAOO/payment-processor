@@ -7,17 +7,17 @@ import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 contract Escrow is IEscrow {
     using SafeTransferLib for address;
 
-    /// @notice The address of the payer associated with this escrow.
-    address public immutable payer;
+    /// @notice The address of the buyer associated with this escrow.
+    address public immutable buyer;
 
-    /// @notice The address of the creator associated with this escrow.
-    address public immutable creator;
+    /// @notice The address of the seller associated with this escrow.
+    address public immutable seller;
 
     /// @notice The address of the payment processor.
     address public immutable paymentProcessor;
 
     /// @notice The invoice ID associated with the escrow.
-    uint256 public immutable invoiceId;
+    bytes32 public immutable invoice;
 
     modifier onlyPaymentProcessor() {
         _onlyPaymentProcessor();
@@ -28,21 +28,17 @@ contract Escrow is IEscrow {
      * @notice Initializes the escrow contract with invoice details and deposits the funds.
      * @dev This constructor sets the invoice ID, creator, payer, and payment processor addresses, and records the sent
      * Ether as the balance.
-     * @param _invoiceId The unique identifier of the invoice associated with this escrow.
-     * @param _creator The address of the invoice creator.
-     * @param _payer The address of the payer for the invoice.
-     * @param _paymentProcessor The address of the payment processor contract managing the invoice.
+     * @param invoiceKey The unique identifier of the invoice associated with this escrow.
+     * @param creator The address of the invoice creator.
+     * @param payer The address of the payer for the invoice.
+     * @param paymentProcessorAddress The address of the payment processor contract managing the invoice.
      */
-    constructor(uint256 _invoiceId, address _creator, address _payer, address _paymentProcessor) payable {
-        invoiceId = _invoiceId;
-        creator = _creator;
-        payer = _payer;
-        paymentProcessor = _paymentProcessor;
-        emit FundsDeposited(_invoiceId, msg.value);
-    }
-
-    function balanceOf(address token) external view returns (uint256) {
-        return token == address(0) ? address(this).balance : token.balanceOf(address(this));
+    constructor(bytes32 invoiceKey, address creator, address payer, address paymentProcessorAddress) payable {
+        invoice = invoiceKey;
+        seller = creator;
+        buyer = payer;
+        paymentProcessor = paymentProcessorAddress;
+        emit FundsDeposited(invoiceKey, msg.value);
     }
 
     function withdraw(address token, address receiver, uint256 amount) external onlyPaymentProcessor {
@@ -50,59 +46,6 @@ contract Escrow is IEscrow {
             receiver.safeTransferETH(amount);
         } else {
             token.safeTransfer(receiver, amount);
-        }
-    }
-
-    function withdraw(address token, address receiver) external onlyPaymentProcessor {
-        token.safeTransferAll(receiver);
-    }
-
-    /// @inheritdoc IEscrow
-    function withdrawToCreator(address _creator) external onlyPaymentProcessor {
-        uint256 bal = _withdraw(_creator);
-        emit FundsWithdrawn(invoiceId, _creator, bal);
-    }
-
-    /// @inheritdoc IEscrow
-    function refundToPayer(address _payer) external onlyPaymentProcessor {
-        uint256 bal = _withdraw(_payer);
-        emit FundsRefunded(invoiceId, _payer, bal);
-    }
-
-    function refundToPayer(address _payer, uint256 amount) external onlyPaymentProcessor {
-        _withdraw(_payer, amount);
-        emit FundsRefunded(invoiceId, _payer, amount);
-    }
-
-    /// @inheritdoc IEscrow
-    function payFee(address _to, uint256 _invoiceId, uint256 _fee) external onlyPaymentProcessor {
-        _withdraw(_to, _fee);
-        emit FeePaid(_invoiceId, _fee);
-    }
-
-    /**
-     * @notice Withdraws the entire balance of the contract to a specified address.
-     * @dev This function attempts to transfer the full balance of the contract to the provided address.
-     *      The balance is returned to provide feedback on the transaction.
-     * @param _to The address to which the funds should be sent.
-     * @return The amount of funds (in wei) that was transferred.
-     */
-    function _withdraw(address _to) internal returns (uint256) {
-        uint256 bal = address(this).balance;
-        _withdraw(_to, bal);
-        return bal;
-    }
-    /**
-     * @notice Withdraws a specific amount of Ether to the given address.
-     * @dev Uses low-level call to transfer Ether and reverts if the transfer fails.
-     *  @param _to The address to receive the Ether.
-     *  @param _amount The amount of Ether to transfer (in wei).
-     */
-
-    function _withdraw(address _to, uint256 _amount) internal {
-        (bool success,) = _to.call{ value: _amount }("");
-        if (!success) {
-            revert TransferFailed();
         }
     }
 

@@ -8,12 +8,8 @@ import { IEscrowFactory } from "./interface/IEscrowFactory.sol";
 
 abstract contract EscrowFactory is IEscrowFactory {
     /// @inheritdoc IEscrowFactory
-    function computeSalt(address seller, address buyer, uint256 invoiceId, uint256 metaInvoiceId)
-        public
-        pure
-        returns (bytes32)
-    {
-        return keccak256(abi.encode(seller, buyer, invoiceId, metaInvoiceId));
+    function computeSalt(address seller, address buyer, bytes32 invoiceKey) public pure returns (bytes32) {
+        return keccak256(abi.encode(seller, buyer, invoiceKey));
     }
 
     /// @inheritdoc IEscrowFactory
@@ -35,8 +31,8 @@ abstract contract EscrowFactory is IEscrowFactory {
      * @return escrow The address of the newly deployed Escrow contract.
      */
     function _create(EscrowCreationParams memory params) internal returns (address) {
-        bytes memory constructorArg = abi.encode(params.invoiceId, params.seller, params.buyer, address(this));
-        bytes32 salt = computeSalt(params.seller, params.buyer, params.invoiceId, params.metaInvoiceId);
+        bytes memory constructorArg = abi.encode(params.invoiceKey, params.seller, params.buyer, address(this));
+        bytes32 salt = computeSalt(params.seller, params.buyer, params.invoiceKey);
 
         if (params.paymentToken != address(0)) {
             params.value = 0;
@@ -45,7 +41,7 @@ abstract contract EscrowFactory is IEscrowFactory {
         address escrow =
             CREATE3.deployDeterministic(params.value, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt);
 
-        emit EscrowCreated(params.invoiceId, escrow);
+        emit EscrowCreated(params.invoiceKey, escrow);
         return escrow;
     }
 }
