@@ -11,36 +11,7 @@ interface IEscrow {
     /// @notice Thrown when a fund transfer fails.
     error TransferFailed();
 
-    function balanceOf(address token) external view returns (uint256);
-
-    function withdraw(address token, address receiver) external;
-
-    function refundToPayer(address payer, uint256 amount) external;
-
     function withdraw(address token, address receiver, uint256 amount) external;
-
-    /**
-     * @notice Refunds the balance held in escrow to the payer when invoice is rejected.
-     * @dev Only callable by the payment processor contract.
-     * @param _payer The address of the payer to whom the funds will be refunded.
-     */
-    function refundToPayer(address _payer) external;
-
-    /**
-     * @notice Withdraws the balance held in escrow to the creator when the invoice is released.
-     * @dev Only callable by the payment processor contract.
-     * @param _creator The address of the creator to whom the funds will be withdrawn.
-     */
-    function withdrawToCreator(address _creator) external;
-
-    /**
-     * @notice Pays the processing fee for a specific invoice.
-     * @dev Can only be called by an authorized payment processor.
-     * @param _to The address receiving the fee.
-     * @param _invoiceId The ID of the invoice for which the fee is being paid.
-     * @param _fee The amount of the fee to be transferred (in wei).
-     */
-    function payFee(address _to, uint256 _invoiceId, uint256 _fee) external;
 
     /**
      * @notice Emitted when funds are refunded to the payer.
@@ -60,10 +31,10 @@ interface IEscrow {
 
     /**
      * @notice Emitted when funds are deposited into the escrow for an invoice.
-     * @param invoiceId The unique ID of the invoice associated with the deposit.
+     * @param invoiceKey The unique key of the invoice associated with the deposit.
      * @param value The amount of funds deposited in wei.
      */
-    event FundsDeposited(uint256 indexed invoiceId, uint256 indexed value);
+    event FundsDeposited(bytes32 indexed invoiceKey, uint256 indexed value);
 
     /**
      * @notice Emitted when a fee is successfully paid to a payment processor.

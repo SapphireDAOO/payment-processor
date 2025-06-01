@@ -5,8 +5,7 @@ interface IEscrowFactory {
     struct EscrowCreationParams {
         address seller;
         address buyer;
-        uint256 invoiceId;
-        uint256 metaInvoiceId;
+        bytes32 invoiceKey;
         uint256 value;
         address paymentToken;
     }
@@ -21,24 +20,20 @@ interface IEscrowFactory {
     function getPredictedAddress(bytes32 salt) external view returns (address);
 
     /**
-     * @notice Computes a unique salt value for a sub-invoice within a meta-invoice context.
+     * @notice Computes a unique salt used for deterministic deployments (e.g., CREATE2/CREATE3).
      * @dev This salt is used to deterministically deploy or reference an Escrow contract via CREATE2,
      *      ensuring uniqueness across both standard and meta-invoice deployments.
-     * @param seller The address of the seller (invoice recipient).
-     * @param buyer The address of the buyer (payer).
-     * @param invoiceId The ID of the individual sub-invoice.
-     * @param metaInvoiceId The ID of the parent meta-invoice this sub-invoice belongs to.
-     * @return A `bytes32` salt value uniquely derived from the input parameters.
+     * @param seller The address of the invoice seller.
+     * @param buyer The address of the invoice buyer.
+     * @param invoiceKey A hash representing the invoice content or metadata.
+     * @return  A `bytes32` salt value uniquely derived from the input parameters.
      */
-    function computeSalt(address seller, address buyer, uint256 invoiceId, uint256 metaInvoiceId)
-        external
-        view
-        returns (bytes32);
+    function computeSalt(address seller, address buyer, bytes32 invoiceKey) external pure returns (bytes32);
 
     /**
      * @notice Emitted when a new escrow contract is created.
-     * @param invoiceId The unique ID of the invoice associated with the escrow.
+     * @param invoiceKey The unique ID of the invoice associated with the escrow.
      * @param escrow The address of the newly created escrow contract.
      */
-    event EscrowCreated(uint256 indexed invoiceId, address indexed escrow);
+    event EscrowCreated(bytes32 indexed invoiceKey, address indexed escrow);
 }
