@@ -198,11 +198,10 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Emitted when a new invoice is created.
-     * @param seller The address of the invoice seller.
-     * @param invoiceKey The unique key of the created invoice.
-     * @param price The price of the invoice that was created.
+     * @param invoiceKey The unique identifier (hash) for the created invoice.
+     * @param invoice The full invoice struct containing buyer, price, timestamps, state, and metadata.
      */
-    event InvoiceCreated(bytes32 indexed invoiceKey, address indexed seller, uint256 indexed price);
+    event InvoiceCreated(bytes32 indexed invoiceKey, Invoice invoice);
 
     /**
      * @notice Emitted when an invoice payment is made.

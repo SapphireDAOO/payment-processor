@@ -85,7 +85,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
 
         invoiceData[invoiceKey] = invoice;
 
-        emit InvoiceCreated(invoiceKey, msg.sender, invoicePrice);
+        emit InvoiceCreated(invoiceKey, invoice);
 
         return invoiceKey;
     }
