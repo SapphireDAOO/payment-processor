@@ -42,11 +42,11 @@ function applyBasisPoints(AdvancedPaymentProcessor pp, uint256 amount, uint256 b
     return (amount * basisPoints) / pp.BASIS_POINTS();
 }
 
-function getSubInvoiceIdsForMetaInvoice(AdvancedPaymentProcessor pp, uint256 metaInvoiceId)
+function getSubInvoiceIdsForMetaInvoice(AdvancedPaymentProcessor pp, bytes32 metaInvoiceKey)
     view
     returns (uint256[] memory)
 {
-    IAdvancedPaymentProcessor.MetaInvoice memory meta = pp.getMetaInvoice(metaInvoiceId);
+    IAdvancedPaymentProcessor.MetaInvoice memory meta = pp.getMetaInvoice(metaInvoiceKey);
     uint256 count = meta.upper - meta.lower + 1;
     uint256[] memory ids = new uint256[](count);
 
@@ -57,13 +57,34 @@ function getSubInvoiceIdsForMetaInvoice(AdvancedPaymentProcessor pp, uint256 met
     return ids;
 }
 
-function getEscrowAddress(
-    AdvancedPaymentProcessor pp,
-    address seller,
-    address buyer,
-    uint256 invoiceId,
-    uint256 metaInvoiceId
-) view returns (address) {
-    bytes32 salt = pp.computeSalt(seller, buyer, invoiceId, metaInvoiceId);
+function getSubInvoiceKeyOfMetaInvoice(AdvancedPaymentProcessor pp, address buyer, bytes32 metaInvoiceKey)
+    view
+    returns (bytes32[] memory)
+{
+    IAdvancedPaymentProcessor.MetaInvoice memory meta = pp.getMetaInvoice(metaInvoiceKey);
+    uint256 count = meta.upper - meta.lower + 1;
+
+    bytes32[] memory subInvoiceKey = new bytes32[](count);
+
+    for (uint256 i = 0; i < count; i++) {
+        subInvoiceKey[i] = computeSingleInvoiceKey(buyer, address(pp), meta.lower + i);
+    }
+
+    return subInvoiceKey;
+}
+
+function getEscrowAddress(AdvancedPaymentProcessor pp, address seller, address buyer, bytes32 invoiceKey)
+    view
+    returns (address)
+{
+    bytes32 salt = pp.computeSalt(seller, buyer, invoiceKey);
     return pp.getPredictedAddress(salt);
+}
+
+function computeSingleInvoiceKey(address buyer, address issuer, uint256 invoiceId) pure returns (bytes32) {
+    return keccak256(abi.encode(buyer, issuer, invoiceId));
+}
+
+function computeMetaInvoiceKey(address buyer, uint256 lower, uint256 upper) pure returns (bytes32) {
+    return keccak256(abi.encode(buyer, lower, upper, lower + upper));
 }

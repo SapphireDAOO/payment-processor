@@ -12,11 +12,17 @@ import {
     getInvoiceCreationParams,
     applyBasisPoints,
     getSubInvoiceIdsForMetaInvoice,
-    getEscrowAddress
+    getEscrowAddress,
+    getSubInvoiceKeyOfMetaInvoice
 } from "../utils/InvoiceTestHelpers.sol";
 
 contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
-    using { applyBasisPoints, getSubInvoiceIdsForMetaInvoice, getEscrowAddress } for AdvancedPaymentProcessor;
+    using {
+        applyBasisPoints,
+        getSubInvoiceIdsForMetaInvoice,
+        getEscrowAddress,
+        getSubInvoiceKeyOfMetaInvoice
+    } for AdvancedPaymentProcessor;
 
     function test_Initialization() public view {
         assertEq(advancedPP.getNextInvoiceId(), 1);
@@ -30,18 +36,21 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
         advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         uint256 nextInvoiceId = advancedPP.getNextInvoiceId();
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(nextInvoiceId - 1);
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceKey);
         assertEq(inv.price, price);
         assertEq(inv.buyer, buyerOne);
         assertEq(inv.seller, sellerOne);
         assertEq(inv.createdAt, block.timestamp);
-        assertEq(inv.metaInvoiceId, 0);
+        assertEq(inv.metaInvoiceKey, bytes32(0));
+        assertEq(inv.invoiceId, advancedPP.totalUniqueInvoiceCreated());
         assertEq(nextInvoiceId, 2);
     }
 
     function test_openMultipleInvoiceWithPayment() public {
+        // set up
         address[] memory sellers = new address[](2);
         sellers[0] = sellerOne;
         sellers[1] = sellerTwo;
@@ -59,64 +68,69 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[1] = 2 days;
 
         uint256 startInvoiceId = advancedPP.getNextInvoiceId();
-        advancedPP.createMetaInvoice(
+
+        // create invoice
+        bytes32 metaInvoiceKey = advancedPP.createMetaInvoice(
             buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
         );
 
-        uint256 thisMetaInvoiceId = advancedPP.getNextMetaInvoiceId() - 1;
         uint256 upper = advancedPP.getNextInvoiceId() - 1;
 
-        IAdvancedPaymentProcessor.MetaInvoice memory metaInv = advancedPP.getMetaInvoice(thisMetaInvoiceId);
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(upper);
+        IAdvancedPaymentProcessor.MetaInvoice memory metaInv = advancedPP.getMetaInvoice(metaInvoiceKey);
 
-        assertEq(inv.price, prices[1]);
-        assertEq(inv.buyer, buyerOne);
-        assertEq(inv.seller, sellerTwo);
-        assertEq(inv.createdAt, block.timestamp);
-        assertEq(inv.metaInvoiceId, thisMetaInvoiceId);
+        // assertion
+
+        bytes32[] memory keys = advancedPP.getSubInvoiceKeyOfMetaInvoice(buyerOne, metaInvoiceKey);
+
+        for (uint256 i = 0; i < keys.length; i++) {
+            IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(keys[i]);
+            assertEq(inv.price, prices[i]);
+            assertEq(inv.buyer, buyerOne);
+            assertEq(inv.seller, sellers[i]);
+            assertEq(inv.createdAt, block.timestamp);
+            assertEq(inv.metaInvoiceKey, metaInvoiceKey);
+            assertEq(advancedPP.getMetaInvoiceIdForSub(keys[i]), metaInvoiceKey);
+        }
+
         assertEq(advancedPP.getNextInvoiceId(), upper + 1);
-
-        assertEq(thisMetaInvoiceId, 1);
-        assertEq(advancedPP.getMetaInvoiceIdForSub(upper), thisMetaInvoiceId);
-        assertEq(advancedPP.getMetaInvoiceIdForSub(startInvoiceId), thisMetaInvoiceId);
         assertEq(metaInv.price, prices[0] + prices[1]);
         assertEq(metaInv.upper, upper);
         assertEq(metaInv.lower, startInvoiceId);
+        assertEq(metaInv.invoiceId, 1);
     }
 
     function test_nativeTokenPaymentForSingleInvoice() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
-        uint256 thisInvoiceId = advancedPP.totalUniqueInvoiceCreated();
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
         vm.startPrank(buyerOne);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidPaymentToken.selector);
-        advancedPP.paySingleInvoice(thisInvoiceId, address(12));
+        advancedPP.paySingleInvoice(invoiceKey, address(12));
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidNativePayment.selector);
-        advancedPP.paySingleInvoice{ value: 0.001 ether }(thisInvoiceId, address(0));
+        advancedPP.paySingleInvoice{ value: 0.001 ether }(invoiceKey, address(0));
 
         uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
-        advancedPP.paySingleInvoice{ value: amountInToken }(thisInvoiceId, address(0));
+        advancedPP.paySingleInvoice{ value: amountInToken }(invoiceKey, address(0));
         vm.stopPrank();
 
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(thisInvoiceId);
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceKey);
 
         assertEq(inv.escrow.balance, amountInToken);
         assertEq(inv.paymentToken, address(0));
         assertEq(inv.state, advancedPP.PAID());
 
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
-
-        uint256 currentId = advancedPP.totalUniqueInvoiceCreated();
+        invoiceKey = advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
         vm.warp(block.timestamp + 1 + 1 days);
         vm.expectRevert(IAdvancedPaymentProcessor.InvoiceExpired.selector);
-        advancedPP.paySingleInvoice{ value: price }(currentId, address(0));
+        advancedPP.paySingleInvoice{ value: price }(invoiceKey, address(0));
     }
 
     function test_nativeTokenPaymentForMetaInvoice() public {
+        // set up
         address[] memory sellers = new address[](2);
         sellers[0] = sellerOne;
         sellers[1] = sellerTwo;
@@ -133,43 +147,42 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[0] = 1 days;
         disputeWindow[1] = 3 days;
 
-        uint256 thisInvoiceId = advancedPP.getNextInvoiceId();
-        advancedPP.createMetaInvoice(
+        // create meta invoice
+        bytes32 metaInvoiceKey = advancedPP.createMetaInvoice(
             buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
         );
 
         uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvoiceDoesNotExist.selector);
-        advancedPP.payMetaInvoice{ value: 0.03 ether }(10, address(0));
+        advancedPP.payMetaInvoice{ value: 0.03 ether }(keccak256(""), address(0));
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidBuyer.selector);
-        advancedPP.payMetaInvoice{ value: tokenAmount }(thisInvoiceId, address(0));
+        advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceKey, address(0));
 
         vm.startPrank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidMetaInvoicePayment.selector);
-        advancedPP.payMetaInvoice{ value: 0.01 ether }(thisInvoiceId, address(0));
+        advancedPP.payMetaInvoice{ value: 0.01 ether }(metaInvoiceKey, address(0));
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidPaymentToken.selector);
-        advancedPP.payMetaInvoice(thisInvoiceId, address(12));
+        advancedPP.payMetaInvoice(metaInvoiceKey, address(12));
 
-        advancedPP.payMetaInvoice{ value: tokenAmount }(thisInvoiceId, address(0));
+        advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceKey, address(0));
 
         vm.stopPrank();
 
-        IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(thisInvoiceId);
-        address escrowOne =
-            advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId, invOne.metaInvoiceId);
+        bytes32[] memory invoiceKeys = advancedPP.getSubInvoiceKeyOfMetaInvoice(buyerOne, metaInvoiceKey);
+
+        IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(invoiceKeys[0]);
+        address escrowOne = advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, invoiceKeys[0]);
 
         assertEq(invOne.state, advancedPP.PAID());
         assertEq(invOne.escrow, escrowOne);
         assertEq(invOne.escrow.balance, advancedPP.getTokenValueFromUsd(address(0), prices[0]));
         assertEq(invOne.paymentToken, address(0));
 
-        IAdvancedPaymentProcessor.Invoice memory invTwo = advancedPP.getInvoice(advancedPP.getNextInvoiceId() - 1);
-        address escrowTwo = advancedPP.getEscrowAddress(
-            invTwo.seller, invTwo.buyer, advancedPP.getNextInvoiceId() - 1, invTwo.metaInvoiceId
-        );
+        IAdvancedPaymentProcessor.Invoice memory invTwo = advancedPP.getInvoice(invoiceKeys[1]);
+        address escrowTwo = advancedPP.getEscrowAddress(invTwo.seller, invTwo.buyer, invoiceKeys[1]);
 
         assertEq(invTwo.state, advancedPP.PAID());
         assertEq(invTwo.escrow, escrowTwo);
@@ -179,21 +192,21 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_erc20PaymentForSingleInvoice() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
-        uint256 invoiceId = advancedPP.getNextInvoiceId() - 1;
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
         vm.prank(buyerTwo);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidBuyer.selector);
-        advancedPP.paySingleInvoice(invoiceId, address(mockUsdc));
+        advancedPP.paySingleInvoice(invoiceKey, address(mockUsdc));
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice(invoiceId, address(mockUsdc));
+        advancedPP.paySingleInvoice(invoiceKey, address(mockUsdc));
 
         vm.prank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.paySingleInvoice(invoiceId, address(mockUsdc));
+        advancedPP.paySingleInvoice(invoiceKey, address(mockUsdc));
 
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceKey);
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(mockUsdc), price);
 
@@ -203,6 +216,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
     }
 
     function test_erc20PaymentForMetaInvoice() public {
+        // set up
         address[] memory sellers = new address[](2);
         sellers[0] = sellerOne;
         sellers[1] = sellerTwo;
@@ -219,18 +233,19 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[0] = 2 days;
         disputeWindow[1] = 2 days;
 
-        uint256 thisInvoiceId = advancedPP.getNextInvoiceId();
-        advancedPP.createMetaInvoice(
+        // create meta invoice
+        bytes32 metaInvoiceKey = advancedPP.createMetaInvoice(
             buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
         );
 
+        // make payment
         vm.prank(buyerOne);
+        advancedPP.payMetaInvoice(metaInvoiceKey, address(mockWBtc));
 
-        advancedPP.payMetaInvoice(thisInvoiceId, address(mockWBtc));
+        bytes32[] memory invoiceKeys = advancedPP.getSubInvoiceKeyOfMetaInvoice(buyerOne, metaInvoiceKey);
 
-        IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(thisInvoiceId);
-        address escrowOne =
-            advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, thisInvoiceId, invOne.metaInvoiceId);
+        IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(invoiceKeys[0]);
+        address escrowOne = advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, invoiceKeys[0]);
 
         assertEq(invOne.state, advancedPP.PAID());
         assertEq(invOne.escrow, escrowOne);
@@ -239,10 +254,8 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         );
         assertEq(invOne.paymentToken, address(mockWBtc));
 
-        IAdvancedPaymentProcessor.Invoice memory invTwo = advancedPP.getInvoice(advancedPP.getNextInvoiceId() - 1);
-        address escrowTwo = advancedPP.getEscrowAddress(
-            invTwo.seller, invTwo.buyer, advancedPP.getNextInvoiceId() - 1, invTwo.metaInvoiceId
-        );
+        IAdvancedPaymentProcessor.Invoice memory invTwo = advancedPP.getInvoice(invoiceKeys[1]);
+        address escrowTwo = advancedPP.getEscrowAddress(invTwo.seller, invTwo.buyer, invoiceKeys[1]);
 
         assertEq(invTwo.state, advancedPP.PAID());
         assertEq(invTwo.escrow, escrowTwo);
@@ -256,29 +269,30 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         // single Invoice
 
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
         uint256 currentId = advancedPP.totalUniqueInvoiceCreated();
 
         vm.prank(sellerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.acceptInvoice(currentId);
+        advancedPP.acceptInvoice(invoiceKey);
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(currentId, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceKey, address(0));
 
-        assertEq(advancedPP.getInvoice(currentId).state, advancedPP.PAID());
+        assertEq(advancedPP.getInvoice(invoiceKey).state, advancedPP.PAID());
 
         vm.prank(sellerTwo);
         vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedSeller.selector);
-        advancedPP.acceptInvoice(currentId);
+        advancedPP.acceptInvoice(invoiceKey);
 
         vm.prank(sellerOne);
-        advancedPP.acceptInvoice(currentId);
+        advancedPP.acceptInvoice(invoiceKey);
 
-        assertEq(advancedPP.getInvoice(currentId).state, advancedPP.ACCEPTED());
+        assertEq(advancedPP.getInvoice(invoiceKey).state, advancedPP.ACCEPTED());
 
         // meta invoice
 
@@ -298,67 +312,66 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[0] = 2 days;
         disputeWindow[1] = 2 days;
 
-        advancedPP.createMetaInvoice(
+        bytes32 metaInvoiceKey = advancedPP.createMetaInvoice(
             buyerTwo, getInvoiceCreationParams(buyerTwo, sellers, prices, responseTime, disputeWindow)
         );
-
-        uint256 currentMetaId = advancedPP.totalMetaInvoiceCreated();
 
         uint256 metaInvoiceTokenValue = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
 
         vm.prank(buyerTwo);
-        advancedPP.payMetaInvoice{ value: metaInvoiceTokenValue }(currentMetaId, address(0));
+        advancedPP.payMetaInvoice{ value: metaInvoiceTokenValue }(metaInvoiceKey, address(0));
 
-        uint256[] memory ids = advancedPP.getSubInvoiceIdsForMetaInvoice(currentMetaId);
+        bytes32[] memory keys = advancedPP.getSubInvoiceKeyOfMetaInvoice(buyerTwo, metaInvoiceKey);
 
         vm.prank(sellerTwo);
-        advancedPP.acceptInvoice(ids);
+        advancedPP.acceptInvoice(keys);
 
-        for (uint256 i = 0; i < ids.length - 1; i++) {
-            assertEq(advancedPP.getInvoice(ids[i]).state, advancedPP.ACCEPTED());
+        for (uint256 i = 0; i < keys.length - 1; i++) {
+            assertEq(advancedPP.getInvoice(keys[i]).state, advancedPP.ACCEPTED());
         }
 
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+        IAdvancedPaymentProcessor.InvoiceCreationParam memory param =
+            getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days);
+        invoiceKey = advancedPP.createSingleInvoice(param);
         currentId = advancedPP.totalUniqueInvoiceCreated();
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(currentId, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceKey, address(0));
 
         vm.warp(block.timestamp + 1 + 1 days);
 
         vm.prank(sellerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvoiceResponseTimeExpired.selector);
-        advancedPP.acceptInvoice(currentId);
+        advancedPP.acceptInvoice(invoiceKey);
     }
 
     function test_sellerCancelInitiatedInvoice() public {
         // single invoice
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
-
-        uint256 currentId = advancedPP.totalUniqueInvoiceCreated();
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(currentId, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceKey, address(0));
 
         uint256 buyersBalanceBeforeCancellation = buyerOne.balance;
 
         vm.prank(sellerTwo);
         vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedSeller.selector);
-        advancedPP.cancelInvoice(currentId);
+        advancedPP.cancelInvoice(invoiceKey);
 
         vm.prank(sellerOne);
-        advancedPP.cancelInvoice(currentId);
+        advancedPP.cancelInvoice(invoiceKey);
 
         vm.prank(sellerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.cancelInvoice(currentId);
+        advancedPP.cancelInvoice(invoiceKey);
 
         uint256 buyersBalanceAfterCancellation = buyerOne.balance;
 
-        IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(currentId);
+        IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(invoiceKey);
         assertEq(invOne.state, advancedPP.CANCELED());
         assertEq(buyersBalanceAfterCancellation - buyersBalanceBeforeCancellation, tokenValue);
 
@@ -384,25 +397,23 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[1] = 4 days;
         disputeWindow[2] = 5 days;
 
-        advancedPP.createMetaInvoice(
+        bytes32 metaInvoiceKey = advancedPP.createMetaInvoice(
             buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
         );
-
-        uint256 currentMetaInvoiceId = advancedPP.totalMetaInvoiceCreated();
 
         tokenValue = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1] + prices[2]);
 
         vm.prank(buyerOne);
-        advancedPP.payMetaInvoice{ value: tokenValue }(currentMetaInvoiceId, address(0));
+        advancedPP.payMetaInvoice{ value: tokenValue }(metaInvoiceKey, address(0));
         buyersBalanceBeforeCancellation = buyerOne.balance;
 
-        uint256[] memory ids = advancedPP.getSubInvoiceIdsForMetaInvoice(currentMetaInvoiceId);
+        bytes32[] memory keys = advancedPP.getSubInvoiceKeyOfMetaInvoice(buyerOne, metaInvoiceKey);
 
         vm.prank(sellerOne);
-        advancedPP.cancelInvoice(ids);
+        advancedPP.cancelInvoice(keys);
 
-        for (uint256 i = 0; i < ids.length; i++) {
-            assertEq(advancedPP.getInvoice(ids[i]).state, advancedPP.CANCELED());
+        for (uint256 i = 0; i < keys.length; i++) {
+            assertEq(advancedPP.getInvoice(keys[i]).state, advancedPP.CANCELED());
         }
 
         assertApproxEqAbs(buyerOne.balance - buyersBalanceBeforeCancellation, tokenValue, 1);
@@ -410,35 +421,36 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_invoiceCancelationRequest() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
 
         uint256 currentId = advancedPP.totalUniqueInvoiceCreated();
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedBuyer.selector);
-        advancedPP.requestCancelation(currentId);
+        advancedPP.requestCancelation(invoiceKey);
 
         vm.startPrank(buyerOne);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.requestCancelation(currentId);
+        advancedPP.requestCancelation(invoiceKey);
 
-        advancedPP.paySingleInvoice{ value: tokenValue }(currentId, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceKey, address(0));
 
-        advancedPP.requestCancelation(currentId);
+        advancedPP.requestCancelation(invoiceKey);
 
         vm.stopPrank();
-        assertEq(advancedPP.getInvoice(currentId).state, advancedPP.CANCELATION_REQUESTED());
+        assertEq(advancedPP.getInvoice(invoiceKey).state, advancedPP.CANCELATION_REQUESTED());
 
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+        invoiceKey = advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         currentId = advancedPP.totalUniqueInvoiceCreated();
 
         vm.startPrank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(currentId, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceKey, address(0));
 
         vm.warp(block.timestamp + 1 + 1 days);
         vm.expectRevert(IAdvancedPaymentProcessor.CancelationRequestDeadlinePassed.selector);
-        advancedPP.requestCancelation(currentId);
+        advancedPP.requestCancelation(invoiceKey);
 
         vm.stopPrank();
     }
@@ -464,112 +476,113 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[1] = 4 days;
         disputeWindow[2] = 5 days;
 
-        advancedPP.createMetaInvoice(
+        bytes32 metaInvoiceKey = advancedPP.createMetaInvoice(
             buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
         );
 
         uint256 totalPrice = prices[0] + prices[1] + prices[2];
 
-        uint256 currentMetaInvoiceId = advancedPP.totalMetaInvoiceCreated();
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), totalPrice);
 
         vm.startPrank(buyerOne);
-        advancedPP.payMetaInvoice{ value: tokenValue }(currentMetaInvoiceId, address(0));
+        advancedPP.payMetaInvoice{ value: tokenValue }(metaInvoiceKey, address(0));
 
-        uint256[] memory ids = advancedPP.getSubInvoiceIdsForMetaInvoice(currentMetaInvoiceId);
-        advancedPP.requestCancelation(ids);
+        bytes32[] memory keys = advancedPP.getSubInvoiceKeyOfMetaInvoice(buyerOne, metaInvoiceKey);
+        advancedPP.requestCancelation(keys);
 
         vm.startPrank(sellerOne);
 
-        bool[] memory accept = new bool[](ids.length);
+        bool[] memory accept = new bool[](keys.length);
         accept[0] = true; // + 0.01 ether
         accept[1] = false;
         accept[2] = false;
 
         uint256 buyersBalanceBefore = buyerOne.balance;
-        for (uint256 i = 0; i < ids.length; ++i) {
-            advancedPP.handleCancelationRequest(ids[i], accept[i]);
+        for (uint256 i = 0; i < keys.length; ++i) {
+            advancedPP.handleCancelationRequest(keys[i], accept[i]);
         }
 
         assertEq(buyerOne.balance, buyersBalanceBefore + advancedPP.getTokenValueFromUsd(address(0), prices[0]));
-        assertEq(advancedPP.getInvoice(ids[0]).state, advancedPP.CANCELATION_ACCEPTED());
-        assertEq(advancedPP.getInvoice(ids[1]).state, advancedPP.CANCELATION_REJECTED());
-        assertEq(advancedPP.getInvoice(ids[2]).state, advancedPP.CANCELATION_REJECTED());
+        assertEq(advancedPP.getInvoice(keys[0]).state, advancedPP.CANCELATION_ACCEPTED());
+        assertEq(advancedPP.getInvoice(keys[1]).state, advancedPP.CANCELATION_REJECTED());
+        assertEq(advancedPP.getInvoice(keys[2]).state, advancedPP.CANCELATION_REJECTED());
     }
 
     function test_refundAfterInvoiceExpires() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         uint256 id = advancedPP.totalUniqueInvoiceCreated();
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(id, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceKey, address(0));
 
         vm.prank(buyerTwo);
         vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedBuyer.selector);
-        advancedPP.claimExpiredInvoiceRefunds(id);
+        advancedPP.claimExpiredInvoiceRefunds(invoiceKey);
 
         vm.startPrank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvoiceStillActive.selector);
-        advancedPP.claimExpiredInvoiceRefunds(id);
+        advancedPP.claimExpiredInvoiceRefunds(invoiceKey);
 
         uint256 balanceBefore = buyerOne.balance;
         vm.warp(block.timestamp + 1 + 1 days);
-        advancedPP.claimExpiredInvoiceRefunds(id);
+        advancedPP.claimExpiredInvoiceRefunds(invoiceKey);
 
         vm.expectRevert(IAdvancedPaymentProcessor.AlreadyRefunded.selector);
-        advancedPP.claimExpiredInvoiceRefunds(id);
+        advancedPP.claimExpiredInvoiceRefunds(invoiceKey);
         vm.stopPrank();
 
-        assertEq(advancedPP.getInvoice(id).state, advancedPP.REFUNDED());
-        assertEq(advancedPP.getInvoice(id).amountPaid + balanceBefore, buyerOne.balance);
+        assertEq(advancedPP.getInvoice(invoiceKey).state, advancedPP.REFUNDED());
+        assertEq(advancedPP.getInvoice(invoiceKey).amountPaid + balanceBefore, buyerOne.balance);
 
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+        invoiceKey = advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         id = advancedPP.totalUniqueInvoiceCreated();
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(id, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceKey, address(0));
 
         vm.prank(sellerOne);
-        advancedPP.acceptInvoice(id);
+        advancedPP.acceptInvoice(invoiceKey);
 
         vm.prank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.claimExpiredInvoiceRefunds(id);
+        advancedPP.claimExpiredInvoiceRefunds(invoiceKey);
     }
 
     function test_disputeCreation() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
-        uint256 id = advancedPP.totalUniqueInvoiceCreated();
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedBuyer.selector);
-        advancedPP.createDispute(id);
+        advancedPP.createDispute(invoiceKey);
 
         vm.startPrank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.createDispute(id);
+        advancedPP.createDispute(invoiceKey);
 
-        advancedPP.paySingleInvoice{ value: tokenValue }(id, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceKey, address(0));
         vm.stopPrank();
 
         vm.prank(sellerOne);
-        advancedPP.acceptInvoice(id);
+        advancedPP.acceptInvoice(invoiceKey);
 
         vm.warp(block.timestamp + 25 hours);
 
         vm.startPrank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.DisputeWindowExpired.selector);
-        advancedPP.createDispute(id);
+        advancedPP.createDispute(invoiceKey);
 
         vm.warp(block.timestamp - 20 hours);
-        advancedPP.createDispute(id);
+        advancedPP.createDispute(invoiceKey);
         vm.stopPrank();
 
-        assertEq(advancedPP.getInvoice(id).state, advancedPP.DISPUTED());
+        assertEq(advancedPP.getInvoice(invoiceKey).state, advancedPP.DISPUTED());
     }
 
     function test_resolvedAndDismissedDispute() public {
@@ -589,24 +602,23 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[0] = 1 days;
         disputeWindow[1] = 4 days;
 
-        advancedPP.createMetaInvoice(
+        bytes32 metaInvoiceKey = advancedPP.createMetaInvoice(
             buyerOne, getInvoiceCreationParams(buyerOne, sellers, prices, responseTime, disputeWindow)
         );
-        uint256 metaInvoiceId = advancedPP.totalMetaInvoiceCreated();
 
-        uint256[] memory ids = advancedPP.getSubInvoiceIdsForMetaInvoice(metaInvoiceId);
+        bytes32[] memory keys = advancedPP.getSubInvoiceKeyOfMetaInvoice(buyerOne, metaInvoiceKey);
 
         vm.prank(buyerOne);
-        advancedPP.payMetaInvoice(metaInvoiceId, address(mockUsdc));
+        advancedPP.payMetaInvoice(metaInvoiceKey, address(mockUsdc));
 
-        for (uint256 i; i < ids.length; i++) {
-            uint256 id = ids[i];
-            IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(id);
+        for (uint256 i; i < keys.length; i++) {
+            bytes32 key = keys[i];
+            IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(key);
             vm.prank(inv.seller);
-            advancedPP.acceptInvoice(id);
+            advancedPP.acceptInvoice(key);
 
             vm.prank(buyerOne);
-            advancedPP.createDispute(id);
+            advancedPP.createDispute(key);
         }
 
         uint8 dismissed = advancedPP.DISPUTE_DISMISSED();
@@ -614,37 +626,38 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         vm.prank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
-        advancedPP.resolveDispute(ids[0], dismissed, 0);
+        advancedPP.resolveDispute(keys[0], dismissed, 0);
 
-        advancedPP.resolveDispute(ids[0], dismissed, 0);
+        advancedPP.resolveDispute(keys[0], dismissed, 0);
 
-        advancedPP.resolveDispute(ids[1], resolved, 0);
+        advancedPP.resolveDispute(keys[1], resolved, 0);
 
-        assertEq(advancedPP.getInvoice(ids[0]).state, dismissed);
-        assertEq(advancedPP.getInvoice(ids[1]).state, resolved);
+        assertEq(advancedPP.getInvoice(keys[0]).state, dismissed);
+        assertEq(advancedPP.getInvoice(keys[1]).state, resolved);
     }
 
     function test_settledDispute() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
-        uint256 id = advancedPP.totalUniqueInvoiceCreated();
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(mockUsdc), price);
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice(id, address(mockUsdc));
+        advancedPP.paySingleInvoice(invoiceKey, address(mockUsdc));
 
         vm.prank(sellerOne);
-        advancedPP.acceptInvoice(id);
+        advancedPP.acceptInvoice(invoiceKey);
 
         uint256 basisPoint = advancedPP.BASIS_POINTS();
         uint8 dismissed = advancedPP.DISPUTE_DISMISSED();
         uint8 settled = advancedPP.DISPUTE_SETTLED();
         uint8 accepted = advancedPP.ACCEPTED();
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.resolveDispute(id, dismissed, basisPoint);
+        advancedPP.resolveDispute(invoiceKey, dismissed, basisPoint);
 
         vm.prank(buyerOne);
-        advancedPP.createDispute(id);
+        advancedPP.createDispute(invoiceKey);
 
         uint256 buyerBalanceBefore = IERC20(mockUsdc).balanceOf(buyerOne);
         uint256 sellerBalanceBefore = IERC20(mockUsdc).balanceOf(sellerOne);
@@ -654,12 +667,12 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint256 sellerPercentage = 9000;
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidSellersPayoutShare.selector);
-        advancedPP.resolveDispute(id, settled, basisPoint + 1);
+        advancedPP.resolveDispute(invoiceKey, settled, basisPoint + 1);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidDisputeResolution.selector);
-        advancedPP.resolveDispute(id, accepted, sellerPercentage);
+        advancedPP.resolveDispute(invoiceKey, accepted, sellerPercentage);
 
-        advancedPP.resolveDispute(id, settled, sellerPercentage);
+        advancedPP.resolveDispute(invoiceKey, settled, sellerPercentage);
 
         uint256 buyerShare = advancedPP.applyBasisPoints(tokenValue, advancedPP.BASIS_POINTS() - sellerPercentage);
 
@@ -668,37 +681,35 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         console.log("balances after", IERC20(mockUsdc).balanceOf(buyerOne), IERC20(mockUsdc).balanceOf(sellerOne));
 
-        assertEq(advancedPP.getInvoice(id).state, advancedPP.DISPUTE_SETTLED());
+        assertEq(advancedPP.getInvoice(invoiceKey).state, advancedPP.DISPUTE_SETTLED());
         assertEq(IERC20(mockUsdc).balanceOf(sellerOne), sellerBalanceBefore + sellerShare - fee);
         assertEq(IERC20(mockUsdc).balanceOf(buyerOne), buyerBalanceBefore + buyerShare);
         assertEq(IERC20(mockUsdc).balanceOf(feeReceiver), fee);
     }
 
-    // @audit time factor
     function test_invoiceRelease() public {
         uint256 price = 100e8;
-        advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
-        uint256 id = advancedPP.totalUniqueInvoiceCreated();
-
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.releasePayment(id);
+        advancedPP.releasePayment(invoiceKey);
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(id, address(0));
+        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceKey, address(0));
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.releasePayment(id);
+        advancedPP.releasePayment(invoiceKey);
 
         vm.prank(sellerOne);
-        advancedPP.acceptInvoice(id);
+        advancedPP.acceptInvoice(invoiceKey);
 
-        advancedPP.releasePayment(id);
+        advancedPP.releasePayment(invoiceKey);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.releasePayment(id);
+        advancedPP.releasePayment(invoiceKey);
 
-        assertEq(advancedPP.getInvoice(id).state, advancedPP.RELEASED());
+        assertEq(advancedPP.getInvoice(invoiceKey).state, advancedPP.RELEASED());
     }
 }
