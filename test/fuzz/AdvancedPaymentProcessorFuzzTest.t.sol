@@ -139,9 +139,8 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         assertApproxEqAbs(mockUsdc.allowance(buyerOne, address(advancedPP)), 0, 2);
     }
 
-    function testFuzz_releasePayment(uint256 price, uint256 resolution, uint256 sellerShare) public {
+    function testFuzz_releasePayment(uint256 price, uint256 sellerShare) public {
         price = bound(price, 1e8, 100e8);
-        resolution = bound(resolution, advancedPP.DISPUTE_RESOLVED(), advancedPP.DISPUTE_SETTLED());
         sellerShare = bound(sellerShare, 0, advancedPP.BASIS_POINTS());
 
         bytes32 invoiceKeyId =
@@ -165,9 +164,9 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         assertEq(sellerOne.balance, expectedValue + balanceBefore);
     }
 
-    function testFuzz_resolveDispute(uint256 price, uint256 resolution, uint256 sellerShare) public {
+    function testFuzz_handleDispute(uint256 price, uint256 resolution, uint256 sellerShare) public {
         price = bound(price, 1e8, 100e8);
-        resolution = bound(resolution, advancedPP.DISPUTE_RESOLVED(), advancedPP.DISPUTE_SETTLED());
+        resolution = bound(resolution, advancedPP.DISPUTE_DISMISSED(), advancedPP.DISPUTE_SETTLED());
         sellerShare = bound(sellerShare, 0, advancedPP.BASIS_POINTS());
 
         bytes32 invoiceKeyId =
@@ -184,7 +183,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         vm.prank(buyerOne);
         advancedPP.createDispute(invoiceKeyId);
 
-        advancedPP.resolveDispute(invoiceKeyId, resolution.toUint8(), sellerShare);
+        advancedPP.handleDispute(invoiceKeyId, resolution.toUint8(), sellerShare);
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceKeyId);
         assertEq(inv.state, resolution);

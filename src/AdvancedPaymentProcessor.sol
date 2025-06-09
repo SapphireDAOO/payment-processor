@@ -260,19 +260,15 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function resolveDispute(bytes32 invoiceKey, uint8 resolution, uint256 sellerShare) external onlyMarketplace {
+    function handleDispute(bytes32 invoiceKey, uint8 resolution, uint256 sellerShare) external onlyMarketplace {
         Invoice memory inv = _getInvoice(invoiceKey);
 
         if (inv.state != DISPUTED) revert InvalidInvoiceState();
         if (sellerShare > BASIS_POINTS) revert InvalidSellersPayoutShare();
-        if (resolution < DISPUTED || resolution > DISPUTE_SETTLED) revert InvalidDisputeResolution();
+        if (resolution != DISPUTE_DISMISSED && resolution != DISPUTE_SETTLED) revert InvalidDisputeResolution();
 
         inv.state = resolution;
         _updateInvoice(invoiceKey, inv);
-
-        if (resolution == DISPUTE_RESOLVED) {
-            emit DisputeResolved(invoiceKey);
-        }
 
         if (resolution == DISPUTE_DISMISSED) {
             emit DisputeDismissed(invoiceKey);
@@ -295,8 +291,9 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     /// @inheritdoc IAdvancedPaymentProcessor
     function releasePayment(bytes32 invoiceKey) external onlyMarketplace {
         Invoice memory inv = _getInvoice(invoiceKey);
-        if (inv.state == RELEASED) revert InvalidInvoiceState();
-        if (inv.state != ACCEPTED) revert InvalidInvoiceState();
+        if (inv.state != ACCEPTED && inv.state != DISPUTE_RESOLVED) {
+            revert InvalidInvoiceState();
+        }
 
         inv.state = RELEASED;
         _updateInvoice(invoiceKey, inv);
@@ -358,6 +355,23 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         _updateInvoice(invoiceKey, inv);
 
         emit CancelationRequested(invoiceKey);
+    }
+
+    function resolveDispute(bytes32 invoiceKey) external {
+        Invoice memory inv = _getInvoice(invoiceKey);
+        if (inv.state != DISPUTED) revert InvalidInvoiceState();
+        if (msg.sender != inv.seller && msg.sender != inv.buyer) revert UnauthorizedParticipant();
+        if (inv.resolutionInitiator != address(0) && msg.sender == inv.resolutionInitiator) {
+            revert DuplicateResolutionAttempt();
+        }
+        if (inv.resolutionState == 1) {
+            inv.state = DISPUTE_RESOLVED;
+            emit DisputeResolved(invoiceKey);
+        } else {
+            inv.resolutionInitiator = msg.sender;
+            inv.resolutionState++;
+        }
+        _updateInvoice(invoiceKey, inv);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -437,6 +451,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         internal
         returns (Invoice memory, bytes32)
     {
+        if (param.buyer == param.seller) revert BuyerCannotBeSeller();
         Invoice memory inv;
         inv.seller = param.seller;
         inv.buyer = param.buyer;

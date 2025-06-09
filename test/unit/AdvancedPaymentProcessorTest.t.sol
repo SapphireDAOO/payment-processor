@@ -585,7 +585,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(advancedPP.getInvoice(invoiceKey).state, advancedPP.DISPUTED());
     }
 
-    function test_resolvedAndDismissedDispute() public {
+    function test_dismissedDispute() public {
         address[] memory sellers = new address[](2);
         sellers[0] = sellerOne;
         sellers[1] = sellerTwo;
@@ -622,18 +622,14 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         }
 
         uint8 dismissed = advancedPP.DISPUTE_DISMISSED();
-        uint8 resolved = advancedPP.DISPUTE_RESOLVED();
 
         vm.prank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
-        advancedPP.resolveDispute(keys[0], dismissed, 0);
+        advancedPP.handleDispute(keys[0], dismissed, 0);
 
-        advancedPP.resolveDispute(keys[0], dismissed, 0);
-
-        advancedPP.resolveDispute(keys[1], resolved, 0);
+        advancedPP.handleDispute(keys[0], dismissed, 0);
 
         assertEq(advancedPP.getInvoice(keys[0]).state, dismissed);
-        assertEq(advancedPP.getInvoice(keys[1]).state, resolved);
     }
 
     function test_settledDispute() public {
@@ -654,7 +650,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint8 settled = advancedPP.DISPUTE_SETTLED();
         uint8 accepted = advancedPP.ACCEPTED();
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.resolveDispute(invoiceKey, dismissed, basisPoint);
+        advancedPP.handleDispute(invoiceKey, dismissed, basisPoint);
 
         vm.prank(buyerOne);
         advancedPP.createDispute(invoiceKey);
@@ -667,12 +663,12 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint256 sellerPercentage = 9000;
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidSellersPayoutShare.selector);
-        advancedPP.resolveDispute(invoiceKey, settled, basisPoint + 1);
+        advancedPP.handleDispute(invoiceKey, settled, basisPoint + 1);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidDisputeResolution.selector);
-        advancedPP.resolveDispute(invoiceKey, accepted, sellerPercentage);
+        advancedPP.handleDispute(invoiceKey, accepted, sellerPercentage);
 
-        advancedPP.resolveDispute(invoiceKey, settled, sellerPercentage);
+        advancedPP.handleDispute(invoiceKey, settled, sellerPercentage);
 
         uint256 buyerShare = advancedPP.applyBasisPoints(tokenValue, advancedPP.BASIS_POINTS() - sellerPercentage);
 
@@ -685,6 +681,43 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(IERC20(mockUsdc).balanceOf(sellerOne), sellerBalanceBefore + sellerShare - fee);
         assertEq(IERC20(mockUsdc).balanceOf(buyerOne), buyerBalanceBefore + buyerShare);
         assertEq(IERC20(mockUsdc).balanceOf(feeReceiver), fee);
+    }
+
+    function test_resolveDispute() public {
+        uint256 price = 100e8;
+        bytes32 invoiceKey =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(buyerOne, sellerOne, price, 1 days, 1 days));
+
+        vm.prank(buyerOne);
+        advancedPP.paySingleInvoice(invoiceKey, address(mockUsdc));
+
+        vm.prank(sellerOne);
+        advancedPP.acceptInvoice(invoiceKey);
+
+        vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
+        advancedPP.resolveDispute(invoiceKey);
+
+        vm.prank(buyerOne);
+        advancedPP.createDispute(invoiceKey);
+
+        vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedParticipant.selector);
+        advancedPP.resolveDispute(invoiceKey);
+
+        vm.prank(buyerOne);
+        advancedPP.resolveDispute(invoiceKey);
+
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceKey);
+
+        assertEq(inv.resolutionInitiator, buyerOne);
+        assertEq(inv.resolutionState, 1);
+
+        vm.prank(buyerOne);
+        vm.expectRevert(IAdvancedPaymentProcessor.DuplicateResolutionAttempt.selector);
+        advancedPP.resolveDispute(invoiceKey);
+
+        vm.prank(sellerOne);
+        advancedPP.resolveDispute(invoiceKey);
+        assertEq(advancedPP.getInvoice(invoiceKey).state, advancedPP.DISPUTE_RESOLVED());
     }
 
     function test_invoiceRelease() public {

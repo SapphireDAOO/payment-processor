@@ -19,4 +19,9 @@ runs = 5000
 depth = 64
 fail_on_revert = true
 
+[rpc_endpoints]
+amoy = "${TEST_NET_RPC_URL}"
+anvil = "http://127.0.0.1:8545"
+
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

@@ -30,6 +30,9 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when the invoice is still active and certain actions are not allowed.
     error InvoiceStillActive();
 
+    /// @notice Reverts if the buyer and seller are the same address.
+    error BuyerCannotBeSeller();
+
     /// @notice Thrown when the invoice is in a state that does not allow the attempted action.
     error InvalidInvoiceState();
 
@@ -56,6 +59,12 @@ interface IAdvancedPaymentProcessor {
 
     /// @notice Thrown when a dispute resolution type is invalid.
     error InvalidDisputeResolution();
+
+    /// @notice Reverts if the caller is not the buyer or seller of the invoice.
+    error UnauthorizedParticipant();
+
+    /// @notice Reverts if the same participant attempts to initiate resolution more than once.
+    error DuplicateResolutionAttempt();
 
     /// @notice Thrown when the seller's payout share exceeds the allowed limit (10000 BPS).
     error InvalidSellersPayoutShare();
@@ -84,8 +93,12 @@ interface IAdvancedPaymentProcessor {
         address escrow;
         /// @notice Token used for payment. Address zero for native currency.
         address paymentToken;
+        /// @notice Stores the address of the first party (buyer or seller) that initiated the resolution process
+        address resolutionInitiator;
         /// @notice Current state of the invoice.
         uint8 state;
+        /// @notice Tracks the number of parties (buyer and seller) who have confirmed resolution.
+        uint8 resolutionState;
         /// @notice Timestamp when the payment was made.
         uint48 paidAt;
         /// @notice Timestamp when the invoice was created.
@@ -235,15 +248,22 @@ interface IAdvancedPaymentProcessor {
     function createDispute(bytes32 invoiceKey) external;
 
     /**
-     * @notice Resolves a dispute on a given invoice.
+     * @notice handle a dispute on a given invoice.
      * @dev Callable only by the marketplace. Must be called after a dispute is created.
-     *      The resolution can be DISPUTE_RESOLVED, DISPUTE_DISMISSED, or DISPUTE_SETTLED.
+     *      The resolution can be DISPUTE_DISMISSED, or DISPUTE_SETTLED.
      *      If settled, the seller and buyer receive a split of the funds based on sellerShare.
      * @param invoiceKey The ID of the invoice.
      * @param resolution The resolution state (must be one of the defined DISPUTE_* constants).
      * @param sellerShare The portion of the invoice price (in basis points) to be awarded to the seller.
      */
-    function resolveDispute(bytes32 invoiceKey, uint8 resolution, uint256 sellerShare) external;
+    function handleDispute(bytes32 invoiceKey, uint8 resolution, uint256 sellerShare) external;
+    /**
+     * @notice Allows the buyer or seller to resolve a disputed invoice by mutual confirmation.
+     *  @dev Both parties must call this function once to resolve the dispute. The first caller is recorded,
+     *  and the second call finalizes the resolution.
+     *  @param invoiceKey The unique identifier (hash) of the invoice to be resolved.
+     */
+    function resolveDispute(bytes32 invoiceKey) external;
 
     /**
      * @notice Releases payment to the seller for a successfully completed invoice.

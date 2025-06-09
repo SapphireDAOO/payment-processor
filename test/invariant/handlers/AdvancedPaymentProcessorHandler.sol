@@ -202,20 +202,20 @@ contract AdvancedPaymentProcessorHandler is Test {
         advancedPP.createDispute(invoiceKey);
     }
 
-    function resolveDispute(uint256 index, uint256 resolution, uint256 sellerShare)
+    function handleDispute(uint256 index, uint256 resolution, uint256 sellerShare)
         public
         onlyExistingInvoice
-        countCall(this.resolveDispute.selector)
+        countCall(this.handleDispute.selector)
     {
         index = _bound(index);
         bytes32 invoiceKey = singleInvoiceKeys[index];
-        resolution = bound(resolution, advancedPP.DISPUTE_RESOLVED(), advancedPP.DISPUTE_SETTLED());
+        resolution = bound(resolution, advancedPP.DISPUTE_DISMISSED(), advancedPP.DISPUTE_SETTLED());
         sellerShare = bound(sellerShare, 0, advancedPP.BASIS_POINTS());
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceKey);
         if (inv.state != advancedPP.DISPUTED()) return;
 
         vm.prank(advancedPP.getMarketplace());
-        advancedPP.resolveDispute(invoiceKey, resolution.toUint8(), sellerShare);
+        advancedPP.handleDispute(invoiceKey, resolution.toUint8(), sellerShare);
     }
 
     function releasePayment(uint256 index) public onlyExistingInvoice countCall(this.releasePayment.selector) {
@@ -226,6 +226,26 @@ contract AdvancedPaymentProcessorHandler is Test {
 
         vm.prank(advancedPP.getMarketplace());
         advancedPP.releasePayment(invoiceKey);
+    }
+
+    function resolveDispute(uint256 index, uint256 senderIndex)
+        public
+        onlyExistingInvoice
+        countCall(this.resolveDispute.selector)
+    {
+        index = _bound(index);
+        senderIndex = bound(senderIndex, 0, 1);
+        bytes32 invoiceKey = singleInvoiceKeys[index];
+
+        address[2] memory possibleSenders = [buyer, seller];
+        address sender = possibleSenders[senderIndex];
+
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceKey);
+        if (inv.state != advancedPP.DISPUTED()) return;
+        if (inv.resolutionInitiator == sender) return;
+
+        vm.prank(sender);
+        advancedPP.resolveDispute(invoiceKey);
     }
 
     function _bound(uint256 index) internal view returns (uint256) {
@@ -252,6 +272,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         console.log("Request Cancelation:", calls[this.requestCancelation.selector]);
         console.log("Handle Cancelation:", calls[this.handleCancelation.selector]);
         console.log("Create Dispute:", calls[this.createDispute.selector]);
+        console.log("Handle Dispute:", calls[this.handleDispute.selector]);
         console.log("Resolve Dispute:", calls[this.resolveDispute.selector]);
         console.log("Release Payment:", calls[this.releasePayment.selector]);
     }

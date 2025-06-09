@@ -320,7 +320,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         uint256 sellerPercentage = 9000;
 
-        advancedPP.resolveDispute(invoiceKey, settled, sellerPercentage);
+        advancedPP.handleDispute(invoiceKey, settled, sellerPercentage);
 
         uint256 buyerShare = advancedPP.applyBasisPoints(tokenValue, advancedPP.BASIS_POINTS() - sellerPercentage);
 
