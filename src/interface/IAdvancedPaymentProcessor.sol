@@ -15,14 +15,14 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when attempting to interact with an expired invoice.
     error InvoiceExpired();
 
+    /// @notice Thrown when trying to create an invoice that already exists.
+    error InvoiceAlreadyExists();
+
     /// @notice Thrown when an invoice has already been refunded.
     error AlreadyRefunded();
 
     /// @notice Thrown when the caller is not the invoice's buyer.
     error UnauthorizedBuyer();
-
-    /// @notice Thrown when an escrow has zero balance during an operation.
-    error ZeroEscrowBalance();
 
     /// @notice Thrown when the caller is not the invoice's seller.
     error UnauthorizedSeller();
@@ -47,15 +47,6 @@ interface IAdvancedPaymentProcessor {
 
     /// @notice Thrown when the dispute window has already passed.
     error DisputeWindowExpired();
-
-    /// @notice Thrown when none of the sub-invoices in a meta-invoice were cancelled.
-    error NoSubInvoiceCancelled();
-
-    /// @notice Thrown when the escrow address does not match expectations.
-    error EscrowAddressMismatch();
-
-    /// @notice Thrown when no payout share was allocated to the buyer in a dispute resolution.
-    error NoShareAllocatedToBuyer();
 
     /// @notice Thrown when a dispute resolution type is invalid.
     error InvalidDisputeResolution();
@@ -114,7 +105,7 @@ interface IAdvancedPaymentProcessor {
         /// @notice The total amount paid by the buyer for this invoice, denominated in the payment token (native token if address(0)).
         uint256 amountPaid;
         /// @notice Identifier linking the invoice to a meta invoice. bytes32(0) if not part of any meta invoice.
-        bytes32 metaInvoiceKey;
+        bytes32 metaInvoiceOrderId;
     }
 
     struct MetaInvoice {
@@ -133,6 +124,7 @@ interface IAdvancedPaymentProcessor {
     }
 
     struct InvoiceCreationParam {
+        string orderId;
         /// @notice Address of the seller.
         address seller;
         /// @notice Address of the buyer.
@@ -165,120 +157,120 @@ interface IAdvancedPaymentProcessor {
      *      and all are linked under a single meta-invoice key.
      * @param buyer The address of the buyer for whom the meta-invoice is created.
      * @param param An array of parameters used to create each sub-invoice.
-     * @return metaInvoiceKey The keccak256 hash representing the meta-invoice ID.
+     * @return metaInvoiceOrderId The keccak256 hash representing the meta-invoice ID.
      */
     function createMetaInvoice(address buyer, InvoiceCreationParam[] memory param) external returns (bytes32);
 
     /**
      * @notice Pays a single invoice using native ETH or an approved ERC20 token.
      * @dev Caller must be the invoice buyer. Use `address(0)` for native payments.
-     * @param invoiceKey The ID of the invoice to be paid.
+     * @param orderId The ID of the invoice to be paid.
      * @param paymentToken The token address used for payment (or zero address for ETH).
      */
-    function paySingleInvoice(bytes32 invoiceKey, address paymentToken) external payable;
+    function paySingleInvoice(bytes32 orderId, address paymentToken) external payable;
 
     /**
      * @notice Pays all sub-invoices in a meta invoice using native ETH or ERC20.
      * @dev Caller must be the buyer of all sub-invoices. Use `address(0)` for native payment.
-     * @param invoiceKey The meta invoice ID to be paid.
+     * @param orderId The meta invoice ID to be paid.
      * @param paymentToken The token address used for payment (or zero address for ETH).
      */
-    function payMetaInvoice(bytes32 invoiceKey, address paymentToken) external payable;
+    function payMetaInvoice(bytes32 orderId, address paymentToken) external payable;
 
     /**
      * @notice Accepts multiple invoices by their IDs.
      * @dev Callable only by the respective sellers of each invoice.
-     * @param invoiceKeys The array of invoice IDs to be accepted.
+     * @param orderIds The array of invoice IDs to be accepted.
      */
-    function acceptInvoice(bytes32[] calldata invoiceKeys) external;
+    function acceptInvoice(bytes32[] calldata orderIds) external;
 
     /**
      * @notice Accepts a single invoice.
      * @dev Callable only by the seller of the invoice. The invoice must be in the PAID state.
-     * @param invoiceKey The ID of the invoice to be accepted.
+     * @param orderId The ID of the invoice to be accepted.
      */
-    function acceptInvoice(bytes32 invoiceKey) external;
+    function acceptInvoice(bytes32 orderId) external;
 
     /**
      * @notice Handles a cancelation request from a buyer by accepting or rejecting it.
      * @dev Callable only by the seller of the invoice. Only valid for invoices in the CANCELATION_REQUESTED state.
-     * @param invoiceKey The ID of the invoice for which the cancelation is being handled.
+     * @param orderId The ID of the invoice for which the cancelation is being handled.
      * @param accept A boolean indicating whether to accept (`true`) or reject (`false`) the cancelation.
      */
-    function handleCancelationRequest(bytes32 invoiceKey, bool accept) external;
+    function handleCancelationRequest(bytes32 orderId, bool accept) external;
 
     /**
      * @notice Requests cancelation for multiple invoices.
      * @dev Callable only by the respective buyers of the invoices.
      *      Only valid for invoices in the PAID state and within the allowed cancelation window.
-     * @param invoiceKeys The array of invoice IDs to request cancelation for.
+     * @param orderIds The array of invoice IDs to request cancelation for.
      */
-    function requestCancelation(bytes32[] memory invoiceKeys) external;
+    function requestCancelation(bytes32[] memory orderIds) external;
 
     /**
      * @notice Requests cancelation for a single invoice.
      * @dev Callable only by the buyer of the invoice.
      *      Only valid for invoices in the PAID state and within the allowed cancelation window.
-     * @param invoiceKey The ID of the invoice to request cancelation for.
+     * @param orderId The ID of the invoice to request cancelation for.
      */
-    function requestCancelation(bytes32 invoiceKey) external;
+    function requestCancelation(bytes32 orderId) external;
 
     /**
      * @notice Cancels multiple invoices.
      * @dev Callable only by the respective sellers of the invoices.
      *      Only valid for invoices in the PAID state.
-     * @param invoiceKeys The array of invoice IDs to cancel.
+     * @param orderIds The array of invoice IDs to cancel.
      */
-    function cancelInvoice(bytes32[] memory invoiceKeys) external;
+    function cancelInvoice(bytes32[] memory orderIds) external;
 
     /**
      * @notice Cancels a single invoice.
      * @dev Callable only by the seller of the invoice.
      *      Only valid for invoices in the PAID state.
-     * @param invoiceKey The ID of the invoice to cancel.
+     * @param orderId The ID of the invoice to cancel.
      */
-    function cancelInvoice(bytes32 invoiceKey) external;
+    function cancelInvoice(bytes32 orderId) external;
 
     /**
      * @notice Creates a dispute for an invoice.
      * @dev Callable only by the buyer of the invoice.
      *      Only valid for invoices in the ACCEPTED state and within the dispute window.
-     * @param invoiceKey The ID of the invoice to dispute.
+     * @param orderId The ID of the invoice to dispute.
      */
-    function createDispute(bytes32 invoiceKey) external;
+    function createDispute(bytes32 orderId) external;
 
     /**
      * @notice handle a dispute on a given invoice.
      * @dev Callable only by the marketplace. Must be called after a dispute is created.
      *      The resolution can be DISPUTE_DISMISSED, or DISPUTE_SETTLED.
      *      If settled, the seller and buyer receive a split of the funds based on sellerShare.
-     * @param invoiceKey The ID of the invoice.
+     * @param orderId The ID of the invoice.
      * @param resolution The resolution state (must be one of the defined DISPUTE_* constants).
      * @param sellerShare The portion of the invoice price (in basis points) to be awarded to the seller.
      */
-    function handleDispute(bytes32 invoiceKey, uint8 resolution, uint256 sellerShare) external;
+    function handleDispute(bytes32 orderId, uint8 resolution, uint256 sellerShare) external;
     /**
      * @notice Allows the buyer or seller to resolve a disputed invoice by mutual confirmation.
      *  @dev Both parties must call this function once to resolve the dispute. The first caller is recorded,
      *  and the second call finalizes the resolution.
-     *  @param invoiceKey The unique identifier (hash) of the invoice to be resolved.
+     *  @param orderId The unique identifier (hash) of the invoice to be resolved.
      */
-    function resolveDispute(bytes32 invoiceKey) external;
+    function resolveDispute(bytes32 orderId) external;
 
     /**
      * @notice Releases payment to the seller for a successfully completed invoice.
      * @dev Callable only by the marketplace. Only valid for ACCEPTED invoices.
-     * @param invoiceKey The ID of the invoice.
+     * @param orderId The ID of the invoice.
      */
-    function releasePayment(bytes32 invoiceKey) external;
+    function releasePayment(bytes32 orderId) external;
 
     /**
      * @notice Allows a buyer to claim a refund if an invoice expires without seller action.
      * @dev Only callable by the buyer, and only if the invoice has passed the cancelation window
      *      without being accepted or canceled. Prevents double refunds.
-     * @param invoiceKey The ID of the invoice to claim refund for.
+     * @param orderId The ID of the invoice to claim refund for.
      */
-    function claimExpiredInvoiceRefunds(bytes32 invoiceKey) external;
+    function claimExpiredInvoiceRefunds(bytes32 orderId) external;
 
     /**
      * @notice Updates the marketplace address allowed to perform privileged operations.
@@ -288,7 +280,7 @@ interface IAdvancedPaymentProcessor {
     function setMarketplace(address marketplaceAddr) external;
 
     /**
-     * @notice Sets the Chainlink price feed aggregator address for a supported token.
+     * @notice
      * @param token The address of the ERC20 token.
      * @param aggregator The address of the Chainlink aggregator for the token.
      */
@@ -296,17 +288,17 @@ interface IAdvancedPaymentProcessor {
 
     /**
      * @notice Retrieves the invoice data for a specific invoice ID.
-     * @param invoiceKey The ID of the invoice.
+     * @param orderId The ID of the invoice.
      * @return The Invoice struct containing the invoice details.
      */
-    function getInvoice(bytes32 invoiceKey) external view returns (Invoice memory);
+    function getInvoice(bytes32 orderId) external view returns (Invoice memory);
 
     /**
      * @notice Retrieves the meta-invoice data for a specific meta-invoice ID.
-     * @param invoiceKey The ID of the meta-invoice.
+     * @param orderId The ID of the meta-invoice.
      * @return The MetaInvoice struct containing the meta-invoice details.
      */
-    function getMetaInvoice(bytes32 invoiceKey) external view returns (MetaInvoice memory);
+    function getMetaInvoice(bytes32 orderId) external view returns (MetaInvoice memory);
 
     /**
      * @notice Returns the total number of unique invoices created.
@@ -334,10 +326,10 @@ interface IAdvancedPaymentProcessor {
 
     /**
      * @notice Gets the meta-invoice ID associated with a specific sub-invoice.
-     * @param invoiceKey The sub-invoice ID.
+     * @param orderId The sub-invoice ID.
      * @return The ID of the meta-invoice that includes the given sub-invoice.
      */
-    function getMetaInvoiceIdForSub(bytes32 invoiceKey) external view returns (bytes32);
+    function getMetaInvoiceIdForSub(bytes32 orderId) external view returns (bytes32);
 
     /**
      * @notice Converts a USD-denominated price to the equivalent amount in the specified payment token.
@@ -359,93 +351,99 @@ interface IAdvancedPaymentProcessor {
 
     /**
      * @notice Emitted when a dispute is dismissed and no party receives a refund or payout.
-     * @param invoiceKey The ID of the invoice involved in the dispute.
+     * @param orderId The ID of the invoice involved in the dispute.
      */
-    event DisputeDismissed(bytes32 indexed invoiceKey);
+    event DisputeDismissed(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when a dispute is resolved in favor of one party without partial refund.
-     * @param invoiceKey The ID of the invoice involved in the dispute.
+     * @param orderId The ID of the invoice involved in the dispute.
      */
-    event DisputeResolved(bytes32 indexed invoiceKey);
+    event DisputeResolved(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when the seller accepts the invoice, confirming their participation.
-     * @param invoiceKey The ID of the accepted invoice.
+     * @param orderId The ID of the accepted invoice.
      */
-    event InvoiceAccepted(bytes32 indexed invoiceKey);
+    event InvoiceAccepted(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when a new meta-invoice is created.
-     * @param metaInvoiceKey The unique identifier of the newly created meta-invoice.
+     * @param metaInvoiceOrderId The unique identifier of the newly created meta-invoice.
      * @param metaInvoice The full meta-invoice struct containing aggregated price and related configuration.
      */
-    event MetaInvoiceCreated(bytes32 indexed metaInvoiceKey, MetaInvoice metaInvoice);
+    event MetaInvoiceCreated(bytes32 indexed metaInvoiceOrderId, MetaInvoice metaInvoice);
 
     /**
      * @notice Emitted when a new invoice is created.
-     * @param invoiceKey The ID of the newly created invoice.
+     * @param orderId The ID of the newly created invoice.
      * @param invoice The invoice data.
      */
-    event InvoiceCreated(bytes32 indexed invoiceKey, Invoice invoice);
+    event InvoiceCreated(bytes32 indexed orderId, Invoice invoice);
 
     /**
      * @notice Emitted when an invoice is canceled by the seller and the buyer is refunded.
-     * @param invoiceKey The ID of the canceled invoice.
+     * @param orderId The ID of the canceled invoice.
      */
-    event InvoiceCanceled(bytes32 indexed invoiceKey);
+    event InvoiceCanceled(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when an invoice is rejected during dispute or cancelation.
-     * @param invoiceKey The ID of the rejected invoice.
+     * @param orderId The ID of the rejected invoice.
      */
-    event InvoiceRejected(bytes32 indexed invoiceKey);
+    event InvoiceRejected(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when a dispute is settled and the funds are split between buyer and seller.
-     * @param invoiceKey The ID of the invoice that was disputed.
+     * @param orderId The ID of the invoice that was disputed.
      * @param sellerAmount The amount transferred to the seller.
      * @param buyerAmount The amount refunded to the buyer.
      */
-    event DisputeSettled(bytes32 indexed invoiceKey, uint256 sellerAmount, uint256 buyerAmount);
+    event DisputeSettled(bytes32 indexed orderId, uint256 sellerAmount, uint256 buyerAmount);
 
     /**
      * @notice Emitted when a buyer initiates a cancellation request for an invoice.
-     * @param invoiceKey The ID of the invoice for which cancellation was requested.
+     * @param orderId The ID of the invoice for which cancellation was requested.
      */
-    event CancelationRequested(bytes32 indexed invoiceKey);
+    event CancelationRequested(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when an invoice has been successfully paid and escrow is created.
-     * @param invoiceKey The ID of the paid invoice.
+     * @param orderId The ID of the paid invoice.
      * @param paymentToken The address of the token used for payment (use address(0) for native token).
      * @param escrowAddress The address of the newly created escrow contract holding the funds.
      * @param amount The amount paid in the token's smallest denomination (based on token decimals).
      */
-    event InvoicePaid(bytes32 indexed invoiceKey, address paymentToken, address escrowAddress, uint256 amount);
+    event InvoicePaid(bytes32 indexed orderId, address paymentToken, address escrowAddress, uint256 amount);
 
     /**
      * @notice Emitted when a cancellation request is either accepted or rejected by the seller.
-     * @param invoiceKey The ID of the invoice under consideration.
+     * @param orderId The ID of the invoice under consideration.
      * @param accepted Whether the cancellation request was accepted (true) or rejected (false).
      */
-    event CancelationRequestHandled(bytes32 indexed invoiceKey, bool indexed accepted);
+    event CancelationRequestHandled(bytes32 indexed orderId, bool indexed accepted);
 
     /**
      * @notice Emitted when the payment is released to the seller.
-     * @param invoiceKey The ID of the invoice for which payment was released.
+     * @param orderId The ID of the invoice for which payment was released.
      */
-    event PaymentReleased(bytes32 indexed invoiceKey);
+    event PaymentReleased(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when a dispute is raised for an invoice by the buyer.
-     * @param invoiceKey The ID of the disputed invoice.
+     * @param orderId The ID of the disputed invoice.
      */
-    event DisputeCreated(bytes32 indexed invoiceKey);
+    event DisputeCreated(bytes32 indexed orderId);
+
+    /**
+     * @notice Emitted when a payment is released before the predefined release timestamp.
+     * @param orderId The ID of the invoice that was released early.
+     */
+    event EarlyRelease(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when a refund is claimed for an expired invoice.
-     * @param invoiceKey The ID of the expired invoice that was refunded.
+     * @param orderId The ID of the expired invoice that was refunded.
      */
-    event ExpiredInvoiceRefunded(bytes32 indexed invoiceKey);
+    event ExpiredInvoiceRefunded(bytes32 indexed orderId);
 }

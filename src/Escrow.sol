@@ -28,17 +28,17 @@ contract Escrow is IEscrow {
      * @notice Initializes the escrow contract with invoice details and deposits the funds.
      * @dev This constructor sets the invoice ID, creator, payer, and payment processor addresses, and records the sent
      * Ether as the balance.
-     * @param invoiceKey The unique identifier of the invoice associated with this escrow.
+     * @param orderId The unique identifier of the invoice associated with this escrow.
      * @param creator The address of the invoice creator.
      * @param payer The address of the payer for the invoice.
      * @param paymentProcessorAddress The address of the payment processor contract managing the invoice.
      */
-    constructor(bytes32 invoiceKey, address creator, address payer, address paymentProcessorAddress) payable {
-        invoice = invoiceKey;
+    constructor(bytes32 orderId, address creator, address payer, address paymentProcessorAddress) payable {
+        invoice = orderId;
         seller = creator;
         buyer = payer;
         paymentProcessor = paymentProcessorAddress;
-        emit FundsDeposited(invoiceKey, msg.value);
+        emit FundsDeposited(orderId, msg.value);
     }
 
     function withdraw(address token, address receiver, uint256 amount) external onlyPaymentProcessor {

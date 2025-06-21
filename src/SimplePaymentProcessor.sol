@@ -55,7 +55,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
      *      is an `Invoice` struct that contains detailed information such as the
      *      creator, payer, status, amount, escrow address, timestamps, etc.
      */
-    mapping(bytes32 invoiceKey => Invoice invoice) private invoiceData;
+    mapping(bytes32 orderId => Invoice invoice) private invoiceData;
 
     /**
      * @notice Initializes the payment processor with owner, fee settings, and default hold period.
@@ -81,18 +81,18 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
         invoice.status = CREATED;
         invoice.invoiceId = ppStorage.updateInvoiceId(1);
 
-        bytes32 invoiceKey = _computeInvoiceKey(msg.sender, invoice.invoiceId);
+        bytes32 orderId = _computeorderId(msg.sender, invoice.invoiceId);
 
-        invoiceData[invoiceKey] = invoice;
+        invoiceData[orderId] = invoice;
 
-        emit InvoiceCreated(invoiceKey, invoice);
+        emit InvoiceCreated(orderId, invoice);
 
-        return invoiceKey;
+        return orderId;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function makeInvoicePayment(bytes32 invoiceKey) external payable returns (address) {
-        Invoice memory invoice = invoiceData[invoiceKey];
+    function makeInvoicePayment(bytes32 orderId) external payable returns (address) {
+        Invoice memory invoice = invoiceData[orderId];
 
         if (invoice.status != CREATED) {
             revert InvalidInvoiceState(invoice.status);
@@ -110,22 +110,22 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
             revert InvoiceIsNoLongerValid();
         }
 
-        address escrow = address(new Escrow{ value: msg.value }(invoiceKey, invoice.seller, msg.sender, address(this)));
+        address escrow = address(new Escrow{ value: msg.value }(orderId, invoice.seller, msg.sender, address(this)));
 
         invoice.escrow = escrow;
         invoice.buyer = msg.sender;
         invoice.status = PAID;
         invoice.amountPaid = msg.value;
         invoice.paymentTime = (block.timestamp).toUint32();
-        invoiceData[invoiceKey] = invoice;
+        invoiceData[orderId] = invoice;
 
-        emit InvoicePaid(invoiceKey, msg.sender, msg.value);
+        emit InvoicePaid(orderId, msg.sender, msg.value);
         return escrow;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function sellerAction(bytes32 invoiceKey, bool state) external {
-        Invoice memory invoice = invoiceData[invoiceKey];
+    function sellerAction(bytes32 orderId, bool state) external {
+        Invoice memory invoice = invoiceData[orderId];
         if (block.timestamp > invoice.paymentTime + ACCEPTANCE_WINDOW) {
             revert AcceptanceWindowExceeded();
         }
@@ -135,25 +135,25 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
         if (invoice.status != PAID) {
             revert InvoiceNotPaid();
         }
-        state ? _acceptInvoice(invoiceKey) : _rejectInvoice(invoiceKey, invoice);
+        state ? _acceptInvoice(orderId) : _rejectInvoice(orderId, invoice);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function cancelInvoice(bytes32 invoiceKey) external {
-        Invoice memory invoice = invoiceData[invoiceKey];
+    function cancelInvoice(bytes32 orderId) external {
+        Invoice memory invoice = invoiceData[orderId];
         if (invoice.seller != msg.sender) {
             revert Unauthorized();
         }
         if (invoice.status != CREATED) {
             revert InvalidInvoiceState(invoice.status);
         }
-        invoiceData[invoiceKey].status = CANCELLED;
-        emit InvoiceCanceled(invoiceKey);
+        invoiceData[orderId].status = CANCELLED;
+        emit InvoiceCanceled(orderId);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function releaseInvoice(bytes32 invoiceKey) external {
-        Invoice memory invoice = invoiceData[invoiceKey];
+    function releaseInvoice(bytes32 orderId) external {
+        Invoice memory invoice = invoiceData[orderId];
 
         if (invoice.status == RELEASED) revert InvoiceHasAlreadyBeenReleased();
         if (invoice.status != ACCEPTED) {
@@ -168,56 +168,56 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
 
         uint256 feeValue = calculateFee(invoice.price);
 
-        invoiceData[invoiceKey].status = RELEASED;
+        invoiceData[orderId].status = RELEASED;
         IEscrow(invoice.escrow).withdraw(address(0), msg.sender, invoice.price - feeValue);
-        emit InvoiceReleased(invoiceKey);
+        emit InvoiceReleased(orderId);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function refundBuyerAfterWindow(bytes32 invoiceKey) external {
-        Invoice memory invoice = invoiceData[invoiceKey];
+    function refundBuyerAfterWindow(bytes32 orderId) external {
+        Invoice memory invoice = invoiceData[orderId];
         if (invoice.status != PAID || block.timestamp < invoice.paymentTime + ACCEPTANCE_WINDOW) {
             revert InvoiceNotEligibleForRefund();
         }
 
-        invoiceData[invoiceKey].status = REFUNDED;
+        invoiceData[orderId].status = REFUNDED;
         IEscrow(invoice.escrow).withdraw(address(0), invoice.buyer, invoice.price);
 
-        emit InvoiceRefunded(invoiceKey);
+        emit InvoiceRefunded(orderId);
     }
 
     /**
      * @notice Marks the specified invoice as accepted.
      * @dev This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event.
      *      It is expected that the creator is approving the payment for the invoice.
-     * @param invoiceKey The key of the invoice being accepted.
+     * @param orderId The key of the invoice being accepted.
      */
-    function _acceptInvoice(bytes32 invoiceKey) internal {
-        Invoice memory invoice = invoiceData[invoiceKey];
+    function _acceptInvoice(bytes32 orderId) internal {
+        Invoice memory invoice = invoiceData[orderId];
         invoice.status = ACCEPTED;
         uint256 holdPeriod = invoice.releaseAt == 0 ? defaultHoldPeriod : invoice.releaseAt;
         invoice.releaseAt = (holdPeriod + block.timestamp).toUint32();
-        invoiceData[invoiceKey] = invoice;
+        invoiceData[orderId] = invoice;
 
         uint256 feeValue = calculateFee(invoice.price);
         IEscrow(invoice.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), feeValue);
 
-        emit InvoiceAccepted(invoiceKey);
+        emit InvoiceAccepted(orderId);
     }
 
     /**
      * @notice Marks the specified invoice as rejected and refunds the payer.
      * @dev This function updates the invoice status to `REJECTED`, refunds the payer via the escrow contract,
      *      and emits the `InvoiceRejected` event.
-     * @param invoiceKey The key of the invoice being rejected.
+     * @param orderId The key of the invoice being rejected.
      * @param invoice The `Invoice` struct containing details of the invoice to be rejected, including the escrow
      * address and payer.
      */
-    function _rejectInvoice(bytes32 invoiceKey, Invoice memory invoice) internal {
-        invoiceData[invoiceKey].status = REJECTED;
+    function _rejectInvoice(bytes32 orderId, Invoice memory invoice) internal {
+        invoiceData[orderId].status = REJECTED;
         IEscrow(invoice.escrow).withdraw(address(0), invoice.buyer, invoice.price);
 
-        emit InvoiceRejected(invoiceKey);
+        emit InvoiceRejected(orderId);
     }
 
     /**
@@ -227,13 +227,13 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
      * @param invoiceId The unique identifier for the invoice.
      * @return The keccak256 hash representing the invoice ID.
      */
-    function _computeInvoiceKey(address buyer, uint256 invoiceId) internal view returns (bytes32) {
+    function _computeorderId(address buyer, uint256 invoiceId) internal view returns (bytes32) {
         return keccak256(abi.encode(buyer, invoiceId, block.timestamp, address(this)));
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setInvoiceReleaseTime(bytes32 invoiceKey, uint32 holdPeriod) external onlyOwner {
-        Invoice memory invoice = invoiceData[invoiceKey];
+    function setInvoiceReleaseTime(bytes32 orderId, uint32 holdPeriod) external onlyOwner {
+        Invoice memory invoice = invoiceData[orderId];
 
         uint256 newReleaseTime = invoice.releaseAt + holdPeriod;
 
@@ -243,9 +243,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
 
         if (newReleaseTime > type(uint32).max) revert ReleaseTimeOverflow();
 
-        invoiceData[invoiceKey].releaseAt = newReleaseTime.toUint32();
+        invoiceData[orderId].releaseAt = newReleaseTime.toUint32();
 
-        emit UpdateHoldPeriod(invoiceKey, newReleaseTime);
+        emit UpdateHoldPeriod(orderId, newReleaseTime);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -280,8 +280,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getInvoiceData(bytes32 invoiceKey) external view returns (Invoice memory) {
-        return invoiceData[invoiceKey];
+    function getInvoiceData(bytes32 orderId) external view returns (Invoice memory) {
+        return invoiceData[orderId];
     }
 
     /// @inheritdoc ISimplePaymentProcessor

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import { LibString } from "solady/utils/LibString.sol";
 import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
 
 function getInvoiceCreationParam(
+    uint256 invoiceId,
     address buyer,
     address seller,
     uint256 price,
@@ -11,6 +13,7 @@ function getInvoiceCreationParam(
     uint32 releaseWindow
 ) pure returns (IAdvancedPaymentProcessor.InvoiceCreationParam memory) {
     IAdvancedPaymentProcessor.InvoiceCreationParam memory param;
+    param.orderId = LibString.toString(invoiceId);
     param.seller = seller;
     param.buyer = buyer;
     param.price = price;
@@ -22,69 +25,43 @@ function getInvoiceCreationParam(
 }
 
 function getInvoiceCreationParams(
+    uint256 invoiceId,
     address buyer,
     address[] memory sellers,
     uint256[] memory prices,
     uint32[] memory timeBeforeCancelation,
     uint32[] memory disputeWindow
-) pure returns (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory) {
+) pure returns (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory, bytes32[] memory) {
     uint256 numberOfInvoice = sellers.length;
     IAdvancedPaymentProcessor.InvoiceCreationParam[] memory params =
         new IAdvancedPaymentProcessor.InvoiceCreationParam[](numberOfInvoice);
+    bytes32[] memory suborderIds = new bytes32[](numberOfInvoice);
 
     for (uint256 i; i < numberOfInvoice; i++) {
-        params[i] = getInvoiceCreationParam(buyer, sellers[i], prices[i], timeBeforeCancelation[i], disputeWindow[i]);
+        params[i] = getInvoiceCreationParam(
+            invoiceId + i, buyer, sellers[i], prices[i], timeBeforeCancelation[i], disputeWindow[i]
+        );
+        suborderIds[i] = keccak256(abi.encode(params[i].orderId));
     }
-    return params;
+    return (params, suborderIds);
 }
 
 function applyBasisPoints(AdvancedPaymentProcessor pp, uint256 amount, uint256 basisPoints) view returns (uint256) {
     return (amount * basisPoints) / pp.BASIS_POINTS();
 }
 
-function getSubInvoiceIdsForMetaInvoice(AdvancedPaymentProcessor pp, bytes32 metaInvoiceKey)
-    view
-    returns (uint256[] memory)
-{
-    IAdvancedPaymentProcessor.MetaInvoice memory meta = pp.getMetaInvoice(metaInvoiceKey);
-    uint256 count = meta.upper - meta.lower + 1;
-    uint256[] memory ids = new uint256[](count);
-
-    for (uint256 i = 0; i < count; i++) {
-        ids[i] = meta.lower + i;
-    }
-
-    return ids;
-}
-
-function getSubInvoiceKeyOfMetaInvoice(AdvancedPaymentProcessor pp, address buyer, bytes32 metaInvoiceKey)
-    view
-    returns (bytes32[] memory)
-{
-    IAdvancedPaymentProcessor.MetaInvoice memory meta = pp.getMetaInvoice(metaInvoiceKey);
-    uint256 count = meta.upper - meta.lower + 1;
-
-    bytes32[] memory subInvoiceKey = new bytes32[](count);
-
-    for (uint256 i = 0; i < count; i++) {
-        subInvoiceKey[i] = computeSingleInvoiceKey(buyer, address(pp), meta.lower + i);
-    }
-
-    return subInvoiceKey;
-}
-
-function getEscrowAddress(AdvancedPaymentProcessor pp, address seller, address buyer, bytes32 invoiceKey)
+function getEscrowAddress(AdvancedPaymentProcessor pp, address seller, address buyer, bytes32 orderId)
     view
     returns (address)
 {
-    bytes32 salt = pp.computeSalt(seller, buyer, invoiceKey);
+    bytes32 salt = pp.computeSalt(seller, buyer, orderId);
     return pp.getPredictedAddress(salt);
 }
 
-function computeSingleInvoiceKey(address buyer, address issuer, uint256 invoiceId) pure returns (bytes32) {
+function computeSingleorderId(address buyer, address issuer, uint256 invoiceId) pure returns (bytes32) {
     return keccak256(abi.encode(buyer, issuer, invoiceId));
 }
 
-function computeMetaInvoiceKey(address buyer, uint256 lower, uint256 upper) pure returns (bytes32) {
+function computeMetaorderId(address buyer, uint256 lower, uint256 upper) pure returns (bytes32) {
     return keccak256(abi.encode(buyer, lower, upper, lower + upper));
 }

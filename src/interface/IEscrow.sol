@@ -5,12 +5,14 @@ interface IEscrow {
     /// @notice Thrown when an unauthorized address attempts to perform a restricted action.
     error Unauthorized();
 
-    /// @notice Thrown when the provided value is lower than the required minimum.
-    error ValueIsTooLow();
-
-    /// @notice Thrown when a fund transfer fails.
-    error TransferFailed();
-
+    /**
+     * @notice Withdraws ETH or ERC20 tokens from the escrow contract to a specified receiver.
+     * @dev Only callable by the payment processor. Transfers ETH if `token` is the zero address,
+     *      otherwise transfers ERC20 tokens.
+     * @param token The address of the token to withdraw (use address(0) for ETH).
+     * @param receiver The address to receive the withdrawn funds.
+     * @param amount The amount of ETH or tokens to transfer.
+     */
     function withdraw(address token, address receiver, uint256 amount) external;
 
     /**
@@ -31,10 +33,10 @@ interface IEscrow {
 
     /**
      * @notice Emitted when funds are deposited into the escrow for an invoice.
-     * @param invoiceKey The unique key of the invoice associated with the deposit.
+     * @param orderId The unique key of the invoice associated with the deposit.
      * @param value The amount of funds deposited in wei.
      */
-    event FundsDeposited(bytes32 indexed invoiceKey, uint256 indexed value);
+    event FundsDeposited(bytes32 indexed orderId, uint256 indexed value);
 
     /**
      * @notice Emitted when a fee is successfully paid to a payment processor.

@@ -101,38 +101,38 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Makes a payment for a specific invoice.
-     * @param invoiceKey The ID of the invoice being paid.
+     * @param orderId The ID of the invoice being paid.
      * @return The address of the escrow contract managing the payment.
      */
-    function makeInvoicePayment(bytes32 invoiceKey) external payable returns (address);
+    function makeInvoicePayment(bytes32 orderId) external payable returns (address);
 
     /**
      * @notice Allows the seller of the invoice to accept or reject it.
-     * @param invoiceKey The ID of the invoice.
+     * @param orderId The ID of the invoice.
      * @param _state True to accept the invoice, false to reject.
      */
-    function sellerAction(bytes32 invoiceKey, bool _state) external;
+    function sellerAction(bytes32 orderId, bool _state) external;
 
     /**
      * @notice Cancels an existing invoice.
      * @dev Only callable by the invoice seller.
-     * @param invoiceKey The ID of the invoice to cancel.
+     * @param orderId The ID of the invoice to cancel.
      */
-    function cancelInvoice(bytes32 invoiceKey) external;
+    function cancelInvoice(bytes32 orderId) external;
 
     /**
      * @notice Releases the funds held in escrow for a specific invoice to the seller.
-     * @param invoiceKey The ID of the invoice for which funds are released.
+     * @param orderId The ID of the invoice for which funds are released.
      */
-    function releaseInvoice(bytes32 invoiceKey) external;
+    function releaseInvoice(bytes32 orderId) external;
 
     /**
      * @notice Sets a custom hold period for a specific invoice.
      * @dev Overrides the default hold period for this invoice.
-     * @param invoiceKey The ID of the invoice.
+     * @param orderId The ID of the invoice.
      * @param _holdPeriod The new hold period in seconds.
      */
-    function setInvoiceReleaseTime(bytes32 invoiceKey, uint32 _holdPeriod) external;
+    function setInvoiceReleaseTime(bytes32 orderId, uint32 _holdPeriod) external;
 
     /**
      *  @notice Updates the minimum allowed invoice value required for creating an invoice.
@@ -145,10 +145,10 @@ interface ISimplePaymentProcessor {
      * @notice Refunds the seller of a specific invoice.
      * @dev This function allows the buyer to be refund if the acceptance window has not been exceeded
      *      and the invoice is eligible for a refund. The refund will be processed through the escrow contract.
-     * @param invoiceKey The ID of the invoice to be refunded.
+     * @param orderId The ID of the invoice to be refunded.
      *
      */
-    function refundBuyerAfterWindow(bytes32 invoiceKey) external;
+    function refundBuyerAfterWindow(bytes32 orderId) external;
 
     /**
      * @notice Updates the default hold period for all new invoices.
@@ -177,10 +177,10 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Retrieves detailed data for a specific invoice.
-     * @param invoiceKey The ID of the invoice.
+     * @param orderId The ID of the invoice.
      * @return A struct containing the invoice's details.
      */
-    function getInvoiceData(bytes32 invoiceKey) external view returns (Invoice memory);
+    function getInvoiceData(bytes32 orderId) external view returns (Invoice memory);
 
     /**
      * @notice Calculates the fee based on the provided amount and current fee rate.
@@ -198,52 +198,52 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Emitted when a new invoice is created.
-     * @param invoiceKey The unique identifier (hash) for the created invoice.
+     * @param orderId The unique identifier (hash) for the created invoice.
      * @param invoice The full invoice struct containing buyer, price, timestamps, state, and metadata.
      */
-    event InvoiceCreated(bytes32 indexed invoiceKey, Invoice invoice);
+    event InvoiceCreated(bytes32 indexed orderId, Invoice invoice);
 
     /**
      * @notice Emitted when an invoice payment is made.
-     * @param invoiceKey The unique key of the accepted invoice.
+     * @param orderId The unique key of the accepted invoice.
      * @param amountPaid The amount paid towards the invoice in wei.
      */
-    event InvoicePaid(bytes32 indexed invoiceKey, address indexed buyer, uint256 indexed amountPaid);
+    event InvoicePaid(bytes32 indexed orderId, address indexed buyer, uint256 indexed amountPaid);
 
     /**
      * @notice Emitted when an invoice is rejected by the seller.
-     * @param invoiceKey The unique key of the rejected invoice.
+     * @param orderId The unique key of the rejected invoice.
      */
-    event InvoiceRejected(bytes32 indexed invoiceKey);
+    event InvoiceRejected(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when an invoice is refunded to the buyer.
-     * @param invoiceKey The unique key of the rejected invoice.
+     * @param orderId The unique key of the rejected invoice.
      */
-    event InvoiceRefunded(bytes32 indexed invoiceKey);
+    event InvoiceRefunded(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when an invoice is accepted by the seller.
-     * @param invoiceKey The unique key of the accepted invoice.
+     * @param orderId The unique key of the accepted invoice.
      */
-    event InvoiceAccepted(bytes32 indexed invoiceKey);
+    event InvoiceAccepted(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when an invoice is canceled.
-     * @param invoiceKey The unique key of the canceled invoice.
+     * @param orderId The unique key of the canceled invoice.
      */
-    event InvoiceCanceled(bytes32 indexed invoiceKey);
+    event InvoiceCanceled(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when an invoice is released (funds disbursed from escrow).
-     * @param invoiceKey The unique key of the released invoice.
+     * @param orderId The unique key of the released invoice.
      */
-    event InvoiceReleased(bytes32 indexed invoiceKey);
+    event InvoiceReleased(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when the hold period of a given invoice is updated to a new timestamp.
-     * @param invoiceKey The key of the invoice whose hold period was updated.
+     * @param orderId The key of the invoice whose hold period was updated.
      * @param releaseDueTimestamp The new hold period expressed as a UNIX timestamp.
      */
-    event UpdateHoldPeriod(bytes32 indexed invoiceKey, uint256 indexed releaseDueTimestamp);
+    event UpdateHoldPeriod(bytes32 indexed orderId, uint256 indexed releaseDueTimestamp);
 }

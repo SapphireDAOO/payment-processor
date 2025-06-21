@@ -16,7 +16,7 @@ contract SimplePaymentProcessorHandler is Test {
 
     uint256 constant BUYERS_INITIAL_FUND = 10_000 ether;
 
-    bytes32[] invoiceKeys;
+    bytes32[] orderIds;
 
     mapping(bytes4 => uint256) public calls;
     mapping(bytes32 => uint256) public price;
@@ -27,7 +27,7 @@ contract SimplePaymentProcessorHandler is Test {
     }
 
     modifier invoiceExists() {
-        if (invoiceKeys.length == 0) return;
+        if (orderIds.length == 0) return;
         _;
     }
 
@@ -42,49 +42,49 @@ contract SimplePaymentProcessorHandler is Test {
     function createInvoice(uint256 _price) public countCall(this.createInvoice.selector) {
         _price = bound(_price, 1.01 ether, INVOICE_PRICE);
         vm.prank(seller);
-        bytes32 invoiceKey = pp.createInvoice(_price);
-        price[invoiceKey] = _price;
-        invoiceKeys.push(invoiceKey);
+        bytes32 orderId = pp.createInvoice(_price);
+        price[orderId] = _price;
+        orderIds.push(orderId);
         totalInvoiceCreated++;
     }
 
     function cancelInvoice(uint256 index) public invoiceExists countCall(this.cancelInvoice.selector) {
         index = _bound(index);
-        bytes32 invoiceKey = invoiceKeys[index];
-        if (pp.getInvoiceData(invoiceKey).status != pp.CREATED()) return;
+        bytes32 orderId = orderIds[index];
+        if (pp.getInvoiceData(orderId).status != pp.CREATED()) return;
         vm.prank(seller);
-        pp.cancelInvoice(invoiceKey);
+        pp.cancelInvoice(orderId);
     }
 
     function makePayment(uint256 index, uint256 _value) public invoiceExists countCall(this.makePayment.selector) {
         index = _bound(index);
-        bytes32 invoiceKey = invoiceKeys[index];
-        if (pp.getInvoiceData(invoiceKey).status != pp.CREATED()) return;
-        uint256 iPrice = pp.getInvoiceData(invoiceKey).price;
+        bytes32 orderId = orderIds[index];
+        if (pp.getInvoiceData(orderId).status != pp.CREATED()) return;
+        uint256 iPrice = pp.getInvoiceData(orderId).price;
         _value = bound(_value, iPrice, iPrice);
 
-        _value = bound(_value, 0, price[invoiceKey]);
+        _value = bound(_value, 0, price[orderId]);
 
         vm.prank(buyer);
-        pp.makeInvoicePayment{ value: _value }(invoiceKey);
+        pp.makeInvoicePayment{ value: _value }(orderId);
     }
 
     function sellerAction(uint256 index, bool accept) public invoiceExists countCall(this.sellerAction.selector) {
         index = _bound(index);
-        bytes32 invoiceKey = invoiceKeys[index];
-        ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(invoiceKey);
+        bytes32 orderId = orderIds[index];
+        ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(orderId);
         if (i.status != pp.PAID()) return;
         vm.prank(seller);
-        pp.sellerAction(invoiceKey, accept);
+        pp.sellerAction(orderId, accept);
     }
 
     function releaseInvoice(uint256 index) public invoiceExists countCall(this.releaseInvoice.selector) {
         index = _bound(index);
-        bytes32 invoiceKey = invoiceKeys[index];
-        if (pp.getInvoiceData(invoiceKey).status == pp.RELEASED()) return;
+        bytes32 orderId = orderIds[index];
+        if (pp.getInvoiceData(orderId).status == pp.RELEASED()) return;
         vm.assume(block.timestamp > block.timestamp + pp.ACCEPTANCE_WINDOW());
         vm.prank(seller);
-        pp.releaseInvoice(invoiceKey);
+        pp.releaseInvoice(orderId);
     }
 
     function getTotalInvoiceCreated() external view returns (uint256) {
@@ -92,7 +92,7 @@ contract SimplePaymentProcessorHandler is Test {
     }
 
     function _bound(uint256 index) internal view returns (uint256) {
-        return bound(index, 0, invoiceKeys.length - 1);
+        return bound(index, 0, orderIds.length - 1);
     }
 
     function callSummary() external view {
