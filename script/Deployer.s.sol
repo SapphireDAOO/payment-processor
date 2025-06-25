@@ -28,6 +28,14 @@ contract Deployer is Script {
     address constant WBTC_USD_PRICE_FEED = 0xDE31F8bFBD8c84b5360CFACCa3539B938dd78ae6;
     address constant POL_USD_PRICE_FEED = 0xAB594600376Ec9fD91F8e885dADF0CE036862dE0;
 
+    address constant MOCK_USDC = 0xF5B28d5787343668FE20d9D0275ca9355bf8e223;
+    address constant MOCK_WBTC = 0xf694274E7Cc6B60E3575B6Ac600D0822E2555130;
+
+    address constant MOCK_USDC_PRICE_FEED = 0xAD7ad8715164E9d3731cB27e693d9EbD1c327394;
+
+    address constant MOCK_WBTC_PRICE_FEED = 0x1233947aFD3c53ecb641b51DA87e52B2dDAc8490;
+    address constant MOCK_NATIVE_PRICE_FEED = 0x6676B18EB795D7E295443FC448d388f5C630b1f8;
+
     int256 constant INITIAL_USDC_PRICE = 1e8;
     int256 constant INITIAL_WBTC_PRICE = 90_000e8;
     int256 constant INITIAL_POL_PRICE = 0.6e8;
@@ -59,7 +67,7 @@ contract Deployer is Script {
         vm.stopBroadcast();
     }
 
-    function _setUp() internal returns (Addr memory) {
+    function _setUp() internal view returns (Addr memory) {
         if (block.chainid == MAINNET_CHAIN_ID) {
             return Addr({
                 usdcPriceFeed: USDC_USD_PRICE_FEED,
@@ -69,22 +77,12 @@ contract Deployer is Script {
                 wbtc: WBTC
             });
         } else {
-            MockV3Aggregator mockUsdcPriceFeed = new MockV3Aggregator(8, INITIAL_USDC_PRICE);
-            MockV3Aggregator mockWbtcPriceFeed = new MockV3Aggregator(8, INITIAL_WBTC_PRICE);
-            MockV3Aggregator mockNativePriceFeed = new MockV3Aggregator(8, INITIAL_POL_PRICE);
-
-            MockUsdc mockUsdc = new MockUsdc("Mock Usdc", "mUsdc");
-            MockWbtc mockWBtc = new MockWbtc("Mock WBtc", "mWBtc");
-
-            mockUsdc.mint(msg.sender, INITIAL_BALANCE);
-            mockWBtc.mint(msg.sender, INITIAL_BALANCE);
-
             return Addr({
-                usdcPriceFeed: address(mockUsdcPriceFeed),
-                wbtcPriceFeed: address(mockWbtcPriceFeed),
-                nativeTokenPriceFeed: address(mockNativePriceFeed),
-                usdc: address(mockUsdc),
-                wbtc: address(mockWBtc)
+                usdcPriceFeed: MOCK_USDC_PRICE_FEED,
+                wbtcPriceFeed: MOCK_WBTC_PRICE_FEED,
+                nativeTokenPriceFeed: MOCK_NATIVE_PRICE_FEED,
+                usdc: MOCK_USDC,
+                wbtc: MOCK_WBTC
             });
         }
     }

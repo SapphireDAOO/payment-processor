@@ -31,9 +31,16 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
         advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, buyerOne, sellerOne, price, 1 days, 1 days));
 
+        vm.expectRevert(IAdvancedPaymentProcessor.BuyerCannotBeSeller.selector);
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, buyerOne, buyerOne, price, 1 days, 1 days));
+
         bytes32 orderId = advancedPP.createSingleInvoice(
             getInvoiceCreationParam(invoiceId, buyerOne, sellerOne, price, 1 days, 1 days)
         );
+
+        vm.expectRevert(IAdvancedPaymentProcessor.InvoiceAlreadyExists.selector);
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, buyerOne, sellerOne, price, 1 days, 1 days));
+
         uint256 nextInvoiceId = advancedPP.getNextInvoiceId();
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         assertEq(inv.price, price);
@@ -170,6 +177,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidPaymentToken.selector);
         advancedPP.payMetaInvoice(metaInvoiceOrderId, address(12));
 
+        advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
+
+        vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
         advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
 
         vm.stopPrank();

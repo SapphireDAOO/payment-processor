@@ -45,6 +45,9 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when an invalid amount of native currency is sent with a payment.
     error InvalidNativePayment();
 
+    /// @dev This occurs when a computed meta-invoice ID (hash) is already assigned in storage.
+    error MetaInvoiceAlreadyExists();
+
     /// @notice Thrown when the dispute window has already passed.
     error DisputeWindowExpired();
 

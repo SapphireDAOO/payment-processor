@@ -164,7 +164,10 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         uint256 length = param.length;
         uint256 upperInvoiceId = length + startInvoiceId - 1;
 
-        bytes32 metaInvoiceOrderId = _computemetaInvoiceOrderId(buyer, startInvoiceId, upperInvoiceId);
+        bytes32 metaInvoiceOrderId =
+            _computeMetaInvoiceOrderId(buyer, startInvoiceId, upperInvoiceId, nextMetaInvoiceId);
+        if (metaInvoice[metaInvoiceOrderId].price > 0) revert MetaInvoiceAlreadyExists();
+
         MetaInvoice memory metaInv;
         metaInv.lower = startInvoiceId;
         for (; i < length; i++) {
@@ -274,9 +277,9 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
 
         if (inv.state != DISPUTED) revert InvalidInvoiceState();
         if (sellerShare > BASIS_POINTS) revert InvalidSellersPayoutShare();
-        if (resolution != DISPUTE_DISMISSED && resolution != DISPUTE_SETTLED) revert InvalidDisputeResolution();
-
-        // give the marketplace the ability to handle partially resolve dispute
+        if (resolution != DISPUTE_DISMISSED && resolution != DISPUTE_SETTLED && inv.resolutionState != 1) {
+            revert InvalidDisputeResolution();
+        }
 
         inv.state = resolution;
         _updateInvoice(orderId, inv);
@@ -383,6 +386,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
             revert DuplicateResolutionAttempt();
         }
         if (inv.resolutionState == 1) {
+            inv.resolutionState++;
             inv.state = DISPUTE_RESOLVED;
             emit DisputeResolved(orderId);
         } else {
@@ -444,15 +448,15 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
             })
         );
 
-        inv.state = PAID;
-        inv.escrow = escrowAddress;
-        inv.paidAt = (block.timestamp).toUint48();
-        inv.amountPaid = price;
-
         if (paymentToken != address(0)) {
             inv.paymentToken = paymentToken;
             paymentToken.safeTransferFrom(msg.sender, escrowAddress, price);
         }
+
+        inv.state = PAID;
+        inv.escrow = escrowAddress;
+        inv.paidAt = (block.timestamp).toUint48();
+        inv.amountPaid = price;
 
         emit InvoicePaid(orderId, paymentToken, escrowAddress, price);
     }
@@ -527,15 +531,21 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /**
-     * @notice Computes a unique hash for a meta-invoice based on the buyer and a range of sub-invoice IDs.
-     * @dev Assumes the sub-invoice IDs are in the range [low, high].
-     * @param buyer The address of the invoice initiator.
-     * @param lower The lowest sub-invoice ID in the group.
-     * @param upper The highest sub-invoice ID in the group.
-     * @return The keccak256 hash representing the meta-invoice ID.
+     * @notice Computes a unique and deterministic ID for a meta-invoice.
+     * @dev The hash is based on the buyer address, the sub-invoice ID range [lower, upper], and an additional salt (e.g., a sequence number).
+     *      This prevents collisions when multiple meta-invoices share the same buyer and invoice range.
+     * @param buyer The address initiating the meta-invoice.
+     * @param lower The starting sub-invoice ID in the group.
+     * @param upper The ending sub-invoice ID in the group.
+     * @param salt A user-provided or system-generated value (e.g., nextMetaInvoiceId) to ensure uniqueness.
+     * @return A keccak256 hash representing the unique meta-invoice order ID.
      */
-    function _computemetaInvoiceOrderId(address buyer, uint256 lower, uint256 upper) internal pure returns (bytes32) {
-        return keccak256(abi.encode(buyer, lower, upper, lower + upper));
+    function _computeMetaInvoiceOrderId(address buyer, uint256 lower, uint256 upper, uint256 salt)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(buyer, lower, upper, salt));
     }
 
     /**
