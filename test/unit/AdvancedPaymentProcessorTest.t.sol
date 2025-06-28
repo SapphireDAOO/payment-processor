@@ -323,9 +323,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.payMetaInvoice{ value: metaInvoiceTokenValue }(metaInvoiceOrderId, address(0));
 
         vm.startPrank(sellerTwo);
+        advancedPP.acceptInvoices(orderIds);
 
         for (uint256 i = 0; i < orderIds.length - 1; i++) {
-            advancedPP.acceptInvoice(orderIds[i]);
             assertEq(advancedPP.getInvoice(orderIds[i]).state, advancedPP.ACCEPTED());
         }
 

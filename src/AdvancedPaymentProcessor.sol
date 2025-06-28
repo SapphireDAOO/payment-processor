@@ -115,7 +115,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      * @notice Maps each meta-invoice ID to its associated sub-invoice keys by index.
      * @dev Used to retrieve individual sub-invoice keys from a meta-invoice for tracking.
      */
-    mapping(bytes32 metaInvoiceId => mapping(uint256 index => bytes32 orderId)) private metaInvoiceTosubOrderId;
+    mapping(bytes32 metaInvoiceId => mapping(uint256 index => bytes32 orderId)) private metaInvoiceToSubOrderId;
 
     /**
      * @notice Restricts function access to the authorized marketplace address.
@@ -171,7 +171,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
             (Invoice memory inv, bytes32 subOrderId) = _createInvoice(startInvoiceId + i, metaInvoiceOrderId, param[i]);
             metaInvoiceToSubInvoice[metaInvoiceOrderId][subOrderId] = inv;
             subInvoiceToMetaInvoiceId[subOrderId] = metaInvoiceOrderId;
-            metaInvoiceTosubOrderId[metaInvoiceOrderId][i] = subOrderId;
+            metaInvoiceToSubOrderId[metaInvoiceOrderId][i] = subOrderId;
         }
 
         metaInv.upper = upperInvoiceId;
@@ -209,7 +209,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         metaInv.paymentToken = paymentToken;
         metaInv.buyer = msg.sender;
         for (uint256 i = metaInv.lower; i <= metaInv.upper; i++) {
-            bytes32 subOrderId = metaInvoiceTosubOrderId[orderId][index];
+            bytes32 subOrderId = metaInvoiceToSubOrderId[orderId][index];
             Invoice memory inv = metaInvoiceToSubInvoice[orderId][subOrderId];
             if (inv.state != INITIATED) revert InvalidInvoiceState();
             uint256 invPrice = getTokenValueFromUsd(paymentToken, inv.price);
