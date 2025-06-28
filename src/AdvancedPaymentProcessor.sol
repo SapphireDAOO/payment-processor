@@ -153,25 +153,19 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function createMetaInvoice(address buyer, InvoiceCreationParam[] memory param)
-        external
-        onlyMarketplace
-        returns (bytes32)
-    {
+    function createMetaInvoice(InvoiceCreationParam[] memory param) external onlyMarketplace returns (bytes32) {
         uint256 totalPrice;
         uint256 startInvoiceId = ppStorage.getNextInvoiceId();
         uint256 i = 0;
         uint256 length = param.length;
         uint256 upperInvoiceId = length + startInvoiceId - 1;
 
-        bytes32 metaInvoiceOrderId =
-            _computeMetaInvoiceOrderId(buyer, startInvoiceId, upperInvoiceId, nextMetaInvoiceId);
+        bytes32 metaInvoiceOrderId = _computeMetaInvoiceOrderId(startInvoiceId, upperInvoiceId, nextMetaInvoiceId);
         if (metaInvoice[metaInvoiceOrderId].price > 0) revert MetaInvoiceAlreadyExists();
 
         MetaInvoice memory metaInv;
         metaInv.lower = startInvoiceId;
         for (; i < length; i++) {
-            param[i].buyer = buyer;
             totalPrice += param[i].price;
 
             (Invoice memory inv, bytes32 subOrderId) = _createInvoice(startInvoiceId + i, metaInvoiceOrderId, param[i]);
@@ -182,7 +176,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
 
         metaInv.upper = upperInvoiceId;
         metaInv.price = totalPrice;
-        metaInv.buyer = buyer;
         metaInv.invoiceId = nextMetaInvoiceId;
 
         metaInvoice[metaInvoiceOrderId] = metaInv;
@@ -211,10 +204,10 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
 
         if (metaInv.price == 0) revert InvoiceDoesNotExist();
         if (msg.value != price && msg.value > 0) revert InvalidMetaInvoicePayment();
-        if (msg.sender != metaInv.buyer) revert InvalidBuyer();
 
         uint256 index = 0;
         metaInv.paymentToken = paymentToken;
+        metaInv.buyer = msg.sender;
         for (uint256 i = metaInv.lower; i <= metaInv.upper; i++) {
             bytes32 subOrderId = metaInvoiceTosubOrderId[orderId][index];
             Invoice memory inv = metaInvoiceToSubInvoice[orderId][subOrderId];
@@ -227,7 +220,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function acceptInvoice(bytes32[] calldata orderIds) external {
+    function acceptInvoices(bytes32[] calldata orderIds) external {
         for (uint256 i = 0; i < orderIds.length; i++) {
             acceptInvoice(orderIds[i]);
         }
@@ -243,20 +236,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         }
 
         emit CancelationRequestHandled(orderId, accept);
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function requestCancelation(bytes32[] memory orderIds) external {
-        for (uint256 i = 0; i < orderIds.length; i++) {
-            requestCancelation(orderIds[i]);
-        }
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function cancelInvoice(bytes32[] memory orderIds) external {
-        for (uint256 i; i < orderIds.length; i++) {
-            cancelInvoice(orderIds[i]);
-        }
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -431,17 +410,17 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      * - Transfers tokens to escrow if the payment is in ERC20.
      */
     function _invoicePayment(Invoice memory inv, uint256 value, bytes32 orderId, address paymentToken) internal {
+        if (msg.sender == inv.seller) revert BuyerCannotBeSeller();
         uint256 price = getTokenValueFromUsd(paymentToken, inv.price);
 
         if (block.timestamp > inv.createdAt + inv.invoiceExpiryDuration) revert InvoiceExpired();
         if (value > 0 && value != price) revert InvalidNativePayment();
-        if (msg.sender != inv.buyer) revert InvalidBuyer();
         if (inv.state != INITIATED) revert InvalidInvoiceState();
 
         address escrowAddress = _create(
             EscrowCreationParams({
                 seller: inv.seller,
-                buyer: inv.buyer,
+                buyer: msg.sender,
                 orderId: orderId,
                 value: value,
                 paymentToken: paymentToken
@@ -453,6 +432,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
             paymentToken.safeTransferFrom(msg.sender, escrowAddress, price);
         }
 
+        inv.buyer = msg.sender;
         inv.state = PAID;
         inv.escrow = escrowAddress;
         inv.paidAt = (block.timestamp).toUint48();
@@ -473,10 +453,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         internal
         returns (Invoice memory, bytes32)
     {
-        if (param.buyer == param.seller) revert BuyerCannotBeSeller();
         Invoice memory inv;
         inv.seller = param.seller;
-        inv.buyer = param.buyer;
         inv.price = param.price;
         inv.createdAt = (block.timestamp).toUint48();
         inv.timeBeforeCancelation = param.timeBeforeCancelation;
@@ -531,21 +509,17 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /**
-     * @notice Computes a unique and deterministic ID for a meta-invoice.
-     * @dev The hash is based on the buyer address, the sub-invoice ID range [lower, upper], and an additional salt (e.g., a sequence number).
-     *      This prevents collisions when multiple meta-invoices share the same buyer and invoice range.
-     * @param buyer The address initiating the meta-invoice.
+     * @notice Computes a deterministic ID for a meta-invoice based on the sub-invoice range and a salt.
+     * @dev The hash is based on the contract address, the sub-invoice ID range [lower, upper], and a salt
+     *      (e.g., a sequence number or counter). This prevents collisions when multiple meta-invoices share
+     *      the same buyer and invoice range.
      * @param lower The starting sub-invoice ID in the group.
      * @param upper The ending sub-invoice ID in the group.
      * @param salt A user-provided or system-generated value (e.g., nextMetaInvoiceId) to ensure uniqueness.
-     * @return A keccak256 hash representing the unique meta-invoice order ID.
+     * @return A keccak256 hash representing the deterministic meta-invoice order ID.
      */
-    function _computeMetaInvoiceOrderId(address buyer, uint256 lower, uint256 upper, uint256 salt)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return keccak256(abi.encode(buyer, lower, upper, salt));
+    function _computeMetaInvoiceOrderId(uint256 lower, uint256 upper, uint256 salt) internal view returns (bytes32) {
+        return keccak256(abi.encode(address(this), lower, upper, salt));
     }
 
     /**

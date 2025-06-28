@@ -58,6 +58,9 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when the invoice price is below the allowed minimum.
     error InvoicePriceIsTooLow();
 
+    /// @notice Thrown when trying to create an invoice that already exists.
+    error InvoiceAlreadyExists();
+
     /// @notice Thrown when the invoice is in an invalid state for the requested action.
     /// @param invoiceState The current state of the invoice, which caused the operation to fail
     error InvalidInvoiceState(uint256 invoiceState);
@@ -107,11 +110,21 @@ interface ISimplePaymentProcessor {
     function makeInvoicePayment(bytes32 orderId) external payable returns (address);
 
     /**
-     * @notice Allows the seller of the invoice to accept or reject it.
-     * @param orderId The ID of the invoice.
-     * @param _state True to accept the invoice, false to reject.
+     * @notice Marks the specified invoice as accepted.
+     * @dev This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event.
+     *      It is expected that the creator is approving the payment for the invoice.
+     * @param orderId The key of the invoice being accepted.
      */
-    function sellerAction(bytes32 orderId, bool _state) external;
+    function acceptPayment(bytes32 orderId) external;
+
+    /**
+     * @notice Marks the specified invoice as rejected and refunds the payer.
+     * @dev This function updates the invoice status to `REJECTED`, refunds the payer via the escrow contract,
+     *      and emits the `InvoiceRejected` event.
+     * @param orderId The key of the invoice being rejected.
+     * address and payer.
+     */
+    function rejectPayment(bytes32 orderId) external;
 
     /**
      * @notice Cancels an existing invoice.
@@ -148,7 +161,7 @@ interface ISimplePaymentProcessor {
      * @param orderId The ID of the invoice to be refunded.
      *
      */
-    function refundBuyerAfterWindow(bytes32 orderId) external;
+    function refundBuyer(bytes32 orderId) external;
 
     /**
      * @notice Updates the default hold period for all new invoices.

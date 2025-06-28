@@ -130,19 +130,19 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.prank(sellerTwo);
         vm.expectRevert(Unauthorized.selector);
-        simplePP.sellerAction(orderId, false);
+        simplePP.acceptPayment(orderId);
 
         vm.warp(block.number + 10);
 
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceNotPaid.selector);
-        simplePP.sellerAction(orderId, true);
+        simplePP.acceptPayment(orderId);
 
         vm.prank(buyerOne);
         simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
 
         vm.prank(sellerOne);
-        simplePP.sellerAction(orderId, true);
+        simplePP.acceptPayment(orderId);
         ISimplePaymentProcessor.Invoice memory i = simplePP.getInvoiceData(orderId);
         uint256 fee = simplePP.calculateFee(i.price);
         assertEq(i.status, simplePP.ACCEPTED());
@@ -160,7 +160,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.warp(block.timestamp + simplePP.ACCEPTANCE_WINDOW() + 1);
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.AcceptanceWindowExceeded.selector);
-        simplePP.sellerAction(orderId, true);
+        simplePP.acceptPayment(orderId);
     }
 
     function test_payer_refund_acceptance_window() public {
@@ -175,10 +175,10 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.startPrank(buyerOne);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceNotEligibleForRefund.selector);
-        simplePP.refundBuyerAfterWindow(orderId);
+        simplePP.refundBuyer(orderId);
 
         vm.warp(block.timestamp + simplePP.ACCEPTANCE_WINDOW() + 1);
-        simplePP.refundBuyerAfterWindow(orderId);
+        simplePP.refundBuyer(orderId);
         vm.stopPrank();
 
         uint256 balanceAfterRefund = buyerOne.balance;
@@ -198,7 +198,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(buyerOneBalanceAfterPayment, INITIAL_BALANCE - invoicePrice);
 
         vm.prank(sellerOne);
-        simplePP.sellerAction(orderId, false);
+        simplePP.rejectPayment(orderId);
 
         assertEq(simplePP.getInvoiceData(orderId).status, simplePP.REJECTED());
         assertEq(buyerOne.balance, buyerOneBalanceAfterPayment + invoicePrice);
@@ -218,7 +218,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         // // ACCEPT
         vm.prank(sellerOne);
-        simplePP.sellerAction(orderId, true);
+        simplePP.acceptPayment(orderId);
 
         //RELEASE
         vm.expectRevert(Unauthorized.selector);
@@ -259,7 +259,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         // ACCEPT
         vm.prank(sellerOne);
-        simplePP.sellerAction(orderId, true);
+        simplePP.acceptPayment(orderId);
 
         vm.warp(block.timestamp + adminHoldPeriod + 1);
         vm.prank(sellerOne);

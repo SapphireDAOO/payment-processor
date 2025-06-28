@@ -81,7 +81,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
         invoice.status = CREATED;
         invoice.invoiceId = ppStorage.updateInvoiceId(1);
 
-        bytes32 orderId = _computeorderId(msg.sender, invoice.invoiceId);
+        bytes32 orderId = _computeOrderId(msg.sender, invoice.invoiceId);
+
+        if (invoiceData[orderId].status != 0) revert InvoiceAlreadyExists();
 
         invoiceData[orderId] = invoice;
 
@@ -123,9 +125,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
         return escrow;
     }
 
-    /// @inheritdoc ISimplePaymentProcessor
-    function sellerAction(bytes32 orderId, bool state) external {
-        Invoice memory invoice = invoiceData[orderId];
+    function _validateInvoiceStateForPaymentDecision(Invoice memory invoice) internal view {
         if (block.timestamp > invoice.paymentTime + ACCEPTANCE_WINDOW) {
             revert AcceptanceWindowExceeded();
         }
@@ -135,7 +135,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
         if (invoice.status != PAID) {
             revert InvoiceNotPaid();
         }
-        state ? _acceptInvoice(orderId) : _rejectInvoice(orderId, invoice);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -174,7 +173,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function refundBuyerAfterWindow(bytes32 orderId) external {
+    function refundBuyer(bytes32 orderId) external {
         Invoice memory invoice = invoiceData[orderId];
         if (invoice.status != PAID || block.timestamp < invoice.paymentTime + ACCEPTANCE_WINDOW) {
             revert InvoiceNotEligibleForRefund();
@@ -186,14 +185,10 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
         emit InvoiceRefunded(orderId);
     }
 
-    /**
-     * @notice Marks the specified invoice as accepted.
-     * @dev This function updates the status of the invoice to `ACCEPTED` and emits the `InvoiceAccepted` event.
-     *      It is expected that the creator is approving the payment for the invoice.
-     * @param orderId The key of the invoice being accepted.
-     */
-    function _acceptInvoice(bytes32 orderId) internal {
+    /// @inheritdoc ISimplePaymentProcessor
+    function acceptPayment(bytes32 orderId) external {
         Invoice memory invoice = invoiceData[orderId];
+        _validateInvoiceStateForPaymentDecision(invoice);
         invoice.status = ACCEPTED;
         uint256 holdPeriod = invoice.releaseAt == 0 ? defaultHoldPeriod : invoice.releaseAt;
         invoice.releaseAt = (holdPeriod + block.timestamp).toUint32();
@@ -205,15 +200,10 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
         emit InvoiceAccepted(orderId);
     }
 
-    /**
-     * @notice Marks the specified invoice as rejected and refunds the payer.
-     * @dev This function updates the invoice status to `REJECTED`, refunds the payer via the escrow contract,
-     *      and emits the `InvoiceRejected` event.
-     * @param orderId The key of the invoice being rejected.
-     * @param invoice The `Invoice` struct containing details of the invoice to be rejected, including the escrow
-     * address and payer.
-     */
-    function _rejectInvoice(bytes32 orderId, Invoice memory invoice) internal {
+    /// @inheritdoc ISimplePaymentProcessor
+    function rejectPayment(bytes32 orderId) external {
+        Invoice memory invoice = invoiceData[orderId];
+        _validateInvoiceStateForPaymentDecision(invoice);
         invoiceData[orderId].status = REJECTED;
         IEscrow(invoice.escrow).withdraw(address(0), invoice.buyer, invoice.price);
 
@@ -221,13 +211,13 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
     }
 
     /**
-     * @notice Computes a unique hash for an invoice based on buyer, issuer, and invoice ID.
-     * @dev Assumes the invoiceId is uniquely assigned by the contract.
-     * @param buyer The address of the invoice buyer.
-     * @param invoiceId The unique identifier for the invoice.
-     * @return The keccak256 hash representing the invoice ID.
+     * @notice Computes a unique order ID for an invoice using buyer, invoice ID, timestamp, and contract address.
+     * @dev This function ensures the order ID is non-deterministic, even for repeated inputs.
+     * @param buyer The address of the buyer.
+     * @param invoiceId The invoice identifier provided during creation.
+     * @return The keccak256 hash representing the unique order ID.
      */
-    function _computeorderId(address buyer, uint256 invoiceId) internal view returns (bytes32) {
+    function _computeOrderId(address buyer, uint256 invoiceId) internal view returns (bytes32) {
         return keccak256(abi.encode(buyer, invoiceId, block.timestamp, address(this)));
     }
 

@@ -65,7 +65,6 @@ contract AdvancedPaymentProcessorHandler is Test {
         bytes32 id = advancedPP.createSingleInvoice(
             getInvoiceCreationParam(
                 totalSingleInvoiceCreated,
-                buyer,
                 seller,
                 price,
                 timeBeforeCancelation.toUint32(),
@@ -104,10 +103,10 @@ contract AdvancedPaymentProcessorHandler is Test {
         releaseWindows[1] = releaseWindow.toUint32();
 
         (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
-            getInvoiceCreationParams(totalSingleInvoiceCreated, buyer, sellers, prices, responseTime, releaseWindows);
+            getInvoiceCreationParams(totalSingleInvoiceCreated, sellers, prices, responseTime, releaseWindows);
 
         vm.prank(advancedPP.getMarketplace());
-        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(buyer, param);
+        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
         metaInvoiceOrderIds.push(metaInvoiceOrderId);
 
         for (uint256 i = 0; i < orderIds.length; i++) {

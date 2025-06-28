@@ -69,13 +69,22 @@ contract SimplePaymentProcessorHandler is Test {
         pp.makeInvoicePayment{ value: _value }(orderId);
     }
 
-    function sellerAction(uint256 index, bool accept) public invoiceExists countCall(this.sellerAction.selector) {
+    function acceptPayment(uint256 index) public invoiceExists countCall(this.acceptPayment.selector) {
         index = _bound(index);
         bytes32 orderId = orderIds[index];
         ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(orderId);
         if (i.status != pp.PAID()) return;
         vm.prank(seller);
-        pp.sellerAction(orderId, accept);
+        pp.acceptPayment(orderId);
+    }
+
+    function rejectPayment(uint256 index) public invoiceExists countCall(this.rejectPayment.selector) {
+        index = _bound(index);
+        bytes32 orderId = orderIds[index];
+        ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(orderId);
+        if (i.status != pp.PAID()) return;
+        vm.prank(seller);
+        pp.rejectPayment(orderId);
     }
 
     function releaseInvoice(uint256 index) public invoiceExists countCall(this.releaseInvoice.selector) {
@@ -101,7 +110,8 @@ contract SimplePaymentProcessorHandler is Test {
         console.log("Create Invoice:", calls[this.createInvoice.selector]);
         console.log("Cancel Invoice:", calls[this.cancelInvoice.selector]);
         console.log("Make Payment:", calls[this.makePayment.selector]);
-        console.log("Accept/reject Invoice:", calls[this.sellerAction.selector]);
+        console.log("Accept Invoice:", calls[this.acceptPayment.selector]);
+        console.log("Reject Invoice:", calls[this.rejectPayment.selector]);
         console.log("Release Invoice:", calls[this.releaseInvoice.selector]);
     }
 }

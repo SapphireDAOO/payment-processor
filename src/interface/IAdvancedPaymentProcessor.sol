@@ -130,8 +130,6 @@ interface IAdvancedPaymentProcessor {
         string orderId;
         /// @notice Address of the seller.
         address seller;
-        /// @notice Address of the buyer.
-        address buyer;
         /// @notice Duration (in seconds) after which the invoice expires if unpaid.
         uint32 invoiceExpiryDuration;
         /// @notice Duration (in seconds) after payment within which the seller must respond.
@@ -158,11 +156,10 @@ interface IAdvancedPaymentProcessor {
      * @notice Creates a meta-invoice composed of multiple sub-invoices for a buyer.
      * @dev Only callable by the marketplace contract. Each sub-invoice is created using the provided parameters,
      *      and all are linked under a single meta-invoice key.
-     * @param buyer The address of the buyer for whom the meta-invoice is created.
      * @param param An array of parameters used to create each sub-invoice.
      * @return metaInvoiceOrderId The keccak256 hash representing the meta-invoice ID.
      */
-    function createMetaInvoice(address buyer, InvoiceCreationParam[] memory param) external returns (bytes32);
+    function createMetaInvoice(InvoiceCreationParam[] memory param) external returns (bytes32);
 
     /**
      * @notice Pays a single invoice using native ETH or an approved ERC20 token.
@@ -181,18 +178,18 @@ interface IAdvancedPaymentProcessor {
     function payMetaInvoice(bytes32 orderId, address paymentToken) external payable;
 
     /**
-     * @notice Accepts multiple invoices by their IDs.
-     * @dev Callable only by the respective sellers of each invoice.
-     * @param orderIds The array of invoice IDs to be accepted.
-     */
-    function acceptInvoice(bytes32[] calldata orderIds) external;
-
-    /**
      * @notice Accepts a single invoice.
      * @dev Callable only by the seller of the invoice. The invoice must be in the PAID state.
      * @param orderId The ID of the invoice to be accepted.
      */
     function acceptInvoice(bytes32 orderId) external;
+
+    /**
+     * @notice Accepts multiple invoices by their IDs.
+     * @dev Callable only by the respective sellers of each invoice.
+     * @param orderIds The array of invoice IDs to be accepted.
+     */
+    function acceptInvoices(bytes32[] calldata orderIds) external;
 
     /**
      * @notice Handles a cancelation request from a buyer by accepting or rejecting it.
@@ -203,28 +200,12 @@ interface IAdvancedPaymentProcessor {
     function handleCancelationRequest(bytes32 orderId, bool accept) external;
 
     /**
-     * @notice Requests cancelation for multiple invoices.
-     * @dev Callable only by the respective buyers of the invoices.
-     *      Only valid for invoices in the PAID state and within the allowed cancelation window.
-     * @param orderIds The array of invoice IDs to request cancelation for.
-     */
-    function requestCancelation(bytes32[] memory orderIds) external;
-
-    /**
      * @notice Requests cancelation for a single invoice.
      * @dev Callable only by the buyer of the invoice.
      *      Only valid for invoices in the PAID state and within the allowed cancelation window.
      * @param orderId The ID of the invoice to request cancelation for.
      */
     function requestCancelation(bytes32 orderId) external;
-
-    /**
-     * @notice Cancels multiple invoices.
-     * @dev Callable only by the respective sellers of the invoices.
-     *      Only valid for invoices in the PAID state.
-     * @param orderIds The array of invoice IDs to cancel.
-     */
-    function cancelInvoice(bytes32[] memory orderIds) external;
 
     /**
      * @notice Cancels a single invoice.

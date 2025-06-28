@@ -6,7 +6,6 @@ import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../src/A
 
 function getInvoiceCreationParam(
     uint256 invoiceId,
-    address buyer,
     address seller,
     uint256 price,
     uint32 timeBeforeCancelation,
@@ -15,7 +14,6 @@ function getInvoiceCreationParam(
     IAdvancedPaymentProcessor.InvoiceCreationParam memory param;
     param.orderId = LibString.toString(invoiceId);
     param.seller = seller;
-    param.buyer = buyer;
     param.price = price;
     param.timeBeforeCancelation = timeBeforeCancelation;
     param.releaseWindow = releaseWindow;
@@ -26,7 +24,6 @@ function getInvoiceCreationParam(
 
 function getInvoiceCreationParams(
     uint256 invoiceId,
-    address buyer,
     address[] memory sellers,
     uint256[] memory prices,
     uint32[] memory timeBeforeCancelation,
@@ -38,9 +35,8 @@ function getInvoiceCreationParams(
     bytes32[] memory suborderIds = new bytes32[](numberOfInvoice);
 
     for (uint256 i; i < numberOfInvoice; i++) {
-        params[i] = getInvoiceCreationParam(
-            invoiceId + i, buyer, sellers[i], prices[i], timeBeforeCancelation[i], disputeWindow[i]
-        );
+        params[i] =
+            getInvoiceCreationParam(invoiceId + i, sellers[i], prices[i], timeBeforeCancelation[i], disputeWindow[i]);
         suborderIds[i] = keccak256(abi.encode(params[i].orderId));
     }
     return (params, suborderIds);
@@ -62,6 +58,6 @@ function computeSingleorderId(address buyer, address issuer, uint256 invoiceId) 
     return keccak256(abi.encode(buyer, issuer, invoiceId));
 }
 
-function computeMetaorderId(address buyer, uint256 lower, uint256 upper) pure returns (bytes32) {
-    return keccak256(abi.encode(buyer, lower, upper, lower + upper));
+function computeMetaorderId(uint256 lower, uint256 upper) pure returns (bytes32) {
+    return keccak256(abi.encode(lower, upper, lower + upper));
 }
