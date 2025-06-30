@@ -347,7 +347,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.acceptInvoice(orderId);
     }
 
-    function test_sellerCancelInitiatedInvoice() public {
+    function test_cancel_invoice() public {
         // single invoice
         uint256 price = 100e8;
         bytes32 orderId = advancedPP.createSingleInvoice(
@@ -361,14 +361,8 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         uint256 buyersBalanceBeforeCancellation = buyerOne.balance;
 
-        vm.prank(sellerTwo);
-        vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedSeller.selector);
         advancedPP.cancelInvoice(orderId);
 
-        vm.prank(sellerOne);
-        advancedPP.cancelInvoice(orderId);
-
-        vm.prank(sellerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
         advancedPP.cancelInvoice(orderId);
 
@@ -411,8 +405,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.payMetaInvoice{ value: tokenValue }(metaInvoiceOrderId, address(0));
         buyersBalanceBeforeCancellation = buyerOne.balance;
 
-        vm.startPrank(sellerOne);
-
         for (uint256 i = 0; i < orderIds.length; i++) {
             advancedPP.cancelInvoice(orderIds[i]);
             assertEq(advancedPP.getInvoice(orderIds[i]).state, advancedPP.CANCELED());
@@ -421,103 +413,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.stopPrank();
 
         assertApproxEqAbs(buyerOne.balance - buyersBalanceBeforeCancellation, tokenValue, 1);
-    }
-
-    function test_invoiceCancelationRequest() public {
-        uint256 price = 100e8;
-        bytes32 orderId = advancedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price, 1 days, 1 days)
-        );
-
-        uint256 currentId = advancedPP.totalUniqueInvoiceCreated();
-        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
-
-        vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedBuyer.selector);
-        advancedPP.requestCancelation(orderId);
-
-        vm.startPrank(buyerOne);
-
-        vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedBuyer.selector);
-        advancedPP.requestCancelation(orderId);
-
-        advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
-
-        advancedPP.requestCancelation(orderId);
-
-        vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.requestCancelation(orderId);
-
-        vm.stopPrank();
-        assertEq(advancedPP.getInvoice(orderId).state, advancedPP.CANCELATION_REQUESTED());
-
-        orderId = advancedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price, 1 days, 1 days)
-        );
-        currentId = advancedPP.totalUniqueInvoiceCreated();
-
-        vm.startPrank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
-
-        vm.warp(block.timestamp + 1 + 1 days);
-        vm.expectRevert(IAdvancedPaymentProcessor.CancelationRequestDeadlinePassed.selector);
-        advancedPP.requestCancelation(orderId);
-
-        vm.stopPrank();
-    }
-
-    function test_handleInvoiceCancelation() public {
-        address[] memory sellers = new address[](3);
-        sellers[0] = sellerOne;
-        sellers[1] = sellerOne;
-        sellers[2] = sellerOne;
-
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 50e8;
-        prices[1] = 2500e8;
-        prices[2] = 100e8;
-
-        uint32[] memory responseTime = new uint32[](3);
-        responseTime[0] = 1 days;
-        responseTime[1] = 1 days;
-        responseTime[2] = 1 days;
-
-        uint32[] memory disputeWindow = new uint32[](3);
-        disputeWindow[0] = 1 days;
-        disputeWindow[1] = 4 days;
-        disputeWindow[2] = 5 days;
-
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices, responseTime, disputeWindow);
-
-        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
-
-        uint256 totalPrice = prices[0] + prices[1] + prices[2];
-
-        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), totalPrice);
-
-        vm.startPrank(buyerOne);
-        advancedPP.payMetaInvoice{ value: tokenValue }(metaInvoiceOrderId, address(0));
-
-        advancedPP.requestCancelation(orderIds[0]);
-        advancedPP.requestCancelation(orderIds[1]);
-        advancedPP.requestCancelation(orderIds[2]);
-
-        vm.startPrank(sellerOne);
-
-        bool[] memory accept = new bool[](orderIds.length);
-        accept[0] = true; // + 0.01 ether
-        accept[1] = false;
-        accept[2] = false;
-
-        uint256 buyersBalanceBefore = buyerOne.balance;
-        for (uint256 i = 0; i < orderIds.length; ++i) {
-            advancedPP.handleCancelationRequest(orderIds[i], accept[i]);
-        }
-
-        assertEq(buyerOne.balance, buyersBalanceBefore + advancedPP.getTokenValueFromUsd(address(0), prices[0]));
-        assertEq(advancedPP.getInvoice(orderIds[0]).state, advancedPP.CANCELATION_ACCEPTED());
-        assertEq(advancedPP.getInvoice(orderIds[1]).state, advancedPP.CANCELATION_REJECTED());
-        assertEq(advancedPP.getInvoice(orderIds[2]).state, advancedPP.CANCELATION_REJECTED());
     }
 
     function test_refundAfterInvoiceExpires() public {
@@ -531,10 +426,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         vm.prank(buyerOne);
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
-
-        vm.prank(buyerTwo);
-        vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedBuyer.selector);
-        advancedPP.claimExpiredInvoiceRefunds(orderId);
 
         vm.startPrank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvoiceStillActive.selector);
@@ -639,15 +530,15 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
             advancedPP.createDispute(key);
         }
 
-        // uint8 dismissed = advancedPP.DISPUTE_DISMISSED();
+        uint8 dismissed = advancedPP.DISPUTE_DISMISSED();
 
-        // vm.prank(buyerOne);
-        // vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
-        // advancedPP.handleDispute(orderIds[0], dismissed, 0);
+        vm.prank(buyerOne);
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.handleDispute(orderIds[0], dismissed, 0);
 
-        // advancedPP.handleDispute(orderIds[0], dismissed, 0);
+        advancedPP.handleDispute(orderIds[0], dismissed, 0);
 
-        // assertEq(advancedPP.getInvoice(orderIds[0]).state, dismissed);
+        assertEq(advancedPP.getInvoice(orderIds[0]).state, dismissed);
     }
 
     function test_settledDispute() public {

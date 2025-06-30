@@ -30,6 +30,9 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when the invoice is still active and certain actions are not allowed.
     error InvoiceStillActive();
 
+    /// @notice Thrown when an attempt is made to create an invoice with a price of zero.
+    error PriceCannotBeZero();
+
     /// @notice Reverts if the buyer and seller are the same address.
     error BuyerCannotBeSeller();
 
@@ -190,22 +193,6 @@ interface IAdvancedPaymentProcessor {
      * @param orderIds The array of invoice IDs to be accepted.
      */
     function acceptInvoices(bytes32[] calldata orderIds) external;
-
-    /**
-     * @notice Handles a cancelation request from a buyer by accepting or rejecting it.
-     * @dev Callable only by the seller of the invoice. Only valid for invoices in the CANCELATION_REQUESTED state.
-     * @param orderId The ID of the invoice for which the cancelation is being handled.
-     * @param accept A boolean indicating whether to accept (`true`) or reject (`false`) the cancelation.
-     */
-    function handleCancelationRequest(bytes32 orderId, bool accept) external;
-
-    /**
-     * @notice Requests cancelation for a single invoice.
-     * @dev Callable only by the buyer of the invoice.
-     *      Only valid for invoices in the PAID state and within the allowed cancelation window.
-     * @param orderId The ID of the invoice to request cancelation for.
-     */
-    function requestCancelation(bytes32 orderId) external;
 
     /**
      * @notice Cancels a single invoice.

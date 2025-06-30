@@ -157,7 +157,6 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         uint256 buyersBalanceBeforeCancellation = NATIVE_TOKEN_BUYER.balance;
 
-        vm.prank(sellerOne);
         advancedPP.cancelInvoice(orderId);
 
         uint256 buyersBalanceAfterCancellation = NATIVE_TOKEN_BUYER.balance;
@@ -199,73 +198,12 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         advancedPP.payMetaInvoice{ value: tokenValue }(metaorderId, address(0));
         buyersBalanceBeforeCancellation = NATIVE_TOKEN_BUYER.balance;
 
-        vm.startPrank(sellerOne);
-
         for (uint256 i = 0; i < orderIds.length; i++) {
             advancedPP.cancelInvoice(orderIds[i]);
             assertEq(advancedPP.getInvoice(orderIds[i]).state, advancedPP.CANCELED());
         }
-        
-        vm.stopPrank();
 
         assertApproxEqAbs(NATIVE_TOKEN_BUYER.balance - buyersBalanceBeforeCancellation, tokenValue, 2);
-    }
-
-    function test_handleInvoiceCancelation() public {
-        address[] memory sellers = new address[](3);
-        sellers[0] = sellerOne;
-        sellers[1] = sellerOne;
-        sellers[2] = sellerOne;
-
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 50e8;
-        prices[1] = 2500e8;
-        prices[2] = 100e8;
-
-        uint32[] memory responseTime = new uint32[](3);
-        responseTime[0] = 1 days;
-        responseTime[1] = 1 days;
-        responseTime[2] = 1 days;
-
-        uint32[] memory disputeWindow = new uint32[](3);
-        disputeWindow[0] = 1 days;
-        disputeWindow[1] = 4 days;
-        disputeWindow[2] = 5 days;
-
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices, responseTime, disputeWindow);
-
-        bytes32 metaorderId = advancedPP.createMetaInvoice(param);
-
-        uint256 totalPrice = prices[0] + prices[1] + prices[2];
-
-        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), totalPrice);
-
-        vm.startPrank(NATIVE_TOKEN_BUYER);
-        advancedPP.payMetaInvoice{ value: tokenValue }(metaorderId, address(0));
-
-        for (uint256 i = 0; i < orderIds.length; ++i) {
-            advancedPP.requestCancelation(orderIds[i]);
-        }
-
-        vm.startPrank(sellerOne);
-
-        bool[] memory accept = new bool[](orderIds.length);
-        accept[0] = true; // + 0.01 ether
-        accept[1] = false;
-        accept[2] = false;
-
-        uint256 buyersBalanceBefore = NATIVE_TOKEN_BUYER.balance;
-        for (uint256 i = 0; i < orderIds.length; ++i) {
-            advancedPP.handleCancelationRequest(orderIds[i], accept[i]);
-        }
-
-        assertEq(
-            NATIVE_TOKEN_BUYER.balance, buyersBalanceBefore + advancedPP.getTokenValueFromUsd(address(0), prices[0])
-        );
-        assertEq(advancedPP.getInvoice(orderIds[0]).state, advancedPP.CANCELATION_ACCEPTED());
-        assertEq(advancedPP.getInvoice(orderIds[1]).state, advancedPP.CANCELATION_REJECTED());
-        assertEq(advancedPP.getInvoice(orderIds[2]).state, advancedPP.CANCELATION_REJECTED());
     }
 
     function test_refundAfterInvoiceExpires() public {

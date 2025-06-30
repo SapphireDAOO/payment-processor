@@ -64,11 +64,7 @@ contract AdvancedPaymentProcessorHandler is Test {
 
         bytes32 id = advancedPP.createSingleInvoice(
             getInvoiceCreationParam(
-                totalSingleInvoiceCreated,
-                seller,
-                price,
-                timeBeforeCancelation.toUint32(),
-                releaseWindow.toUint32()
+                totalSingleInvoiceCreated, seller, price, timeBeforeCancelation.toUint32(), releaseWindow.toUint32()
             )
         );
 
@@ -181,32 +177,6 @@ contract AdvancedPaymentProcessorHandler is Test {
         advancedPP.cancelInvoice(orderId);
     }
 
-    function requestCancelation(uint256 index) public onlyExistingInvoice countCall(this.requestCancelation.selector) {
-        if (singleOrderIds.length == 0) return;
-        index = bound(index, 0, singleOrderIds.length - 1);
-        bytes32 orderId = singleOrderIds[index];
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
-        if (inv.state != advancedPP.PAID()) return;
-
-        vm.prank(buyer);
-        advancedPP.requestCancelation(orderId);
-    }
-
-    function handleCancelation(uint256 index, bool accept)
-        public
-        onlyExistingInvoice
-        countCall(this.handleCancelation.selector)
-    {
-        if (singleOrderIds.length == 0) return;
-        index = bound(index, 0, singleOrderIds.length - 1);
-        bytes32 orderId = singleOrderIds[index];
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
-        if (inv.state != advancedPP.CANCELATION_REQUESTED()) return;
-
-        vm.prank(buyer);
-        advancedPP.handleCancelationRequest(orderId, accept);
-    }
-
     function createDispute(uint256 index) public onlyExistingInvoice countCall(this.createDispute.selector) {
         if (singleOrderIds.length == 0) return;
         index = bound(index, 0, singleOrderIds.length - 1);
@@ -284,7 +254,6 @@ contract AdvancedPaymentProcessorHandler is Test {
         // console.log("Make Meta Invoice Payment:", calls[this.makeMetaInvoicePayment.selector]);
         // console.log("Accept Invoice:", calls[this.acceptInvoice.selector]);
         // console.log("Cancel Invoice:", calls[this.cancelInvoice.selector]);
-        // console.log("Request Cancelation:", calls[this.requestCancelation.selector]);
         // console.log("Handle Cancelation:", calls[this.handleCancelation.selector]);
         // console.log("Create Dispute:", calls[this.createDispute.selector]);
         // console.log("Handle Dispute:", calls[this.handleDispute.selector]);

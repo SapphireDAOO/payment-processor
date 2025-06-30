@@ -227,18 +227,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function handleCancelationRequest(bytes32 orderId, bool accept) external {
-        Invoice memory inv = _getInvoice(orderId);
-        inv.state = accept ? CANCELATION_ACCEPTED : CANCELATION_REJECTED;
-        _updateInvoice(orderId, inv);
-        if (inv.state == CANCELATION_ACCEPTED) {
-            IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.amountPaid);
-        }
-
-        emit CancelationRequestHandled(orderId, accept);
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
     function createDispute(bytes32 orderId) external {
         Invoice memory inv = _getInvoice(orderId);
         if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
@@ -307,7 +295,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         Invoice memory inv = _getInvoice(orderId);
         if (inv.state > REFUNDED) revert InvalidInvoiceState();
         if (inv.state == REFUNDED) revert AlreadyRefunded();
-        if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
         if (block.timestamp < inv.createdAt + inv.timeBeforeCancelation) revert InvoiceStillActive();
 
         inv.state = REFUNDED;
@@ -319,14 +306,16 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function cancelInvoice(bytes32 orderId) public {
+    function cancelInvoice(bytes32 orderId) public onlyMarketplace {
         Invoice memory inv = _getInvoice(orderId);
-        if (msg.sender != inv.seller) revert UnauthorizedSeller();
-        if (inv.state != PAID) revert InvalidInvoiceState();
+        uint256 currentState = inv.state;
+        if (currentState != PAID && inv.state != INITIATED) revert InvalidInvoiceState();
 
         inv.state = CANCELED;
         _updateInvoice(orderId, inv);
-        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.amountPaid);
+        if (currentState == PAID) {
+            IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, inv.amountPaid);
+        }
 
         emit InvoiceCanceled(orderId);
     }
@@ -342,19 +331,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         _updateInvoice(orderId, inv);
 
         emit InvoiceAccepted(orderId);
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function requestCancelation(bytes32 orderId) public {
-        Invoice memory inv = _getInvoice(orderId);
-        if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
-        if (inv.state != PAID) revert InvalidInvoiceState();
-        if (block.timestamp > inv.createdAt + inv.timeBeforeCancelation) revert CancelationRequestDeadlinePassed();
-
-        inv.state = CANCELATION_REQUESTED;
-        _updateInvoice(orderId, inv);
-
-        emit CancelationRequested(orderId);
     }
 
     function resolveDispute(bytes32 orderId) external {
@@ -453,6 +429,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         internal
         returns (Invoice memory, bytes32)
     {
+        if (param.price == 0) revert PriceCannotBeZero();
         Invoice memory inv;
         inv.seller = param.seller;
         inv.price = param.price;
