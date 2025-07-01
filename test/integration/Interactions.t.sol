@@ -76,7 +76,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         for (uint256 i = 0; i < orderIds.length; i++) {
             IAdvancedPaymentProcessor.Invoice memory subInvoice = advancedPP.getInvoice(orderIds[i]);
-            address escrow = advancedPP.getEscrowAddress(subInvoice.seller, subInvoice.buyer, orderIds[i]);
+            address escrow = advancedPP.getEscrowAddress(subInvoice.seller, subInvoice.buyer, subInvoice.orderId);
 
             assertEq(subInvoice.state, advancedPP.PAID());
             assertEq(subInvoice.escrow, escrow);
@@ -132,7 +132,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         for (uint256 i = 0; i < orderIds.length; i++) {
             IAdvancedPaymentProcessor.Invoice memory subInvoice = advancedPP.getInvoice(orderIds[i]);
-            address escrow = advancedPP.getEscrowAddress(subInvoice.seller, subInvoice.buyer, orderIds[i]);
+            address escrow = advancedPP.getEscrowAddress(subInvoice.seller, subInvoice.buyer, subInvoice.orderId);
 
             assertEq(subInvoice.state, advancedPP.PAID());
             assertEq(subInvoice.escrow, escrow);

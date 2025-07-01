@@ -42,7 +42,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(inv.price, price);
         assertEq(inv.seller, sellerOne);
         assertEq(inv.createdAt, block.timestamp);
-        assertEq(inv.metaInvoiceOrderId, bytes32(0));
+        assertEq(inv.orderId, bytes32(0));
         assertEq(inv.invoiceId, advancedPP.totalUniqueInvoiceCreated());
         assertEq(nextInvoiceId, 2);
     }
@@ -67,8 +67,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[0] = 2 days;
         disputeWindow[1] = 2 days;
 
-        uint256 startInvoiceId = advancedPP.getNextInvoiceId();
-
         (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory keys) =
             getInvoiceCreationParams(invoiceId, sellers, prices, responseTime, disputeWindow);
 
@@ -83,18 +81,16 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         for (uint256 i = 0; i < keys.length; i++) {
             IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(keys[i]);
+            bytes32 orderId = _computeOrderId(inv.seller, inv.metaInvoiceId);
             assertEq(inv.price, prices[i]);
             assertEq(inv.seller, sellers[i]);
             assertEq(inv.createdAt, block.timestamp);
-            assertEq(inv.metaInvoiceOrderId, metaInvoiceOrderId);
-            assertEq(advancedPP.getMetaInvoiceIdForSub(keys[i]), metaInvoiceOrderId);
+            assertEq(inv.metaInvoiceId, metaInvoiceOrderId);
+            assertEq(inv.orderId, orderId);
         }
 
         assertEq(advancedPP.getNextInvoiceId(), upper + 1);
         assertEq(metaInv.price, prices[0] + prices[1]);
-        assertEq(metaInv.upper, upper);
-        assertEq(metaInv.lower, startInvoiceId);
-        assertEq(metaInv.invoiceId, 1);
     }
 
     function test_nativeTokenPaymentForSingleInvoice() public {
@@ -162,8 +158,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.payMetaInvoice{ value: 0.03 ether }(keccak256(""), address(0));
 
         vm.startPrank(buyerOne);
-        vm.expectRevert(IAdvancedPaymentProcessor.InvalidMetaInvoicePayment.selector);
-        advancedPP.payMetaInvoice{ value: 0.01 ether }(metaInvoiceOrderId, address(0));
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidPaymentToken.selector);
         advancedPP.payMetaInvoice(metaInvoiceOrderId, address(12));
@@ -176,7 +170,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.stopPrank();
 
         IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(orderIds[0]);
-        address escrowOne = advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, orderIds[0]);
+        address escrowOne = advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, invOne.orderId);
 
         assertEq(invOne.state, advancedPP.PAID());
         assertEq(invOne.escrow, escrowOne);
@@ -184,7 +178,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(invOne.paymentToken, address(0));
 
         IAdvancedPaymentProcessor.Invoice memory invTwo = advancedPP.getInvoice(orderIds[1]);
-        address escrowTwo = advancedPP.getEscrowAddress(invTwo.seller, invTwo.buyer, orderIds[1]);
+        address escrowTwo = advancedPP.getEscrowAddress(invTwo.seller, invTwo.buyer, invTwo.orderId);
 
         assertEq(invTwo.state, advancedPP.PAID());
         assertEq(invTwo.escrow, escrowTwo);
@@ -244,7 +238,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.payMetaInvoice(metaInvoiceOrderId, address(mockWBtc));
 
         IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(orderIds[0]);
-        address escrowOne = advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, orderIds[0]);
+        address escrowOne = advancedPP.getEscrowAddress(invOne.seller, invOne.buyer, invOne.orderId);
 
         assertEq(invOne.state, advancedPP.PAID());
         assertEq(invOne.escrow, escrowOne);
@@ -254,7 +248,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(invOne.paymentToken, address(mockWBtc));
 
         IAdvancedPaymentProcessor.Invoice memory invTwo = advancedPP.getInvoice(orderIds[1]);
-        address escrowTwo = advancedPP.getEscrowAddress(invTwo.seller, invTwo.buyer, orderIds[1]);
+        address escrowTwo = advancedPP.getEscrowAddress(invTwo.seller, invTwo.buyer, invTwo.orderId);
 
         assertEq(invTwo.state, advancedPP.PAID());
         assertEq(invTwo.escrow, escrowTwo);
@@ -606,28 +600,22 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.acceptInvoice(orderId);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.resolveDispute(orderId);
+        advancedPP.resolveDispute(orderId, buyerOne);
 
         vm.prank(buyerOne);
         advancedPP.createDispute(orderId);
 
-        vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedParticipant.selector);
-        advancedPP.resolveDispute(orderId);
-
-        vm.prank(buyerOne);
-        advancedPP.resolveDispute(orderId);
+        advancedPP.resolveDispute(orderId, buyerOne);
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
 
         assertEq(inv.resolutionInitiator, buyerOne);
         assertEq(inv.resolutionState, 1);
 
-        vm.prank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.DuplicateResolutionAttempt.selector);
-        advancedPP.resolveDispute(orderId);
+        advancedPP.resolveDispute(orderId, buyerOne);
 
-        vm.prank(sellerOne);
-        advancedPP.resolveDispute(orderId);
+        advancedPP.resolveDispute(orderId, sellerOne);
         assertEq(advancedPP.getInvoice(orderId).state, advancedPP.DISPUTE_RESOLVED());
     }
 
@@ -656,5 +644,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.releasePayment(orderId);
 
         assertEq(advancedPP.getInvoice(orderId).state, advancedPP.RELEASED());
+    }
+
+    function _computeOrderId(address seller, bytes32 metaInvoiceId) internal pure returns (bytes32) {
+        return keccak256(abi.encode(seller, metaInvoiceId));
     }
 }

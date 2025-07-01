@@ -110,23 +110,19 @@ interface IAdvancedPaymentProcessor {
         uint256 price;
         /// @notice The total amount paid by the buyer for this invoice, denominated in the payment token (native token if address(0)).
         uint256 amountPaid;
-        /// @notice Identifier linking the invoice to a meta invoice. bytes32(0) if not part of any meta invoice.
-        bytes32 metaInvoiceOrderId;
+        /// @notice Identifier linking the invoice to a meta invoice. bytes32(0) if not part of any meta invoice.specifically to handle payment
+        bytes32 metaInvoiceId;
+        /// @notice The order ID of the invoice. For standalone invoices, this is set to bytes32(0); otherwise, contains a unique ID.
+        bytes32 orderId;
     }
 
     struct MetaInvoice {
-        /// @notice Address of the seller.
-        address buyer;
         /// @notice Total price of all sub-invoices under this meta invoice.
         uint256 price;
-        /// @notice Upper bound invoice ID within this meta invoice.
-        uint256 upper;
-        /// @notice Lower bound invoice ID within this meta invoice.
-        uint256 lower;
         /// @notice Token used for payment. Address zero for native currency.
         address paymentToken;
-        /// @notice A unique identifier assigned to this invoice, typically sequentially.
-        uint256 invoiceId;
+        /// @notice List of sub-invoice IDs that are grouped under this meta invoice.
+        bytes32[] subInvoiceIds;
     }
 
     struct InvoiceCreationParam {
@@ -220,13 +216,15 @@ interface IAdvancedPaymentProcessor {
      * @param sellerShare The portion of the invoice price (in basis points) to be awarded to the seller.
      */
     function handleDispute(bytes32 orderId, uint8 resolution, uint256 sellerShare) external;
+
     /**
-     * @notice Allows the buyer or seller to resolve a disputed invoice by mutual confirmation.
-     *  @dev Both parties must call this function once to resolve the dispute. The first caller is recorded,
-     *  and the second call finalizes the resolution.
-     *  @param orderId The unique identifier (hash) of the invoice to be resolved.
+     * @notice Resolves a disputed invoice through mutual confirmation by both buyer and seller.
+     * @dev The first caller is recorded as the resolution initiator. The second call by the counterparty
+     *      finalizes the resolution and updates the invoice state to DISPUTE_RESOLVED.
+     * @param orderId The unique identifier of the disputed invoice.
+     * @param sender The address of the caller attempting to resolve the dispute.
      */
-    function resolveDispute(bytes32 orderId) external;
+    function resolveDispute(bytes32 orderId, address sender) external;
 
     /**
      * @notice Releases payment to the seller for a successfully completed invoice.
@@ -294,13 +292,6 @@ interface IAdvancedPaymentProcessor {
      * @return The next meta-invoice ID.
      */
     function getNextMetaInvoiceId() external view returns (uint256);
-
-    /**
-     * @notice Gets the meta-invoice ID associated with a specific sub-invoice.
-     * @param orderId The sub-invoice ID.
-     * @return The ID of the meta-invoice that includes the given sub-invoice.
-     */
-    function getMetaInvoiceIdForSub(bytes32 orderId) external view returns (bytes32);
 
     /**
      * @notice Converts a USD-denominated price to the equivalent amount in the specified payment token.

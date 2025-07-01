@@ -37,7 +37,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         assertEq(inv.price, price);
         assertEq(inv.seller, sellerOne);
-        assertEq(inv.metaInvoiceOrderId, bytes32(0));
+        assertEq(inv.orderId, bytes32(0));
         assertEq(nextInvoiceId, 2);
     }
 

@@ -24,6 +24,9 @@ contract Escrow is IEscrow {
         _;
     }
 
+    fallback() external payable { }
+    receive() external payable { }
+
     /**
      * @notice Initializes the escrow contract with invoice details and deposits the funds.
      * @dev This constructor sets the invoice ID, creator, payer, and payment processor addresses, and records the sent

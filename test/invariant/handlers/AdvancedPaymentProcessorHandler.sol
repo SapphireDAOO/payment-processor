@@ -234,7 +234,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (inv.resolutionInitiator == sender) return;
 
         vm.prank(sender);
-        advancedPP.resolveDispute(orderId);
+        advancedPP.resolveDispute(orderId, sender);
     }
 
     function getTotalSingleInvoiceCreated() public view returns (uint256) {

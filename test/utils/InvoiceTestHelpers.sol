@@ -58,6 +58,6 @@ function computeSingleorderId(address buyer, address issuer, uint256 invoiceId) 
     return keccak256(abi.encode(buyer, issuer, invoiceId));
 }
 
-function computeMetaorderId(uint256 lower, uint256 upper) pure returns (bytes32) {
-    return keccak256(abi.encode(lower, upper, lower + upper));
+function computeMetaorderId(uint256 lower, uint256 upper, uint256 salt) view returns (bytes32) {
+    return keccak256(abi.encode(lower, upper, salt, block.timestamp));
 }
