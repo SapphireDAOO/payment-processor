@@ -429,7 +429,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.warp(block.timestamp + 1 + 1 days);
         advancedPP.claimExpiredInvoiceRefunds(orderId);
 
-        vm.expectRevert(IAdvancedPaymentProcessor.AlreadyRefunded.selector);
+        vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
         advancedPP.claimExpiredInvoiceRefunds(orderId);
         vm.stopPrank();
 
