@@ -44,6 +44,7 @@ contract Escrow is IEscrow {
         emit FundsDeposited(orderId, msg.value);
     }
 
+    /// @inheritdoc IEscrow
     function withdraw(address token, address receiver, uint256 amount) external onlyPaymentProcessor {
         if (token == address(0)) {
             receiver.safeTransferETH(amount);

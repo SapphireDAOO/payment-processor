@@ -646,6 +646,90 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(advancedPP.getInvoice(orderId).state, advancedPP.RELEASED());
     }
 
+    function test_releaseOrderPayment() public {
+        address[] memory sellers = new address[](2);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerOne;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 0.01e8;
+        prices[1] = 0.02e8;
+
+        uint32[] memory responseTime = new uint32[](2);
+        responseTime[0] = 1 days;
+        responseTime[1] = 1 days;
+
+        uint32[] memory disputeWindow = new uint32[](2);
+        disputeWindow[0] = 1 days;
+        disputeWindow[1] = 4 days;
+
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
+            getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices, responseTime, disputeWindow);
+
+        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+
+        uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
+
+        uint256 balanceBefore = buyerTwo.balance;
+
+        vm.prank(buyerTwo);
+        advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
+
+        vm.prank(sellerOne);
+        advancedPP.acceptInvoices(orderIds);
+
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderIds[0]);
+
+        advancedPP.releasePayment(inv.orderId);
+
+        for (uint256 i = 0; i < orderIds.length; i++) {
+            assertEq(advancedPP.getInvoice(orderIds[i]).state, advancedPP.RELEASED());
+        }
+        assertEq(balanceBefore - tokenAmount, buyerTwo.balance);
+    }
+
+    function test_release_after_cancelation() public {
+        address[] memory sellers = new address[](3);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerOne;
+        sellers[2] = sellerOne;
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 0.01e8;
+        prices[1] = 0.02e8;
+        prices[2] = 0.02e8;
+
+        uint32[] memory responseTime = new uint32[](3);
+        responseTime[0] = 1 days;
+        responseTime[1] = 1 days;
+        responseTime[2] = 1 days;
+
+        uint32[] memory disputeWindow = new uint32[](3);
+        disputeWindow[0] = 1 days;
+        disputeWindow[1] = 4 days;
+        disputeWindow[2] = 3 days;
+
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
+            getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices, responseTime, disputeWindow);
+
+        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+
+        advancedPP.cancelInvoice(orderIds[0]);
+
+        uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[1] + prices[2]);
+        uint256 balanceBefore = buyerOne.balance;
+
+        vm.prank(buyerOne);
+        advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
+
+        vm.startPrank(sellerOne);
+        advancedPP.acceptInvoice(orderIds[1]);
+        advancedPP.acceptInvoice(orderIds[2]);
+        vm.stopPrank();
+
+        assertEq(balanceBefore - tokenAmount, buyerOne.balance);
+    }
+
     function _computeOrderId(address seller, bytes32 metaInvoiceId) internal pure returns (bytes32) {
         return keccak256(abi.encode(seller, metaInvoiceId));
     }

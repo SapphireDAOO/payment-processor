@@ -82,11 +82,11 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     mapping(address token => address aggregator) private priceFeed;
 
     /**
-     * @notice Mapping from unique order ID to its associated escrow contract address.
-     * @dev Used to retrieve or reuse the escrow contract tied to a specific order ID.
-     *      Ensures deterministic linkage between invoices and escrow contracts.
+     * @notice Maps a unique order ID to its associated order details.
+     * @dev Stores metadata including escrow address and sub-invoice ID range
+     *      for both single and meta-invoice payments.
      */
-    mapping(bytes32 orderId => address escrow) private orderIdToEscrow;
+    mapping(bytes32 orderId => Order orderInfo) private order;
 
     /**
      * @notice Mapping from meta-invoice ID to its aggregate meta-invoice data.
@@ -94,6 +94,12 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      *      Each MetaInvoice contains the total price and all associated sub-invoice IDs.
      */
     mapping(bytes32 metaInvoiceId => MetaInvoice) private metaInvoice;
+
+    /**
+     * @notice Maps an order ID to a mapping of invoice index to sub-order ID
+     * @dev Allows tracking of sub-order IDs associated with each order at specific indices
+     */
+    mapping(bytes32 => mapping(uint256 index => bytes32)) private orderIdToSubOrderId;
 
     /**
      * @notice Restricts function access to the authorized marketplace address.
@@ -126,7 +132,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function createSingleInvoice(InvoiceCreationParam memory param) external onlyMarketplace returns (bytes32) {
-        (, bytes32 orderId) = _createInvoice(ppStorage.updateInvoiceId(1), 0, param);
+        (Invoice memory inv, bytes32 orderId) = _createInvoice(ppStorage.updateInvoiceId(1), 0, param);
+        emit InvoiceCreated(orderId, inv);
         return orderId;
     }
 
@@ -145,17 +152,29 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
             totalPrice += param[i].price;
             (Invoice memory inv, bytes32 subOrderId) = _createInvoice(startInvoiceId + i, metaInvoiceOrderId, param[i]);
             bytes32 orderId = _computeOrderId(inv.seller, metaInvoiceOrderId);
+            Order memory o = order[orderId];
+
+            orderIdToSubOrderId[orderId][startInvoiceId + i] = subOrderId;
+
+            if (o.escrow == address(0) && o.upper == 0) {
+                order[orderId].lower = i;
+            }
+
+            order[orderId].upper = startInvoiceId + i;
+
             inv.orderId = orderId;
             invoice[subOrderId] = inv;
             metaInvoice[metaInvoiceOrderId].subInvoiceIds.push(subOrderId);
+            emit InvoiceCreated(subOrderId, inv);
         }
 
         metaInvoice[metaInvoiceOrderId].price = totalPrice;
+
         ppStorage.updateInvoiceId(i);
 
         nextMetaInvoiceId++;
 
-        // emit MetaInvoiceCreated(metaInvoiceOrderId, metaInv);
+        emit MetaInvoiceCreated(metaInvoiceOrderId);
 
         return metaInvoiceOrderId;
     }
@@ -190,7 +209,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
             if (inv.state != INITIATED) continue;
             uint256 invPrice = getTokenValueFromUsd(paymentToken, inv.price);
 
-            address escrow = orderIdToEscrow[inv.orderId];
+            address escrow = order[inv.orderId].escrow;
             address escrowAddress = _metaInvoicePayment(inv, paymentToken, invPrice, escrow);
             emit InvoicePaid(subOrderId, paymentToken, escrowAddress, price);
 
@@ -253,20 +272,49 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function releasePayment(bytes32 orderId) external onlyMarketplace {
-        Invoice memory inv = invoice[orderId];
-        if (inv.state != ACCEPTED && inv.state != DISPUTE_RESOLVED && inv.state != DISPUTE_DISMISSED) {
-            revert InvalidInvoiceState();
+        Order memory orderInfo = order[orderId];
+
+        if (orderInfo.lower == 0 && orderInfo.upper == 0) {
+            Invoice memory inv = invoice[orderId];
+
+            if (!_isReleasable(inv)) revert InvalidInvoiceState();
+            if (block.timestamp < inv.releaseWindow) emit EarlyRelease(orderId);
+
+            inv.state = RELEASED;
+            invoice[orderId] = inv;
+            _processSellerPayout(inv, inv.amountPaid);
+            emit PaymentReleased(orderId);
+        } else {
+            Invoice memory invoiceData;
+            for (uint256 i = orderInfo.lower; i <= orderInfo.upper; i++) {
+                bytes32 subOrderId = orderIdToSubOrderId[orderId][i];
+                Invoice memory inv = invoice[subOrderId];
+
+                if (invoiceData.escrow == address(0)) {
+                    invoiceData.escrow = inv.escrow;
+                    invoiceData.seller = inv.seller;
+                    invoiceData.paymentToken = inv.paymentToken;
+                }
+
+                if (inv.createdAt == 0 || !_isReleasable(inv)) continue;
+                if (block.timestamp < inv.releaseWindow) emit EarlyRelease(subOrderId);
+
+                invoiceData.amountPaid += inv.amountPaid;
+
+                invoice[subOrderId].state = RELEASED;
+                emit PaymentReleased(subOrderId);
+            }
+
+            if (invoiceData.amountPaid == 0) revert OrderIsEmpty();
+            _processSellerPayout(invoiceData, invoiceData.amountPaid);
         }
+    }
 
-        if (block.timestamp < inv.releaseWindow) {
-            emit EarlyRelease(orderId);
-        }
-
-        inv.state = RELEASED;
-        invoice[orderId] = inv;
-        _processSellerPayout(inv, inv.amountPaid);
-
-        emit PaymentReleased(orderId);
+    /**
+     * @dev Checks if an invoice state is eligible for release.
+     */
+    function _isReleasable(Invoice memory inv) internal pure returns (bool) {
+        return inv.state == ACCEPTED || inv.state == DISPUTE_RESOLVED || inv.state == DISPUTE_DISMISSED;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -437,7 +485,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
                     paymentToken: paymentToken
                 })
             );
-            orderIdToEscrow[inv.orderId] = escrow;
+            order[inv.orderId].escrow = escrow;
         }
 
         inv.buyer = msg.sender;
@@ -484,7 +532,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         if (invoice[orderId].createdAt != 0) revert InvoiceAlreadyExists();
 
         invoice[orderId] = inv;
-        emit InvoiceCreated(orderId, inv);
         return (inv, orderId);
     }
 
@@ -541,8 +588,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getMetaInvoice(bytes32 orderId) public view returns (MetaInvoice memory) {
-        return metaInvoice[orderId];
+    function getMetaInvoice(bytes32 metaInvoiceId) public view returns (MetaInvoice memory) {
+        return metaInvoice[metaInvoiceId];
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor

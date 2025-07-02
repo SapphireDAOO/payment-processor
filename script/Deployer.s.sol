@@ -17,6 +17,9 @@ struct Addr {
 }
 
 contract Deployer is Script {
+    MockUsdc mockUsdc;
+    MockWbtc mockWBtc;
+
     uint256 constant FEE_RATE = 500;
     uint256 constant DEFAULT_HOLD_PERIOD = 10 minutes;
     uint256 constant MINIMUM_INVOICE_VALUE = 0.1 ether;
@@ -28,19 +31,11 @@ contract Deployer is Script {
     address constant WBTC_USD_PRICE_FEED = 0xDE31F8bFBD8c84b5360CFACCa3539B938dd78ae6;
     address constant POL_USD_PRICE_FEED = 0xAB594600376Ec9fD91F8e885dADF0CE036862dE0;
 
-    address constant MOCK_USDC = 0xF5B28d5787343668FE20d9D0275ca9355bf8e223;
-    address constant MOCK_WBTC = 0xf694274E7Cc6B60E3575B6Ac600D0822E2555130;
-
-    address constant MOCK_USDC_PRICE_FEED = 0xAD7ad8715164E9d3731cB27e693d9EbD1c327394;
-
-    address constant MOCK_WBTC_PRICE_FEED = 0x1233947aFD3c53ecb641b51DA87e52B2dDAc8490;
-    address constant MOCK_NATIVE_PRICE_FEED = 0x6676B18EB795D7E295443FC448d388f5C630b1f8;
-
     int256 constant INITIAL_USDC_PRICE = 1e8;
     int256 constant INITIAL_WBTC_PRICE = 90_000e8;
     int256 constant INITIAL_POL_PRICE = 0.6e8;
 
-    uint256 constant TESTNET_CHAIN_ID = 80002;
+    uint256 constant TESTNET_CHAIN_ID = 11155111;
     uint256 constant MAINNET_CHAIN_ID = 137;
 
     uint256 constant INITIAL_BALANCE = 100_000 ether;
@@ -78,11 +73,11 @@ contract Deployer is Script {
             });
         } else {
             return Addr({
-                usdcPriceFeed: MOCK_USDC_PRICE_FEED,
-                wbtcPriceFeed: MOCK_WBTC_PRICE_FEED,
-                nativeTokenPriceFeed: MOCK_NATIVE_PRICE_FEED,
-                usdc: MOCK_USDC,
-                wbtc: MOCK_WBTC
+                usdcPriceFeed: 0x644046670AD8C49b14c46D22A3230C7830eC6aC5,
+                wbtcPriceFeed: 0xb4B62E25A9EEAF816FaEC4c5a77D38F2e746E59a,
+                nativeTokenPriceFeed: 0x96AB8111B8C9eC5f7ec99c398e83F57BDC47b40E,
+                usdc: 0x3252Ee213AF17C4d752Aec009AdBA83B93229b31,
+                wbtc: 0x5214B494598c706a482A36Dc6fece2FdafF3390d
             });
         }
     }

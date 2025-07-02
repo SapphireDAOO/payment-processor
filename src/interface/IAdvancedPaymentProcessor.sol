@@ -30,6 +30,9 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when the invoice is still active and certain actions are not allowed.
     error InvoiceStillActive();
 
+    /// @notice Thrown when attempting to release or process an order that has no releasable or paid invoices.
+    error OrderIsEmpty();
+
     /// @notice Thrown when an attempt is made to create an invoice with a price of zero.
     error PriceCannotBeZero();
 
@@ -137,6 +140,15 @@ interface IAdvancedPaymentProcessor {
         uint32 releaseWindow;
         /// @notice Price or amount to be paid for the invoice.
         uint256 price;
+    }
+
+    struct Order {
+        /// @notice The address of the escrow contract associated with this order.
+        address escrow;
+        /// @notice The starting sub-invoice ID in the meta-invoice range.
+        uint256 lower;
+        /// @notice The ending sub-invoice ID in the meta-invoice range.
+        uint256 upper;
     }
 
     // ================================================================
@@ -330,18 +342,17 @@ interface IAdvancedPaymentProcessor {
     event InvoiceAccepted(bytes32 indexed orderId);
 
     /**
-     * @notice Emitted when a new meta-invoice is created.
-     * @param metaInvoiceOrderId The unique identifier of the newly created meta-invoice.
-     * @param metaInvoice The full meta-invoice struct containing aggregated price and related configuration.
-     */
-    event MetaInvoiceCreated(bytes32 indexed metaInvoiceOrderId, MetaInvoice metaInvoice);
-
-    /**
      * @notice Emitted when a new invoice is created.
      * @param orderId The ID of the newly created invoice.
      * @param invoice The invoice data.
      */
     event InvoiceCreated(bytes32 indexed orderId, Invoice invoice);
+
+    /**
+     *  @notice Emitted when a meta-invoice is successfully created.
+     *  @param orderId The unique identifier for the newly created meta-invoice.
+     */
+    event MetaInvoiceCreated(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when an invoice is canceled by the seller and the buyer is refunded.
