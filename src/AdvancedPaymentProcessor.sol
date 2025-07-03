@@ -174,7 +174,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
 
         nextMetaInvoiceId++;
 
-        emit MetaInvoiceCreated(metaInvoiceOrderId);
+        emit MetaInvoiceCreated(metaInvoiceOrderId, totalPrice);
 
         return metaInvoiceOrderId;
     }

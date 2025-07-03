@@ -22,7 +22,7 @@ contract Deployer is Script {
 
     uint256 constant FEE_RATE = 500;
     uint256 constant DEFAULT_HOLD_PERIOD = 10 minutes;
-    uint256 constant MINIMUM_INVOICE_VALUE = 0.1 ether;
+    uint256 constant MINIMUM_INVOICE_VALUE = 0.005 ether;
 
     address constant USDC = 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359;
     address constant WBTC = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
@@ -32,13 +32,11 @@ contract Deployer is Script {
     address constant POL_USD_PRICE_FEED = 0xAB594600376Ec9fD91F8e885dADF0CE036862dE0;
 
     int256 constant INITIAL_USDC_PRICE = 1e8;
-    int256 constant INITIAL_WBTC_PRICE = 90_000e8;
+    int256 constant INITIAL_WBTC_PRICE = 95_000e8;
     int256 constant INITIAL_POL_PRICE = 0.6e8;
 
     uint256 constant TESTNET_CHAIN_ID = 11155111;
     uint256 constant MAINNET_CHAIN_ID = 137;
-
-    uint256 constant INITIAL_BALANCE = 100_000 ether;
 
     function run() external {
         console.log("-----Deploying-----");
@@ -62,7 +60,7 @@ contract Deployer is Script {
         vm.stopBroadcast();
     }
 
-    function _setUp() internal view returns (Addr memory) {
+    function _setUp() internal returns (Addr memory) {
         if (block.chainid == MAINNET_CHAIN_ID) {
             return Addr({
                 usdcPriceFeed: USDC_USD_PRICE_FEED,
@@ -72,12 +70,19 @@ contract Deployer is Script {
                 wbtc: WBTC
             });
         } else {
+            MockV3Aggregator mockUsdcPriceFeed = new MockV3Aggregator(8, INITIAL_USDC_PRICE);
+            MockV3Aggregator mockWbtcPriceFeed = new MockV3Aggregator(8, INITIAL_WBTC_PRICE);
+            MockV3Aggregator mockNativePriceFeed = new MockV3Aggregator(8, INITIAL_POL_PRICE);
+
+            mockUsdc = new MockUsdc("Mock Usdc", "mUsdc");
+            mockWBtc = new MockWbtc("Mock WBtc", "mWBtc");
+
             return Addr({
-                usdcPriceFeed: 0x644046670AD8C49b14c46D22A3230C7830eC6aC5,
-                wbtcPriceFeed: 0xb4B62E25A9EEAF816FaEC4c5a77D38F2e746E59a,
-                nativeTokenPriceFeed: 0x96AB8111B8C9eC5f7ec99c398e83F57BDC47b40E,
-                usdc: 0x3252Ee213AF17C4d752Aec009AdBA83B93229b31,
-                wbtc: 0x5214B494598c706a482A36Dc6fece2FdafF3390d
+                usdcPriceFeed: address(mockUsdcPriceFeed),
+                wbtcPriceFeed: address(mockWbtcPriceFeed),
+                nativeTokenPriceFeed: address(mockNativePriceFeed),
+                usdc: address(mockUsdc),
+                wbtc: address(mockWBtc)
             });
         }
     }

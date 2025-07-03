@@ -349,10 +349,11 @@ interface IAdvancedPaymentProcessor {
     event InvoiceCreated(bytes32 indexed orderId, Invoice invoice);
 
     /**
-     *  @notice Emitted when a meta-invoice is successfully created.
-     *  @param orderId The unique identifier for the newly created meta-invoice.
+     * @notice Emitted when a meta-invoice is successfully created.
+     * @param metaInvoiceId The unique identifier of the newly created meta-invoice.
+     * @param totalPrice The aggregated total price (in USD, 8 decimals) of all sub-invoices under this meta-invoice.
      */
-    event MetaInvoiceCreated(bytes32 indexed orderId);
+    event MetaInvoiceCreated(bytes32 indexed metaInvoiceId, uint256 indexed totalPrice);
 
     /**
      * @notice Emitted when an invoice is canceled by the seller and the buyer is refunded.
@@ -375,12 +376,6 @@ interface IAdvancedPaymentProcessor {
     event DisputeSettled(bytes32 indexed orderId, uint256 sellerAmount, uint256 buyerAmount);
 
     /**
-     * @notice Emitted when a buyer initiates a cancellation request for an invoice.
-     * @param orderId The ID of the invoice for which cancellation was requested.
-     */
-    event CancelationRequested(bytes32 indexed orderId);
-
-    /**
      * @notice Emitted when an invoice has been successfully paid and escrow is created.
      * @param orderId The ID of the paid invoice.
      * @param paymentToken The address of the token used for payment (use address(0) for native token).
@@ -388,13 +383,6 @@ interface IAdvancedPaymentProcessor {
      * @param amount The amount paid in the token's smallest denomination (based on token decimals).
      */
     event InvoicePaid(bytes32 indexed orderId, address paymentToken, address escrowAddress, uint256 amount);
-
-    /**
-     * @notice Emitted when a cancellation request is either accepted or rejected by the seller.
-     * @param orderId The ID of the invoice under consideration.
-     * @param accepted Whether the cancellation request was accepted (true) or rejected (false).
-     */
-    event CancelationRequestHandled(bytes32 indexed orderId, bool indexed accepted);
 
     /**
      * @notice Emitted when the payment is released to the seller.
