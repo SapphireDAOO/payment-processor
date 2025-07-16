@@ -9,6 +9,9 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when the caller is not the expected buyer.
     error InvalidBuyer();
 
+    /// @notice Thrown when an account attempts to withdraw or spend more than its available balance.
+    error InsufficientBalance();
+
     /// @notice Thrown when the caller lacks the required role or permission.
     error NotAuthorized();
 
@@ -103,27 +106,21 @@ interface IAdvancedPaymentProcessor {
         uint48 paidAt;
         /// @notice Timestamp when the invoice was created.
         uint48 createdAt;
-        /// @notice Duration (in seconds) after payment before funds are auto-released unless disputed.
-        uint32 releaseWindow;
         /// @notice Time window (in seconds) after which the invoice expires if unpaid.
         uint32 invoiceExpiryDuration;
         /// @notice Time window (in seconds) after payment within which the seller must respond.
         uint32 timeBeforeCancelation;
         /// @notice Invoice amount expressed in USD (8 decimals)
         uint256 price;
-        /// @notice The total amount paid by the buyer for this invoice, denominated in the payment token (native token if address(0)).
-        uint256 amountPaid;
+        /// @notice Total amount paid by the buyer for this invoice, in the payment token (use native token if `paymentToken == address(0)`).
+        uint256 balance;
         /// @notice Identifier linking the invoice to a meta invoice. bytes32(0) if not part of any meta invoice.specifically to handle payment
         bytes32 metaInvoiceId;
-        /// @notice The order ID of the invoice. For standalone invoices, this is set to bytes32(0); otherwise, contains a unique ID.
-        bytes32 orderId;
     }
 
     struct MetaInvoice {
         /// @notice Total price of all sub-invoices under this meta invoice.
         uint256 price;
-        /// @notice Token used for payment. Address zero for native currency.
-        address paymentToken;
         /// @notice List of sub-invoice IDs that are grouped under this meta invoice.
         bytes32[] subInvoiceIds;
     }
@@ -140,15 +137,6 @@ interface IAdvancedPaymentProcessor {
         uint32 releaseWindow;
         /// @notice Price or amount to be paid for the invoice.
         uint256 price;
-    }
-
-    struct Order {
-        /// @notice The address of the escrow contract associated with this order.
-        address escrow;
-        /// @notice The starting sub-invoice ID in the meta-invoice range.
-        uint256 lower;
-        /// @notice The ending sub-invoice ID in the meta-invoice range.
-        uint256 upper;
     }
 
     // ================================================================
@@ -189,20 +177,6 @@ interface IAdvancedPaymentProcessor {
     function payMetaInvoice(bytes32 orderId, address paymentToken) external payable;
 
     /**
-     * @notice Accepts a single invoice.
-     * @dev Callable only by the seller of the invoice. The invoice must be in the PAID state.
-     * @param orderId The ID of the invoice to be accepted.
-     */
-    function acceptInvoice(bytes32 orderId) external;
-
-    /**
-     * @notice Accepts multiple invoices by their IDs.
-     * @dev Callable only by the respective sellers of each invoice.
-     * @param orderIds The array of invoice IDs to be accepted.
-     */
-    function acceptInvoices(bytes32[] calldata orderIds) external;
-
-    /**
      * @notice Cancels a single invoice.
      * @dev Callable only by the seller of the invoice.
      *      Only valid for invoices in the PAID state.
@@ -217,6 +191,13 @@ interface IAdvancedPaymentProcessor {
      * @param orderId The ID of the invoice to dispute.
      */
     function createDispute(bytes32 orderId) external;
+
+    /**
+     * @notice Issues a refund for a given order.
+     * @param orderId The identifier of the order to refund.
+     * @param amount The amount to refund to the buyer.
+     */
+    function refund(bytes32 orderId, uint256 amount) external
 
     /**
      * @notice handle a dispute on a given invoice.
@@ -243,15 +224,7 @@ interface IAdvancedPaymentProcessor {
      * @dev Callable only by the marketplace. Only valid for ACCEPTED invoices.
      * @param orderId The ID of the invoice.
      */
-    function releasePayment(bytes32 orderId) external;
-
-    /**
-     * @notice Allows a buyer to claim a refund if an invoice expires without seller action.
-     * @dev Only callable by the buyer, and only if the invoice has passed the cancelation window
-     *      without being accepted or canceled. Prevents double refunds.
-     * @param orderId The ID of the invoice to claim refund for.
-     */
-    function claimExpiredInvoiceRefunds(bytes32 orderId) external;
+    function release(bytes32 orderId) external;
 
     /**
      * @notice Updates the marketplace address allowed to perform privileged operations.
@@ -397,10 +370,11 @@ interface IAdvancedPaymentProcessor {
     event DisputeCreated(bytes32 indexed orderId);
 
     /**
-     * @notice Emitted when a payment is released before the predefined release timestamp.
-     * @param orderId The ID of the invoice that was released early.
+     * @notice Emitted when a refund is issued for a specific order.
+     * @param orderId The unique identifier of the refunded order.
+     * @param amount The amount refunded to the buyer.
      */
-    event EarlyRelease(bytes32 indexed orderId);
+    event Refunded(bytes32 indexed orderId, uint256 indexed amount);
 
     /**
      * @notice Emitted when a refund is claimed for an expired invoice.
