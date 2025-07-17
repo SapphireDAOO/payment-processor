@@ -147,23 +147,12 @@ contract AdvancedPaymentProcessorHandler is Test {
         bool paid;
         for (uint256 i; i < ids.length; i++) {
             IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(ids[i]);
-            if (inv.amountPaid != 0) paid = true;
+            if (inv.balance != 0) paid = true;
         }
         if (paid || metaInv.price == 0) return;
 
         vm.prank(buyer);
         advancedPP.payMetaInvoice{ value: tokenValue }(orderId, address(0));
-    }
-
-    function acceptInvoice(uint256 index) public onlyExistingInvoice countCall(this.acceptInvoice.selector) {
-        if (singleOrderIds.length == 0) return;
-        index = bound(index, 0, singleOrderIds.length - 1);
-        bytes32 orderId = singleOrderIds[index];
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
-        if (inv.state != advancedPP.PAID()) return;
-
-        vm.prank(seller);
-        advancedPP.acceptInvoice(orderId);
     }
 
     function cancelInvoice(uint256 index) public onlyExistingInvoice countCall(this.cancelInvoice.selector) {
@@ -182,7 +171,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         index = bound(index, 0, singleOrderIds.length - 1);
         bytes32 orderId = singleOrderIds[index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
-        if (inv.state != advancedPP.ACCEPTED()) return;
+        if (inv.state != advancedPP.PAID()) return;
 
         vm.prank(buyer);
         advancedPP.createDispute(orderId);
@@ -210,10 +199,10 @@ contract AdvancedPaymentProcessorHandler is Test {
         index = bound(index, 0, singleOrderIds.length - 1);
         bytes32 orderId = singleOrderIds[index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
-        if (inv.state != advancedPP.ACCEPTED()) return;
+        if (inv.state != advancedPP.PAID()) return;
 
         vm.prank(advancedPP.getMarketplace());
-        advancedPP.releasePayment(orderId);
+        advancedPP.release(orderId);
     }
 
     function resolveDispute(uint256 index, uint256 senderIndex)
@@ -231,10 +220,8 @@ contract AdvancedPaymentProcessorHandler is Test {
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.DISPUTED()) return;
-        if (inv.resolutionInitiator == sender) return;
 
-        vm.prank(sender);
-        advancedPP.resolveDispute(orderId, sender);
+        advancedPP.resolveDispute(orderId);
     }
 
     function getTotalSingleInvoiceCreated() public view returns (uint256) {

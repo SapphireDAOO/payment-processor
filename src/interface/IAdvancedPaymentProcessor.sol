@@ -96,12 +96,8 @@ interface IAdvancedPaymentProcessor {
         address escrow;
         /// @notice Token used for payment. Address zero for native currency.
         address paymentToken;
-        /// @notice Stores the address of the first party (buyer or seller) that initiated the resolution process
-        address resolutionInitiator;
         /// @notice Current state of the invoice.
         uint8 state;
-        /// @notice Tracks the number of parties (buyer and seller) who have confirmed resolution.
-        uint8 resolutionState;
         /// @notice Timestamp when the payment was made.
         uint48 paidAt;
         /// @notice Timestamp when the invoice was created.
@@ -197,7 +193,7 @@ interface IAdvancedPaymentProcessor {
      * @param orderId The identifier of the order to refund.
      * @param amount The amount to refund to the buyer.
      */
-    function refund(bytes32 orderId, uint256 amount) external
+    function refund(bytes32 orderId, uint256 amount) external;
 
     /**
      * @notice handle a dispute on a given invoice.
@@ -211,13 +207,14 @@ interface IAdvancedPaymentProcessor {
     function handleDispute(bytes32 orderId, uint8 resolution, uint256 sellerShare) external;
 
     /**
-     * @notice Resolves a disputed invoice through mutual confirmation by both buyer and seller.
-     * @dev The first caller is recorded as the resolution initiator. The second call by the counterparty
-     *      finalizes the resolution and updates the invoice state to DISPUTE_RESOLVED.
+     * @notice Finalizes a dispute and marks the invoice as resolved.
+     * @dev Callable only by the marketplace after a dispute has been raised by the buyer.
+     *      This function is used when both parties (buyer and seller) have come to an agreement
+     *      without requiring arbitration, or when the dispute period has expired with no further action.
+     *      Transitions the invoice state from DISPUTED to DISPUTE_RESOLVED.
      * @param orderId The unique identifier of the disputed invoice.
-     * @param sender The address of the caller attempting to resolve the dispute.
      */
-    function resolveDispute(bytes32 orderId, address sender) external;
+    function resolveDispute(bytes32 orderId) external;
 
     /**
      * @notice Releases payment to the seller for a successfully completed invoice.

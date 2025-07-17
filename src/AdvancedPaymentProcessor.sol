@@ -212,7 +212,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
 
         if (inv.state != DISPUTED) revert InvalidInvoiceState();
         if (sellerShare > BASIS_POINTS) revert InvalidSellersPayoutShare();
-        if (resolution != DISPUTE_DISMISSED && resolution != DISPUTE_SETTLED && inv.resolutionState != 1) {
+        if (resolution != DISPUTE_DISMISSED && resolution != DISPUTE_SETTLED) {
             revert InvalidDisputeResolution();
         }
 
@@ -264,24 +264,12 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         emit InvoiceCanceled(orderId);
     }
 
-    /// only
+    // review this
     /// @inheritdoc IAdvancedPaymentProcessor
-    function resolveDispute(bytes32 orderId, address sender) external onlyMarketplace {
-        Invoice memory inv = invoice[orderId];
-        if (inv.state != DISPUTED) revert InvalidInvoiceState();
-        if (sender != inv.seller && sender != inv.buyer) revert UnauthorizedParticipant();
-        if (inv.resolutionInitiator != address(0) && sender == inv.resolutionInitiator) {
-            revert DuplicateResolutionAttempt();
-        }
-        if (inv.resolutionState == 1) {
-            inv.resolutionState++;
-            inv.state = DISPUTE_RESOLVED;
-            emit DisputeResolved(orderId);
-        } else {
-            inv.resolutionInitiator = sender;
-            inv.resolutionState++;
-        }
-        invoice[orderId] = inv;
+    function resolveDispute(bytes32 orderId) external onlyMarketplace {
+        if (invoice[orderId].state != DISPUTED) revert InvalidInvoiceState();
+        invoice[orderId].state = DISPUTE_RESOLVED;
+        emit DisputeResolved(orderId);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor

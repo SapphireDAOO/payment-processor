@@ -76,7 +76,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         for (uint256 i = 0; i < orderIds.length; i++) {
             IAdvancedPaymentProcessor.Invoice memory subInvoice = advancedPP.getInvoice(orderIds[i]);
-            address escrow = advancedPP.getEscrowAddress(subInvoice.seller, subInvoice.buyer, subInvoice.orderId);
+            address escrow = advancedPP.getEscrowAddress(subInvoice.seller, subInvoice.buyer, orderIds[i]);
 
             assertEq(subInvoice.state, advancedPP.PAID());
             assertEq(subInvoice.escrow, escrow);
@@ -132,7 +132,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         for (uint256 i = 0; i < orderIds.length; i++) {
             IAdvancedPaymentProcessor.Invoice memory subInvoice = advancedPP.getInvoice(orderIds[i]);
-            address escrow = advancedPP.getEscrowAddress(subInvoice.seller, subInvoice.buyer, subInvoice.orderId);
+            address escrow = advancedPP.getEscrowAddress(subInvoice.seller, subInvoice.buyer, orderIds[i]);
 
             assertEq(subInvoice.state, advancedPP.PAID());
             assertEq(subInvoice.escrow, escrow);
@@ -206,27 +206,6 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         assertApproxEqAbs(NATIVE_TOKEN_BUYER.balance - buyersBalanceBeforeCancellation, tokenValue, 2);
     }
 
-    function test_refundAfterInvoiceExpires() public {
-        uint256 price = 100e8;
-        bytes32 orderId = advancedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price, 1 days, 1 days)
-        );
-
-        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
-
-        vm.startPrank(NATIVE_TOKEN_BUYER);
-        advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
-
-        uint256 balanceBefore = NATIVE_TOKEN_BUYER.balance;
-        vm.warp(block.timestamp + 1 + 1 days);
-        advancedPP.claimExpiredInvoiceRefunds(orderId);
-
-        vm.stopPrank();
-
-        assertEq(advancedPP.getInvoice(orderId).state, advancedPP.REFUNDED());
-        assertEq(advancedPP.getInvoice(orderId).amountPaid + balanceBefore, NATIVE_TOKEN_BUYER.balance);
-    }
-
     function test_settledDispute() public {
         uint256 price = 100e8;
         bytes32 orderId = advancedPP.createSingleInvoice(
@@ -237,9 +216,6 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         vm.prank(USDC_BUYER);
         advancedPP.paySingleInvoice(orderId, address(USDC));
-
-        vm.prank(sellerOne);
-        advancedPP.acceptInvoice(orderId);
 
         uint8 settled = advancedPP.DISPUTE_SETTLED();
 
@@ -274,10 +250,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         vm.prank(NATIVE_TOKEN_BUYER);
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
 
-        vm.prank(sellerOne);
-        advancedPP.acceptInvoice(orderId);
-
-        advancedPP.releasePayment(orderId);
+        advancedPP.release(orderId);
 
         assertEq(advancedPP.getInvoice(orderId).state, advancedPP.RELEASED());
     }
