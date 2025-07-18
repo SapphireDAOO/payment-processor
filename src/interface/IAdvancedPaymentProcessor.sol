@@ -6,9 +6,6 @@ interface IAdvancedPaymentProcessor {
     //                              ERRORS
     // ================================================================
 
-    /// @notice Thrown when the caller is not the expected buyer.
-    error InvalidBuyer();
-
     /// @notice Thrown when an account attempts to withdraw or spend more than its available balance.
     error InsufficientBalance();
 
@@ -20,21 +17,6 @@ interface IAdvancedPaymentProcessor {
 
     /// @notice Thrown when trying to create an invoice that already exists.
     error InvoiceAlreadyExists();
-
-    /// @notice Thrown when an invoice has already been refunded.
-    error AlreadyRefunded();
-
-    /// @notice Thrown when the caller is not the invoice's buyer.
-    error UnauthorizedBuyer();
-
-    /// @notice Thrown when the caller is not the invoice's seller.
-    error UnauthorizedSeller();
-
-    /// @notice Thrown when the invoice is still active and certain actions are not allowed.
-    error InvoiceStillActive();
-
-    /// @notice Thrown when attempting to release or process an order that has no releasable or paid invoices.
-    error OrderIsEmpty();
 
     /// @notice Thrown when an attempt is made to create an invoice with a price of zero.
     error PriceCannotBeZero();
@@ -60,23 +42,8 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when a dispute resolution type is invalid.
     error InvalidDisputeResolution();
 
-    /// @notice Reverts if the caller is not the buyer or seller of the invoice.
-    error UnauthorizedParticipant();
-
-    /// @notice Reverts if the same participant attempts to initiate resolution more than once.
-    error DuplicateResolutionAttempt();
-
     /// @notice Thrown when the seller's payout share exceeds the allowed limit (10000 BPS).
     error InvalidSellersPayoutShare();
-
-    /// @notice Thrown when the meta-invoice payment does not match expected parameters.
-    error InvalidMetaInvoicePayment();
-
-    /// @notice Thrown when the seller fails to respond to an invoice before the deadline.
-    error InvoiceResponseTimeExpired();
-
-    /// @notice Thrown when the buyer attempts to cancel the invoice after the deadline.
-    error CancelationRequestDeadlinePassed();
 
     // ================================================================
     //                              STRUCTS
@@ -304,12 +271,6 @@ interface IAdvancedPaymentProcessor {
     event DisputeResolved(bytes32 indexed orderId);
 
     /**
-     * @notice Emitted when the seller accepts the invoice, confirming their participation.
-     * @param orderId The ID of the accepted invoice.
-     */
-    event InvoiceAccepted(bytes32 indexed orderId);
-
-    /**
      * @notice Emitted when a new invoice is created.
      * @param orderId The ID of the newly created invoice.
      * @param invoice The invoice data.
@@ -328,12 +289,6 @@ interface IAdvancedPaymentProcessor {
      * @param orderId The ID of the canceled invoice.
      */
     event InvoiceCanceled(bytes32 indexed orderId);
-
-    /**
-     * @notice Emitted when an invoice is rejected during dispute or cancelation.
-     * @param orderId The ID of the rejected invoice.
-     */
-    event InvoiceRejected(bytes32 indexed orderId);
 
     /**
      * @notice Emitted when a dispute is settled and the funds are split between buyer and seller.
@@ -372,10 +327,4 @@ interface IAdvancedPaymentProcessor {
      * @param amount The amount refunded to the buyer.
      */
     event Refunded(bytes32 indexed orderId, uint256 indexed amount);
-
-    /**
-     * @notice Emitted when a refund is claimed for an expired invoice.
-     * @param orderId The ID of the expired invoice that was refunded.
-     */
-    event ExpiredInvoiceRefunded(bytes32 indexed orderId);
 }

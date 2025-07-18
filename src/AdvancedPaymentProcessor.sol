@@ -191,7 +191,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     /// @inheritdoc IAdvancedPaymentProcessor
     function createDispute(bytes32 orderId) external {
         Invoice memory inv = invoice[orderId];
-        if (msg.sender != inv.buyer) revert UnauthorizedBuyer();
+        _validateSender(inv.buyer);
         if (inv.state != PAID) revert InvalidInvoiceState();
 
         inv.state = DISPUTED;
@@ -217,21 +217,9 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         }
 
         if (resolution == DISPUTE_SETTLED) {
-            (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _send(inv, sellerShare);
+            (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(inv, sellerShare);
             emit DisputeSettled(orderId, sellerReceivingValue, buyerReceivingValue);
         }
-    }
-
-    function _send(Invoice memory inv, uint256 sellerShare) internal returns (uint256, uint256) {
-        uint256 sellerReceivingValue = _applyBasisPoints(inv.balance, sellerShare);
-        uint256 buyerReceivingValue;
-        if (sellerShare != BASIS_POINTS) {
-            buyerReceivingValue = _applyBasisPoints(inv.balance, BASIS_POINTS - sellerShare);
-            IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, buyerReceivingValue);
-        }
-
-        _processSellerPayout(inv, sellerReceivingValue);
-        return (sellerReceivingValue, buyerReceivingValue);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -239,7 +227,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         Invoice memory inv = invoice[orderId];
         invoice[orderId].state = RELEASED;
         if (!_isReleasable(inv)) revert InvalidInvoiceState();
-        (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _send(inv, sellerShare);
+        (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(inv, sellerShare);
         emit PaymentReleased(orderId, sellerReceivingValue, buyerReceivingValue);
     }
 
@@ -256,13 +244,13 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function cancelInvoice(bytes32 orderId) public onlyMarketplace {
+    function cancelInvoice(bytes32 orderId) public {
         if (invoice[orderId].state != INITIATED) revert InvalidInvoiceState();
+        _validateSender(invoice[orderId].buyer);
         invoice[orderId].state = CANCELED;
         emit InvoiceCanceled(orderId);
     }
 
-    // review this
     /// @inheritdoc IAdvancedPaymentProcessor
     function resolveDispute(bytes32 orderId) external onlyMarketplace {
         if (invoice[orderId].state != DISPUTED) revert InvalidInvoiceState();
@@ -299,20 +287,12 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /**
-     * @notice Validates an invoice payment request and computes the required payment amount in tokens.
-     * @param inv The invoice to validate against.
-     * @param paymentToken The token address used for payment (use address(0) for native token).
-     * @return price The required amount in the given payment token based on the invoice's USD price.
+     * @notice Validates that the caller is the authorized sender.
+     * @dev Reverts with Unauthorized() if msg.sender is not the given address.
+     * @param authorizedSender The address allowed to call the function.
      */
-    function _validatePayment(Invoice memory inv, address paymentToken) internal view returns (uint256) {
-        if (msg.sender == inv.seller) revert BuyerCannotBeSeller();
-        uint256 price = getTokenValueFromUsd(paymentToken, inv.price);
-
-        if (block.timestamp > inv.createdAt + inv.invoiceExpiryDuration) revert InvoiceExpired();
-
-        if (inv.state != INITIATED) revert InvalidInvoiceState();
-
-        return price;
+    function _validateSender(address authorizedSender) internal view {
+        if (msg.sender != authorizedSender && msg.sender != marketplace) revert Unauthorized();
     }
 
     /**
@@ -329,7 +309,10 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      * - Transfers tokens to escrow if the payment is in ERC20.
      */
     function _invoicePayment(Invoice memory inv, bytes32 orderId, address paymentToken, uint256 value) internal {
-        uint256 price = _validatePayment(inv, paymentToken);
+        if (msg.sender == inv.seller) revert BuyerCannotBeSeller();
+        uint256 price = getTokenValueFromUsd(paymentToken, inv.price);
+        if (block.timestamp > inv.createdAt + inv.invoiceExpiryDuration) revert InvoiceExpired();
+        if (inv.state != INITIATED) revert InvalidInvoiceState();
 
         bool isNative = paymentToken == address(0);
 
@@ -397,6 +380,27 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      */
     function _applyBasisPoints(uint256 amount, uint256 basisPoints) internal pure returns (uint256) {
         return (amount * basisPoints) / BASIS_POINTS;
+    }
+
+    /**
+     * @notice Distributes the remaining invoice balance between the seller and the buyer.
+     * @dev Transfers the buyer's refund (if any) and the seller's payout based on the given share.
+     *      The refund is only processed if the seller is not entitled to the full balance.
+     * @param inv The invoice containing payment and escrow details.
+     * @param sellerShare The portion of the invoice balance (in basis points) to be sent to the seller.
+     * @return sellerReceivingValue The amount sent to the seller.
+     * @return buyerReceivingValue The amount refunded to the buyer (zero if sellerShare == 10000).
+     */
+    function _distributeFunds(Invoice memory inv, uint256 sellerShare) internal returns (uint256, uint256) {
+        uint256 sellerReceivingValue = _applyBasisPoints(inv.balance, sellerShare);
+        uint256 buyerReceivingValue;
+        if (sellerShare != BASIS_POINTS) {
+            buyerReceivingValue = _applyBasisPoints(inv.balance, BASIS_POINTS - sellerShare);
+            IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, buyerReceivingValue);
+        }
+
+        _processSellerPayout(inv, sellerReceivingValue);
+        return (sellerReceivingValue, buyerReceivingValue);
     }
 
     /**

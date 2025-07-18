@@ -17,6 +17,8 @@ import {
 contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
     using { applyBasisPoints, getEscrowAddress } for AdvancedPaymentProcessor;
 
+    error Unauthorized();
+
     function test_Initialization() public view {
         assertEq(advancedPP.getNextInvoiceId(), 1);
         assertEq(advancedPP.getNextMetaInvoiceId(), 1);
@@ -107,23 +109,23 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidNativePayment.selector);
         advancedPP.paySingleInvoice{ value: 0.001 ether }(orderId, address(0));
 
-        // uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
-        // advancedPP.paySingleInvoice{ value: amountInToken }(orderId, address(0));
-        // vm.stopPrank();
+        uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
+        advancedPP.paySingleInvoice{ value: amountInToken }(orderId, address(0));
+        vm.stopPrank();
 
-        // IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
 
-        // assertEq(inv.escrow.balance, amountInToken);
-        // assertEq(inv.paymentToken, address(0));
-        // assertEq(inv.state, advancedPP.PAID());
+        assertEq(inv.escrow.balance, amountInToken);
+        assertEq(inv.paymentToken, address(0));
+        assertEq(inv.state, advancedPP.PAID());
 
-        // orderId = advancedPP.createSingleInvoice(
-        //     getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price, 1 days, 1 days)
-        // );
+        orderId = advancedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price, 1 days, 1 days)
+        );
 
-        // vm.warp(block.timestamp + 1 + 1 days);
-        // vm.expectRevert(IAdvancedPaymentProcessor.InvoiceExpired.selector);
-        // advancedPP.paySingleInvoice{ value: price }(orderId, address(0));
+        vm.warp(block.timestamp + 1 + 1 days);
+        vm.expectRevert(IAdvancedPaymentProcessor.InvoiceExpired.selector);
+        advancedPP.paySingleInvoice{ value: price }(orderId, address(0));
     }
 
     function test_nativeTokenPaymentForMetaInvoice() public {
@@ -316,18 +318,15 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
-        vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedBuyer.selector);
+        vm.prank(sellerOne);
+        vm.expectRevert(Unauthorized.selector);
         advancedPP.createDispute(orderId);
 
         vm.startPrank(buyerOne);
-        vm.expectRevert(IAdvancedPaymentProcessor.UnauthorizedBuyer.selector);
-        advancedPP.createDispute(orderId);
-
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
 
         vm.warp(block.timestamp + 25 hours);
 
-        vm.warp(block.timestamp - 20 hours);
         advancedPP.createDispute(orderId);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
