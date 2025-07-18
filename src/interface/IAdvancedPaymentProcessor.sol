@@ -57,9 +57,6 @@ interface IAdvancedPaymentProcessor {
     /// @dev This occurs when a computed meta-invoice ID (hash) is already assigned in storage.
     error MetaInvoiceAlreadyExists();
 
-    /// @notice Thrown when the dispute window has already passed.
-    error DisputeWindowExpired();
-
     /// @notice Thrown when a dispute resolution type is invalid.
     error InvalidDisputeResolution();
 

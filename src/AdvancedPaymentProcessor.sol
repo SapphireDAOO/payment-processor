@@ -140,7 +140,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         for (uint256 i = 0; i < length; i++) {
             totalPrice += param[i].price;
             (Invoice memory inv, bytes32 subOrderId) = _createInvoice(startInvoiceId + i, metaInvoiceOrderId, param[i]);
-            bytes32 orderId = _computeOrderId(inv.seller, metaInvoiceOrderId);
 
             invoice[subOrderId] = inv;
             metaInvoice[metaInvoiceOrderId].subInvoiceIds.push(subOrderId);
@@ -163,7 +162,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
 
         Invoice memory inv = invoice[orderId];
-        _invoicePayment(inv, orderId, paymentToken);
+        _invoicePayment(inv, orderId, paymentToken, msg.value);
         invoice[orderId] = inv;
     }
 
@@ -171,7 +170,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     function payMetaInvoice(bytes32 orderId, address paymentToken) external payable {
         if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
         MetaInvoice memory metaInv = metaInvoice[orderId];
-        uint256 price = getTokenValueFromUsd(paymentToken, metaInv.price);
 
         if (metaInv.price == 0) revert InvoiceDoesNotExist();
 
@@ -186,7 +184,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
             if (inv.state != INITIATED) continue;
             uint256 invPrice = getTokenValueFromUsd(paymentToken, inv.price);
 
-            _invoicePayment(inv, subOrderId, paymentToken);
+            uint256 value = paymentToken == address(0) ? invPrice : 0;
+            _invoicePayment(inv, subOrderId, paymentToken, value);
 
             invoice[subOrderId] = inv;
             if (i == subOrderIds.length - 1) done = true;
@@ -240,6 +239,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     /// @inheritdoc IAdvancedPaymentProcessor
     function release(bytes32 orderId) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
+        invoice[orderId].state = RELEASED;
         if (!_isReleasable(inv)) revert InvalidInvoiceState();
         _processSellerPayout(inv, inv.balance);
         emit PaymentReleased(orderId);
@@ -304,19 +304,14 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      * @notice Validates an invoice payment request and computes the required payment amount in tokens.
      * @param inv The invoice to validate against.
      * @param paymentToken The token address used for payment (use address(0) for native token).
-     * @param value The amount of native token sent with the transaction.
      * @return price The required amount in the given payment token based on the invoice's USD price.
      */
-    function _validatePayment(Invoice memory inv, address paymentToken, uint256 value)
-        internal
-        view
-        returns (uint256)
-    {
+    function _validatePayment(Invoice memory inv, address paymentToken) internal view returns (uint256) {
         if (msg.sender == inv.seller) revert BuyerCannotBeSeller();
         uint256 price = getTokenValueFromUsd(paymentToken, inv.price);
 
         if (block.timestamp > inv.createdAt + inv.invoiceExpiryDuration) revert InvoiceExpired();
-        if (value > 0 && value != price) revert InvalidNativePayment();
+
         if (inv.state != INITIATED) revert InvalidInvoiceState();
 
         return price;
@@ -327,6 +322,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      * @param inv The invoice to be paid.
      * @param orderId The key of the invoice being paid.
      * @param paymentToken The address of the payment token (use address(0) for the native token).
+     *  @param value The amount of native token sent with the transaction.
      *
      * @dev
      * - Converts the USD price to payment token amount using Chainlink oracles.
@@ -334,17 +330,19 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      * - Creates an escrow contract and updates the invoice with payment info.
      * - Transfers tokens to escrow if the payment is in ERC20.
      */
-    function _invoicePayment(Invoice memory inv, bytes32 orderId, address paymentToken) internal {
-        uint256 price = _validatePayment(inv, paymentToken, inv.price);
+    function _invoicePayment(Invoice memory inv, bytes32 orderId, address paymentToken, uint256 value) internal {
+        uint256 price = _validatePayment(inv, paymentToken);
 
-        uint256 value = paymentToken == address(0) ? price : 0;
+        bool isNative = paymentToken == address(0);
+
+        if (isNative && value != price) revert InvalidNativePayment();
 
         address escrowAddress = _create(
             EscrowCreationParams({
                 seller: inv.seller,
                 buyer: msg.sender,
                 orderId: orderId,
-                value: value,
+                value: isNative ? value : 0,
                 paymentToken: paymentToken
             })
         );
@@ -355,7 +353,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         inv.paidAt = (block.timestamp).toUint48();
         inv.balance = price;
 
-        if (value == 0) {
+        if (!isNative) {
             inv.paymentToken = paymentToken;
             paymentToken.safeTransferFrom(msg.sender, escrowAddress, price);
         }
@@ -401,17 +399,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      */
     function _applyBasisPoints(uint256 amount, uint256 basisPoints) internal pure returns (uint256) {
         return (amount * basisPoints) / BASIS_POINTS;
-    }
-
-    /**
-     * @notice Computes a deterministic order ID for a seller within a given meta-invoice.
-     * @dev This ensures all sub-invoices from the same seller in a meta-invoice share the same order ID.
-     * @param seller The address of the seller.
-     * @param metaInvoiceId The unique identifier of the meta-invoice.
-     * @return A keccak256 hash representing the shared order ID for the seller within the meta-invoice.
-     */
-    function _computeOrderId(address seller, bytes32 metaInvoiceId) internal pure returns (bytes32) {
-        return keccak256(abi.encode(seller, metaInvoiceId));
     }
 
     /**

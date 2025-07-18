@@ -215,8 +215,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         senderIndex = bound(senderIndex, 0, 1);
         bytes32 orderId = singleOrderIds[index];
 
-        address[2] memory possibleSenders = [buyer, seller];
-        address sender = possibleSenders[senderIndex];
+
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.DISPUTED()) return;
