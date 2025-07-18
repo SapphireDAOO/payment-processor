@@ -202,7 +202,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (inv.state != advancedPP.PAID()) return;
 
         vm.prank(advancedPP.getMarketplace());
-        advancedPP.release(orderId);
+        advancedPP.release(orderId, 10_000);
     }
 
     function resolveDispute(uint256 index, uint256 senderIndex)
@@ -214,8 +214,6 @@ contract AdvancedPaymentProcessorHandler is Test {
         index = bound(index, 0, singleOrderIds.length - 1);
         senderIndex = bound(senderIndex, 0, 1);
         bytes32 orderId = singleOrderIds[index];
-
-
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.DISPUTED()) return;

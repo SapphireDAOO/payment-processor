@@ -83,13 +83,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      * @dev Stores metadata for grouped payments consisting of multiple sub-invoices.
      *      Each MetaInvoice contains the total price and all associated sub-invoice IDs.
      */
-    mapping(bytes32 metaInvoiceId => MetaInvoice) private metaInvoice;
-
-    /**
-     * @notice Maps an order ID to a mapping of invoice index to sub-order ID
-     * @dev Allows tracking of sub-order IDs associated with each order at specific indices
-     */
-    mapping(bytes32 => mapping(uint256 index => bytes32)) private orderIdToSubOrderId;
+    mapping(bytes32 metaInvoiceId => MetaInvoice invoice) private metaInvoice;
 
     /**
      * @notice Restricts function access to the authorized marketplace address.
@@ -223,26 +217,30 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         }
 
         if (resolution == DISPUTE_SETTLED) {
-            uint256 sellerReceivingValue = _applyBasisPoints(inv.balance, sellerShare);
-            uint256 buyerReceivingValue;
-            if (sellerShare != BASIS_POINTS) {
-                buyerReceivingValue = _applyBasisPoints(inv.balance, BASIS_POINTS - sellerShare);
-                IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, buyerReceivingValue);
-            }
-
-            _processSellerPayout(inv, sellerReceivingValue);
-
+            (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _send(inv, sellerShare);
             emit DisputeSettled(orderId, sellerReceivingValue, buyerReceivingValue);
         }
     }
 
+    function _send(Invoice memory inv, uint256 sellerShare) internal returns (uint256, uint256) {
+        uint256 sellerReceivingValue = _applyBasisPoints(inv.balance, sellerShare);
+        uint256 buyerReceivingValue;
+        if (sellerShare != BASIS_POINTS) {
+            buyerReceivingValue = _applyBasisPoints(inv.balance, BASIS_POINTS - sellerShare);
+            IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, buyerReceivingValue);
+        }
+
+        _processSellerPayout(inv, sellerReceivingValue);
+        return (sellerReceivingValue, buyerReceivingValue);
+    }
+
     /// @inheritdoc IAdvancedPaymentProcessor
-    function release(bytes32 orderId) external onlyMarketplace {
+    function release(bytes32 orderId, uint256 sellerShare) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
         invoice[orderId].state = RELEASED;
         if (!_isReleasable(inv)) revert InvalidInvoiceState();
-        _processSellerPayout(inv, inv.balance);
-        emit PaymentReleased(orderId);
+        (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _send(inv, sellerShare);
+        emit PaymentReleased(orderId, sellerReceivingValue, buyerReceivingValue);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor

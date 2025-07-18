@@ -163,7 +163,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
 
         uint256 balanceBefore = sellerOne.balance;
-        advancedPP.release(orderId);
+        advancedPP.release(orderId, 10_000);
 
         uint256 expectedValue = tokenValue - ((tokenValue * FEE) / advancedPP.BASIS_POINTS());
 

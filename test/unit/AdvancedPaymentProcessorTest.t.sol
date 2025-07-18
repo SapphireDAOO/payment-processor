@@ -454,15 +454,15 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.release(orderId);
+        advancedPP.release(orderId, 10_000);
 
         vm.prank(buyerOne);
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
 
-        advancedPP.release(orderId);
+        advancedPP.release(orderId, 10_000);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.release(orderId);
+        advancedPP.release(orderId, 10_000);
 
         assertEq(advancedPP.getInvoice(orderId).state, advancedPP.RELEASED());
     }
@@ -497,7 +497,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
 
         for (uint256 i = 0; i < orderIds.length; i++) {
-            advancedPP.release(orderIds[i]);
+            advancedPP.release(orderIds[i], 10_000);
         }
 
         for (uint256 i = 0; i < orderIds.length; i++) {
@@ -507,7 +507,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(balanceBefore - tokenAmount, buyerTwo.balance);
     }
 
-    function test_release_after_cancelation() public {
+    function test_release_after_cancelation_for_meta_invoice() public {
         address[] memory sellers = new address[](3);
         sellers[0] = sellerOne;
         sellers[1] = sellerOne;
@@ -544,7 +544,56 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(balanceBefore - tokenAmount, buyerOne.balance);
     }
 
-    function _computeOrderId(address seller, bytes32 metaInvoiceId) internal pure returns (bytes32) {
-        return keccak256(abi.encode(seller, metaInvoiceId));
+    function test_refund_and_release() public {
+        uint256 price = 1500e8;
+        bytes32 orderId = advancedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price, 1 days, 1 days)
+        );
+        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
+
+        vm.prank(buyerOne);
+        advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
+
+        uint256 buyerBalance = buyerOne.balance;
+
+        uint256 refundableAmount = (tokenValue * 67) / 100;
+        uint256 releaseableAmount = tokenValue - refundableAmount;
+
+        advancedPP.refund(orderId, refundableAmount);
+
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
+        assertEq(inv.balance, releaseableAmount);
+        assertEq(buyerOne.balance, buyerBalance + refundableAmount);
+
+        releaseableAmount -= (releaseableAmount * ppStorage.getFeeRate()) / advancedPP.BASIS_POINTS();
+
+        uint256 sellerBalance = sellerOne.balance;
+        advancedPP.release(orderId, 10_000);
+        assertEq(sellerBalance + releaseableAmount, sellerOne.balance);
+    }
+
+    function test_partial_refund() public {
+        uint256 price = 1500e8;
+        bytes32 orderId = advancedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price, 1 days, 1 days)
+        );
+        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(mockUsdc), price);
+
+        vm.prank(buyerOne);
+        advancedPP.paySingleInvoice(orderId, address(mockUsdc));
+
+        uint256 sellerShare = 7_000;
+
+        uint256 releaseableAmount = (tokenValue * sellerShare) / 10_000;
+        uint256 refundableAmount = tokenValue - releaseableAmount;
+
+        uint256 buyerBalance = IERC20(mockUsdc).balanceOf(buyerOne);
+        uint256 sellerBalance = IERC20(mockUsdc).balanceOf(sellerOne);
+        advancedPP.release(orderId, sellerShare);
+
+        releaseableAmount -= (releaseableAmount * ppStorage.getFeeRate()) / advancedPP.BASIS_POINTS();
+
+        assertEq(IERC20(mockUsdc).balanceOf(buyerOne), buyerBalance + refundableAmount);
+        assertEq(IERC20(mockUsdc).balanceOf(sellerOne), sellerBalance + releaseableAmount);
     }
 }
