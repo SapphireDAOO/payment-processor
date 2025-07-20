@@ -22,6 +22,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     using { SafeCastLib.toUint256 } for int256;
     using { FixedPointMathLib.mulDiv } for uint256;
 
+    /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public ppStorage;
 
     /// @notice The next available meta-invoice ID to be assigned.
@@ -226,6 +227,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     function release(bytes32 orderId, uint256 sellerShare) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
         invoice[orderId].state = RELEASED;
+         invoice[orderId].balance = 0;
         if (!_isReleasable(inv)) revert InvalidInvoiceState();
         (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(inv, sellerShare);
         emit PaymentReleased(orderId, sellerReceivingValue, buyerReceivingValue);
@@ -311,7 +313,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     function _invoicePayment(Invoice memory inv, bytes32 orderId, address paymentToken, uint256 value) internal {
         if (msg.sender == inv.seller) revert BuyerCannotBeSeller();
         uint256 price = getTokenValueFromUsd(paymentToken, inv.price);
-        if (block.timestamp > inv.createdAt + inv.invoiceExpiryDuration) revert InvoiceExpired();
         if (inv.state != INITIATED) revert InvalidInvoiceState();
 
         bool isNative = paymentToken == address(0);
@@ -333,6 +334,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         inv.escrow = escrowAddress;
         inv.paidAt = (block.timestamp).toUint48();
         inv.balance = price;
+        inv.amountPaid = price;
 
         if (!isNative) {
             inv.paymentToken = paymentToken;
@@ -358,10 +360,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         inv.seller = param.seller;
         inv.price = param.price;
         inv.createdAt = (block.timestamp).toUint48();
-        inv.timeBeforeCancelation = param.timeBeforeCancelation;
         inv.metaInvoiceId = metaInvoiceId;
         inv.state = INITIATED;
-        inv.invoiceExpiryDuration = param.invoiceExpiryDuration;
         inv.invoiceId = id;
 
         bytes32 orderId = keccak256(abi.encode(param.orderId));
@@ -426,7 +426,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      * @return A keccak256 hash representing the deterministic meta-invoice order ID.
      */
     function _computeMetaInvoiceOrderId(uint256 lower, uint256 upper, uint256 salt) internal view returns (bytes32) {
-        return keccak256(abi.encode(lower, upper, salt, block.timestamp));
+        return keccak256(abi.encode(lower, upper, salt, address(this)));
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor

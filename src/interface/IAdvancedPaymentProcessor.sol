@@ -12,9 +12,6 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when the caller lacks the required role or permission.
     error NotAuthorized();
 
-    /// @notice Thrown when attempting to interact with an expired invoice.
-    error InvoiceExpired();
-
     /// @notice Thrown when trying to create an invoice that already exists.
     error InvoiceAlreadyExists();
 
@@ -66,13 +63,11 @@ interface IAdvancedPaymentProcessor {
         uint48 paidAt;
         /// @notice Timestamp when the invoice was created.
         uint48 createdAt;
-        /// @notice Time window (in seconds) after which the invoice expires if unpaid.
-        uint32 invoiceExpiryDuration;
-        /// @notice Time window (in seconds) after payment within which the seller must respond.
-        uint32 timeBeforeCancelation;
+        /// @notice Total amount paid by the buyer for this invoice, in the payment token (use native token if `paymentToken == address(0)`).
+        uint256 amountPaid;
         /// @notice Invoice amount expressed in USD (8 decimals)
         uint256 price;
-        /// @notice Total amount paid by the buyer for this invoice, in the payment token (use native token if `paymentToken == address(0)`).
+        /// @notice Returns the current balance of the escrow associated with the order, accounting for the total amount paid minus any refunds or released amounts.
         uint256 balance;
         /// @notice Identifier linking the invoice to a meta invoice. bytes32(0) if not part of any meta invoice.specifically to handle payment
         bytes32 metaInvoiceId;
@@ -86,15 +81,10 @@ interface IAdvancedPaymentProcessor {
     }
 
     struct InvoiceCreationParam {
+        /// @notice A unique string identifier for the invoice.
         string orderId;
         /// @notice Address of the seller.
         address seller;
-        /// @notice Duration (in seconds) after which the invoice expires if unpaid.
-        uint32 invoiceExpiryDuration;
-        /// @notice Duration (in seconds) after payment within which the seller must respond.
-        uint32 timeBeforeCancelation;
-        /// @notice Duration (in seconds) after payment before funds are auto-released unless disputed.
-        uint32 releaseWindow;
         /// @notice Price or amount to be paid for the invoice.
         uint256 price;
     }

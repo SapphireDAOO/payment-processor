@@ -51,34 +51,19 @@ contract AdvancedPaymentProcessorHandler is Test {
         _;
     }
 
-    function createInvoice(uint256 price, uint256 timeBeforeCancelation, uint256 releaseWindow)
-        public
-        countCall(this.createInvoice.selector)
-    {
+    function createInvoice(uint256 price) public countCall(this.createInvoice.selector) {
         if (advancedPP.getInvoice(keccak256(abi.encode(totalSingleInvoiceCreated))).state != 0) return;
-        timeBeforeCancelation = bound(timeBeforeCancelation, 1 days, 30 days);
-        releaseWindow = bound(releaseWindow, 1 days, 30 days);
         price = bound(price, 1e8, 1_000e8);
 
         vm.prank(advancedPP.getMarketplace());
 
-        bytes32 id = advancedPP.createSingleInvoice(
-            getInvoiceCreationParam(
-                totalSingleInvoiceCreated, seller, price, timeBeforeCancelation.toUint32(), releaseWindow.toUint32()
-            )
-        );
+        bytes32 id = advancedPP.createSingleInvoice(getInvoiceCreationParam(totalSingleInvoiceCreated, seller, price));
 
         singleAndSubInvoice.push(id);
         totalSingleInvoiceCreated++;
     }
 
-    function createMetaInvoice(uint256 priceO, uint256 priceT, uint256 timeBeforeCancelation, uint256 releaseWindow)
-        public
-        countCall(this.createMetaInvoice.selector)
-    {
-        timeBeforeCancelation = bound(timeBeforeCancelation, 1 days, 30 days);
-        releaseWindow = bound(releaseWindow, 1 days, 30 days);
-
+    function createMetaInvoice(uint256 priceO, uint256 priceT) public countCall(this.createMetaInvoice.selector) {
         priceO = bound(priceO, 1e8, 1_000e8);
         priceT = bound(priceT, 1e8, 1_000e8);
 
@@ -90,16 +75,8 @@ contract AdvancedPaymentProcessorHandler is Test {
         prices[0] = priceO;
         prices[1] = priceT;
 
-        uint32[] memory responseTime = new uint32[](2);
-        responseTime[0] = timeBeforeCancelation.toUint32();
-        responseTime[1] = timeBeforeCancelation.toUint32();
-
-        uint32[] memory releaseWindows = new uint32[](2);
-        releaseWindows[0] = releaseWindow.toUint32();
-        releaseWindows[1] = releaseWindow.toUint32();
-
         (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
-            getInvoiceCreationParams(totalSingleInvoiceCreated, sellers, prices, responseTime, releaseWindows);
+            getInvoiceCreationParams(totalSingleInvoiceCreated, sellers, prices);
 
         vm.prank(advancedPP.getMarketplace());
         bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
@@ -194,15 +171,29 @@ contract AdvancedPaymentProcessorHandler is Test {
         advancedPP.handleDispute(orderId, resolution.toUint8(), sellerShare);
     }
 
-    function releasePayment(uint256 index) public onlyExistingInvoice countCall(this.releasePayment.selector) {
+    function refund(uint256 index, uint256 sellerShare) public onlyExistingInvoice countCall(this.refund.selector) {
         if (singleOrderIds.length == 0) return;
         index = bound(index, 0, singleOrderIds.length - 1);
+        sellerShare = bound(sellerShare, 100, 10_000);
+        bytes32 orderId = singleOrderIds[index];
+
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
+        if (inv.state != advancedPP.PAID()) return;
+
+        vm.prank(advancedPP.getMarketplace());
+        advancedPP.refund(orderId, sellerShare);
+    }
+
+    function release(uint256 index, uint256 sellerShare) public onlyExistingInvoice countCall(this.release.selector) {
+        if (singleOrderIds.length == 0) return;
+        index = bound(index, 0, singleOrderIds.length - 1);
+        sellerShare = bound(sellerShare, 100, 10_000);
         bytes32 orderId = singleOrderIds[index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.PAID()) return;
 
         vm.prank(advancedPP.getMarketplace());
-        advancedPP.release(orderId, 10_000);
+        advancedPP.release(orderId, sellerShare);
     }
 
     function resolveDispute(uint256 index, uint256 senderIndex)
@@ -233,15 +224,14 @@ contract AdvancedPaymentProcessorHandler is Test {
         console.log("Advanced Payment processor Call Summary:");
         console.log("-------------------");
         console.log("Create Invoice:", calls[this.createInvoice.selector]);
-        // console.log("Create Meta Invoice:", calls[this.createMetaInvoice.selector]);
-        // console.log("Make Single Invoice Payment:", calls[this.makeSingleInvoicePayment.selector]);
-        // console.log("Make Meta Invoice Payment:", calls[this.makeMetaInvoicePayment.selector]);
-        // console.log("Accept Invoice:", calls[this.acceptInvoice.selector]);
-        // console.log("Cancel Invoice:", calls[this.cancelInvoice.selector]);
-        // console.log("Handle Cancelation:", calls[this.handleCancelation.selector]);
-        // console.log("Create Dispute:", calls[this.createDispute.selector]);
-        // console.log("Handle Dispute:", calls[this.handleDispute.selector]);
-        // console.log("Resolve Dispute:", calls[this.resolveDispute.selector]);
-        // console.log("Release Payment:", calls[this.releasePayment.selector]);
+        console.log("Create Meta Invoice:", calls[this.createMetaInvoice.selector]);
+        console.log("Make Single Invoice Payment:", calls[this.makeSingleInvoicePayment.selector]);
+        console.log("Make Meta Invoice Payment:", calls[this.makeMetaInvoicePayment.selector]);
+        console.log("Cancel Invoice:", calls[this.cancelInvoice.selector]);
+        console.log("Create Dispute:", calls[this.createDispute.selector]);
+        console.log("Handle Dispute:", calls[this.handleDispute.selector]);
+        console.log("Resolve Dispute:", calls[this.resolveDispute.selector]);
+        console.log("Refund Payment:", calls[this.refund.selector]);
+        console.log("Release Payment:", calls[this.release.selector]);
     }
 }
