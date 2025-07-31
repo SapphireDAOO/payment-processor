@@ -145,9 +145,9 @@ interface IAdvancedPaymentProcessor {
     /**
      * @notice Issues a refund for a given order.
      * @param orderId The identifier of the order to refund.
-     * @param amount The amount to refund to the buyer.
+     * @param refundBps The portion of the invoice price (in basis points) to be refunded to the buyer.
      */
-    function refund(bytes32 orderId, uint256 amount) external;
+    function refund(bytes32 orderId, uint256 refundBps) external;
 
     /**
      * @notice handle a dispute on a given invoice.

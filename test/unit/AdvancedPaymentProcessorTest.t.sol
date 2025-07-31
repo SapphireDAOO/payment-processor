@@ -502,7 +502,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint256 refundableAmount = (tokenValue * 67) / 100;
         uint256 releaseableAmount = tokenValue - refundableAmount;
 
-        advancedPP.refund(orderId, refundableAmount);
+        uint256 refundBps = 6700;
+
+        advancedPP.refund(orderId, refundBps);
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         assertEq(inv.balance, releaseableAmount);
@@ -537,5 +539,24 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         assertEq(IERC20(mockUsdc).balanceOf(buyerOne), buyerBalance + refundableAmount);
         assertEq(IERC20(mockUsdc).balanceOf(sellerOne), sellerBalance + releaseableAmount);
+    }
+
+    function test_MetaInvoiceTotalPrice() public {
+        address[] memory sellers = new address[](3);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerTwo;
+        sellers[2] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 0.01 ether;
+        prices[1] = 0.02 ether;
+        prices[2] = 0.02 ether;
+
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param,) =
+            getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
+
+        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+        IAdvancedPaymentProcessor.MetaInvoice memory metaInv = advancedPP.getMetaInvoice(metaInvoiceOrderId);
+        assertEq(metaInv.price, prices[0] + prices[1] + prices[2]);
     }
 }

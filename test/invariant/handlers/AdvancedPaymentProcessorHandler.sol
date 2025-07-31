@@ -171,17 +171,17 @@ contract AdvancedPaymentProcessorHandler is Test {
         advancedPP.handleDispute(orderId, resolution.toUint8(), sellerShare);
     }
 
-    function refund(uint256 index, uint256 sellerShare) public onlyExistingInvoice countCall(this.refund.selector) {
+    function refund(uint256 index, uint256 share) public onlyExistingInvoice countCall(this.refund.selector) {
         if (singleOrderIds.length == 0) return;
         index = bound(index, 0, singleOrderIds.length - 1);
-        sellerShare = bound(sellerShare, 100, 10_000);
+        share = bound(share, 100, 10_000);
         bytes32 orderId = singleOrderIds[index];
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.PAID()) return;
 
         vm.prank(advancedPP.getMarketplace());
-        advancedPP.refund(orderId, sellerShare);
+        advancedPP.refund(orderId, share);
     }
 
     function release(uint256 index, uint256 sellerShare) public onlyExistingInvoice countCall(this.release.selector) {

@@ -117,8 +117,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function createSingleInvoice(InvoiceCreationParam memory param) external onlyMarketplace returns (bytes32) {
-        (Invoice memory inv, bytes32 orderId) = _createInvoice(ppStorage.updateInvoiceId(1), 0, param);
-        emit InvoiceCreated(orderId, inv);
+        bytes32 orderId = _createInvoice(ppStorage.updateInvoiceId(1), 0, param);
         return orderId;
     }
 
@@ -134,11 +133,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
 
         for (uint256 i = 0; i < length; i++) {
             totalPrice += param[i].price;
-            (Invoice memory inv, bytes32 subOrderId) = _createInvoice(startInvoiceId + i, metaInvoiceOrderId, param[i]);
-
-            invoice[subOrderId] = inv;
+            bytes32 subOrderId = _createInvoice(startInvoiceId + i, metaInvoiceOrderId, param[i]);
             metaInvoice[metaInvoiceOrderId].subInvoiceIds.push(subOrderId);
-            emit InvoiceCreated(subOrderId, inv);
         }
 
         metaInvoice[metaInvoiceOrderId].price = totalPrice;
@@ -227,19 +223,21 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     function release(bytes32 orderId, uint256 sellerShare) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
         invoice[orderId].state = RELEASED;
-         invoice[orderId].balance = 0;
+        invoice[orderId].balance = 0;
         if (!_isReleasable(inv)) revert InvalidInvoiceState();
         (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(inv, sellerShare);
         emit PaymentReleased(orderId, sellerReceivingValue, buyerReceivingValue);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function refund(bytes32 orderId, uint256 amount) external onlyMarketplace {
+    function refund(bytes32 orderId, uint256 refundBps) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
         if (inv.state != PAID) revert InvalidInvoiceState();
-        if (amount > inv.balance) revert InsufficientBalance();
-        inv.balance -= amount;
 
+        uint256 amount = _applyBasisPoints(inv.balance, refundBps);
+        if (amount > inv.balance) revert InsufficientBalance();
+
+        inv.balance -= amount;
         invoice[orderId] = inv;
         IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, amount);
         emit Refunded(orderId, amount);
@@ -348,12 +346,11 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
      * @notice Creates a new invoice and stores it in contract state.
      * @param id The unique ID to assign to the new invoice.
      * @param param The parameters required to create the invoice.
-     * @return inv The newly created invoice.
      * @return orderId The keccak256 hash representing the invoice ID.
      */
     function _createInvoice(uint256 id, bytes32 metaInvoiceId, InvoiceCreationParam memory param)
         internal
-        returns (Invoice memory, bytes32)
+        returns (bytes32)
     {
         if (param.price == 0) revert PriceCannotBeZero();
         Invoice memory inv;
@@ -369,7 +366,9 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
         if (invoice[orderId].createdAt != 0) revert InvoiceAlreadyExists();
 
         invoice[orderId] = inv;
-        return (inv, orderId);
+
+        emit InvoiceCreated(orderId, inv);
+        return orderId;
     }
 
     /**
