@@ -3,12 +3,12 @@ pragma solidity 0.8.28;
 
 import { Escrow, IEscrow } from "./Escrow.sol";
 
-import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
+import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 
-contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
+contract SimplePaymentProcessor is ISimplePaymentProcessor {
     using SafeCastLib for uint256;
 
     IPaymentProcessorStorage public immutable ppStorage;
@@ -66,7 +66,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
      */
     constructor(address paymentProcessorStorageAddress, uint256 initialDefaultHoldPeriod, uint256 minimumInvoicePrice) {
         ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
-        _initializeOwner(msg.sender);
         setDefaultHoldPeriod(initialDefaultHoldPeriod);
         setMinimumInvoiceValue(minimumInvoicePrice);
     }
@@ -130,7 +129,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
             revert AcceptanceWindowExceeded();
         }
         if (invoice.seller != msg.sender) {
-            revert Unauthorized();
+            revert NotAuthorized();
         }
         if (invoice.status != PAID) {
             revert InvoiceNotPaid();
@@ -141,7 +140,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
     function cancelInvoice(bytes32 orderId) external {
         Invoice memory invoice = invoiceData[orderId];
         if (invoice.seller != msg.sender) {
-            revert Unauthorized();
+            revert NotAuthorized();
         }
         if (invoice.status != CREATED) {
             revert InvalidInvoiceState(invoice.status);
@@ -159,7 +158,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
             revert InvalidInvoiceState(invoice.status);
         }
         if (invoice.seller != msg.sender) {
-            revert Unauthorized();
+            revert NotAuthorized();
         }
         if (block.timestamp < invoice.releaseAt) {
             revert HoldPeriodHasNotBeenExceeded();
@@ -222,7 +221,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setInvoiceReleaseTime(bytes32 orderId, uint32 holdPeriod) external onlyOwner {
+    function setInvoiceReleaseTime(bytes32 orderId, uint32 holdPeriod) external {
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
         Invoice memory invoice = invoiceData[orderId];
 
         uint256 newReleaseTime = invoice.releaseAt + holdPeriod;
@@ -244,13 +244,15 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, Ownable {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setDefaultHoldPeriod(uint256 newDefaultHoldPeriod) public onlyOwner {
+    function setDefaultHoldPeriod(uint256 newDefaultHoldPeriod) public {
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
         if (newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
         defaultHoldPeriod = newDefaultHoldPeriod;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setMinimumInvoiceValue(uint256 newMinimumInvoiceValue) public onlyOwner {
+    function setMinimumInvoiceValue(uint256 newMinimumInvoiceValue) public {
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
         minimumInvoiceValue = newMinimumInvoiceValue;
     }
 

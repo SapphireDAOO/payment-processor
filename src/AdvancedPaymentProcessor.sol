@@ -7,16 +7,14 @@ import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";
 
 import { IERC20 } from "./interface/IERC20.sol";
 import { IEscrow } from "./interface/IEscrow.sol";
-import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
+import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { IAdvancedPaymentProcessor } from "./interface/IAdvancedPaymentProcessor.sol";
-
-import { Ownable } from "solady/auth/Ownable.sol";
 
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 
-contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, Ownable {
+contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     using { SafeTransferLib.safeTransferFrom } for address;
     using { SafeCastLib.toUint48 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
@@ -97,19 +95,16 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     /**
      * @notice Initializes the AdvancedPaymentProcessor contract with core configuration.
      * @param paymentProcessorStorageAddress The address of the shared payment processor storage contract.
-     * @param ownerAddress The address to be set as the contract owner.
      * @param marketplaceAddress The address authorized to manage invoice operations.
      * @param nativeTokenAggregatorAddress The Chainlink aggregator address for the native token (e.g., ETH/USD).
      */
 
     constructor(
         address paymentProcessorStorageAddress,
-        address ownerAddress,
         address marketplaceAddress,
         address nativeTokenAggregatorAddress
     ) {
         ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
-        _initializeOwner(ownerAddress);
         marketplace = marketplaceAddress;
         nativeTokenAggregator = nativeTokenAggregatorAddress;
         nextMetaInvoiceId = 1;
@@ -230,11 +225,11 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function refund(bytes32 orderId, uint256 refundBps) external onlyMarketplace {
+    function refund(bytes32 orderId, uint256 refundShare) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
-        uint256 amount = _applyBasisPoints(inv.balance, refundBps);
+        uint256 amount = _applyBasisPoints(inv.balance, refundShare);
         if (amount > inv.balance) revert InsufficientBalance();
 
         inv.balance -= amount;
@@ -259,12 +254,14 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setPriceFeed(address token, address aggregator) external onlyOwner {
+    function setPriceFeed(address token, address aggregator) external {
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
         priceFeed[token] = aggregator;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setMarketplace(address marketplaceAddress) external onlyOwner {
+    function setMarketplace(address marketplaceAddress) external {
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
         marketplace = marketplaceAddress;
     }
 
@@ -288,11 +285,11 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, O
 
     /**
      * @notice Validates that the caller is the authorized sender.
-     * @dev Reverts with Unauthorized() if msg.sender is not the given address.
+     * @dev Reverts with NotAuthorized() if msg.sender is not the given address.
      * @param authorizedSender The address allowed to call the function.
      */
     function _validateSender(address authorizedSender) internal view {
-        if (msg.sender != authorizedSender && msg.sender != marketplace) revert Unauthorized();
+        if (msg.sender != authorizedSender && msg.sender != marketplace) revert NotAuthorized();
     }
 
     /**

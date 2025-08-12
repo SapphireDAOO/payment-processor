@@ -16,10 +16,11 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     }
 
     function _simplePaymentProcessorSetUp(address storageAddress) internal virtual returns (SimplePaymentProcessor) {
-        vm.prank(admin);
+        vm.startPrank(admin);
         simplePP = new SimplePaymentProcessor(storageAddress, DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
 
         PaymentProcessorStorage(storageAddress).setAuthorizedAddress(address(simplePP), true);
+        vm.stopPrank();
 
         return simplePP;
     }

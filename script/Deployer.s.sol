@@ -43,19 +43,19 @@ contract Deployer is Script {
         vm.startBroadcast();
         Addr memory addr = _setUp();
 
-        PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(msg.sender, FEE_RATE);
+        PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(msg.sender, msg.sender, FEE_RATE);
 
         SimplePaymentProcessor simplePP =
             new SimplePaymentProcessor(address(ppStorage), DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
 
         AdvancedPaymentProcessor advancedPP =
-            new AdvancedPaymentProcessor(address(ppStorage), msg.sender, msg.sender, addr.nativeTokenPriceFeed);
+            new AdvancedPaymentProcessor(address(ppStorage), msg.sender, addr.nativeTokenPriceFeed);
 
         ppStorage.setAuthorizedAddress(address(simplePP), true);
-        ppStorage.setAuthorizedAddress(address(advancedPP), true);
+        PaymentProcessorStorage(ppStorage).setAuthorizedAddress(address(advancedPP), true);
 
-        advancedPP.setPriceFeed(address(addr.usdc), address(addr.usdcPriceFeed));
-        advancedPP.setPriceFeed(address(addr.wbtc), address(addr.wbtcPriceFeed));
+        advancedPP.setPriceFeed(addr.usdc, addr.usdcPriceFeed);
+        advancedPP.setPriceFeed(addr.wbtc, addr.wbtcPriceFeed);
 
         vm.stopBroadcast();
     }

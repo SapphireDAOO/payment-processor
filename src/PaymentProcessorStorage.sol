@@ -39,11 +39,12 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
 
     /**
      *  @notice Initializes the contract with the owner, fee receiver, and initial fee rate.
+     * @param ownerAddress The address to be set as the contract owner.
      *  @param feeReceiverAddress The address that will receive platform fees.
      *  @param initialFeeRate The initial fee rate in basis points (e.g., 100 = 1%).
      */
-    constructor(address feeReceiverAddress, uint256 initialFeeRate) {
-        _initializeOwner(msg.sender);
+    constructor(address ownerAddress, address feeReceiverAddress, uint256 initialFeeRate) {
+        _initializeOwner(ownerAddress);
         feeReceiver = feeReceiverAddress;
         feeRate = initialFeeRate;
         nextInvoiceId = 1;

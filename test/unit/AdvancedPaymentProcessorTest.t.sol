@@ -17,7 +17,7 @@ import {
 contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
     using { applyBasisPoints, getEscrowAddress } for AdvancedPaymentProcessor;
 
-    error Unauthorized();
+    error NotAuthorized();
 
     function test_Initialization() public view {
         assertEq(advancedPP.getNextInvoiceId(), 1);
@@ -275,7 +275,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(sellerOne);
-        vm.expectRevert(Unauthorized.selector);
+        vm.expectRevert(NotAuthorized.selector);
         advancedPP.createDispute(orderId);
 
         vm.startPrank(buyerOne);
@@ -502,9 +502,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint256 refundableAmount = (tokenValue * 67) / 100;
         uint256 releaseableAmount = tokenValue - refundableAmount;
 
-        uint256 refundBps = 6700;
+        uint256 refundShare = 6700;
 
-        advancedPP.refund(orderId, refundBps);
+        advancedPP.refund(orderId, refundShare);
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         assertEq(inv.balance, releaseableAmount);

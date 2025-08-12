@@ -24,7 +24,8 @@ abstract contract BaseSetUp is Test {
         vm.deal(buyerTwo, INITIAL_BALANCE);
         vm.deal(sellerTwo, INITIAL_BALANCE);
 
-        ppStorage = new PaymentProcessorStorage(feeReceiver, FEE);
+        vm.prank(admin);
+        ppStorage = new PaymentProcessorStorage(admin, feeReceiver, FEE);
 
         return address(ppStorage);
     }

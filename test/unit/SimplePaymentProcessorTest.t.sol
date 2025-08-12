@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
 
-error Unauthorized();
+error NotAuthorized();
 
 contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_storage_state() public view {
@@ -54,7 +54,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         bytes32 orderId = simplePP.createInvoice(invoicePrice);
 
-        vm.expectRevert(Unauthorized.selector);
+        vm.expectRevert(NotAuthorized.selector);
         simplePP.cancelInvoice(orderId);
 
         vm.prank(buyerOne);
@@ -129,7 +129,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         bytes32 orderId = simplePP.createInvoice(invoicePrice);
 
         vm.prank(sellerTwo);
-        vm.expectRevert(Unauthorized.selector);
+        vm.expectRevert(NotAuthorized.selector);
         simplePP.acceptPayment(orderId);
 
         vm.warp(block.number + 10);
@@ -221,7 +221,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.acceptPayment(orderId);
 
         //RELEASE
-        vm.expectRevert(Unauthorized.selector);
+        vm.expectRevert(NotAuthorized.selector);
         simplePP.releaseInvoice(orderId);
 
         vm.startPrank(sellerOne);

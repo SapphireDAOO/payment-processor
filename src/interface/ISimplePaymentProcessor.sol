@@ -6,31 +6,15 @@ pragma solidity 0.8.28;
  * @notice This interface provides functionality for creating and managing invoices.
  */
 interface ISimplePaymentProcessor {
-    struct Invoice {
-        /// @notice A unique identifier assigned to this invoice, typically sequentially.
-        uint256 invoiceId;
-        /// @notice The address of the seller of the invoice.
-        address seller;
-        /// @notice The address of the buyer of the invoice.
-        address buyer;
-        /// @notice The address of the escrow contract managing the funds for this invoice.
-        address escrow;
-        /// @notice The total price of the invoice in wei.
-        uint256 price;
-        /// @notice The amount that has been paid.
-        uint256 amountPaid;
-        /// @notice The Unix timestamp when the invoice was created.
-        uint32 createdAt;
-        /// @notice The Unix timestamp when the payment was completed.
-        uint32 paymentTime;
-        /// @notice The timestamp when funds in escrow can be released to the seller.
-        uint32 releaseAt;
-        /// @notice The current status of the invoice.
-        uint32 status;
-    }
+    // ================================================================
+    //                              ERRORS
+    // ================================================================
 
     /// @notice Thrown when the provided fee rate exceeds the maximum allowed (100% = 10,000 basis points).
     error FeeTooHigh();
+
+    /// @notice Thrown when the caller lacks the required role or permission.
+    error NotAuthorized();
 
     /// @notice Thrown when the provided value is lower than the required minimum.
     error ValueIsTooLow();
@@ -94,6 +78,37 @@ interface ISimplePaymentProcessor {
 
     /// @notice Error thrown when attempting to release an invoice that has already been released.
     error InvoiceHasAlreadyBeenReleased();
+
+    // ================================================================
+    //                              STRUCTS
+    // ================================================================
+
+    struct Invoice {
+        /// @notice A unique identifier assigned to this invoice, typically sequentially.
+        uint256 invoiceId;
+        /// @notice The address of the seller of the invoice.
+        address seller;
+        /// @notice The address of the buyer of the invoice.
+        address buyer;
+        /// @notice The address of the escrow contract managing the funds for this invoice.
+        address escrow;
+        /// @notice The total price of the invoice in wei.
+        uint256 price;
+        /// @notice The amount that has been paid.
+        uint256 amountPaid;
+        /// @notice The Unix timestamp when the invoice was created.
+        uint32 createdAt;
+        /// @notice The Unix timestamp when the payment was completed.
+        uint32 paymentTime;
+        /// @notice The timestamp when funds in escrow can be released to the seller.
+        uint32 releaseAt;
+        /// @notice The current status of the invoice.
+        uint32 status;
+    }
+
+    // ================================================================
+    //                            FUNCTIONS
+    // ================================================================
 
     /**
      * @notice Creates a new invoice with a specified price.
@@ -208,6 +223,10 @@ interface ISimplePaymentProcessor {
      * @return The minimum invoice value in wei.
      */
     function getMinimumInvoiceValue() external view returns (uint256);
+
+    // ================================================================
+    //                              EVENTS
+    // ================================================================
 
     /**
      * @notice Emitted when a new invoice is created.

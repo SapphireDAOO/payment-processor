@@ -48,21 +48,20 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
     function _advancedPaymentProcessorSetUp(address storageAddress) internal returns (AdvancedPaymentProcessor) {
         Addr memory addr = _setUp();
 
-        advancedPP =
-            new AdvancedPaymentProcessor(storageAddress, admin, address(this), address(addr.nativeTokenPriceFeed));
+        vm.startPrank(admin);
+        advancedPP = new AdvancedPaymentProcessor(storageAddress, address(this), address(addr.nativeTokenPriceFeed));
 
         PaymentProcessorStorage(storageAddress).setAuthorizedAddress(address(advancedPP), true);
+
+        advancedPP.setPriceFeed(address(addr.usdc), address(addr.usdcPriceFeed));
+        advancedPP.setPriceFeed(address(addr.wbtc), address(addr.wbtcPriceFeed));
+        vm.stopPrank();
+
+        _mintAndApproveTokens(address(advancedPP));
 
         if (block.chainid == MAINNET_CHAIN_ID) {
             vm.makePersistent(address(advancedPP), storageAddress);
         }
-
-        _mintAndApproveTokens(address(advancedPP));
-
-        vm.startPrank(admin);
-        advancedPP.setPriceFeed(address(addr.usdc), address(addr.usdcPriceFeed));
-        advancedPP.setPriceFeed(address(addr.wbtc), address(addr.wbtcPriceFeed));
-        vm.stopPrank();
 
         return advancedPP;
     }
