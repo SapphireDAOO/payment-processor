@@ -66,7 +66,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         config.defaultHoldPeriod = newDefaultHoldPeriod;
     }
 
-    function execute(address target, bytes calldata data) external {
+    function execute(address target, bytes calldata data) external onlyOwner {
         (bool success, bytes memory result) = target.call(data);
 
         if (!success) {

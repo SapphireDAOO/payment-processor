@@ -169,7 +169,6 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         uint8 settled = advancedPP.DISPUTE_SETTLED();
 
-        vm.prank(USDC_BUYER);
         advancedPP.createDispute(orderId);
 
         uint256 buyerBalanceBefore = IERC20(USDC).balanceOf(USDC_BUYER);

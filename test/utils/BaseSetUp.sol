@@ -27,9 +27,9 @@ abstract contract BaseSetUp is Test {
         vm.deal(sellerTwo, INITIAL_BALANCE);
 
         IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
-            owner: msg.sender,
-            feeReceiver: msg.sender,
-            marketplace: msg.sender,
+            owner: admin,
+            feeReceiver: feeReceiver,
+            marketplace: address(this),
             feeRate: FEE_RATE,
             defaultHoldPeriod: DEFAULT_HOLD_PERIOD
         });

@@ -244,7 +244,10 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.prank(admin);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceHasNotBeenAccepted.selector);
-        simplePP.setInvoiceReleaseTime(keccak256(""), adminHoldPeriod);
+
+        bytes memory data =
+            abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, keccak256(""), adminHoldPeriod);
+        ppStorage.execute(address(simplePP), data);
 
         // CREATE
         uint256 invoicePrice = 100 ether;
@@ -261,7 +264,11 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.acceptPayment(orderId);
 
-        vm.warp(block.timestamp + adminHoldPeriod + 1);
+        data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, orderId, adminHoldPeriod);
+        vm.prank(admin);
+        ppStorage.execute(address(simplePP), data);
+
+        vm.warp(block.timestamp + adminHoldPeriod);
         vm.prank(sellerOne);
         simplePP.releaseInvoice(orderId);
 

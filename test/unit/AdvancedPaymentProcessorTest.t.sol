@@ -278,7 +278,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.expectRevert(NotAuthorized.selector);
         advancedPP.createDispute(orderId);
 
-        vm.startPrank(buyerOne);
+        vm.prank(buyerOne);
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
 
         vm.warp(block.timestamp + 25 hours);
@@ -287,7 +287,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
         advancedPP.createDispute(orderId);
-        vm.stopPrank();
 
         assertEq(advancedPP.getInvoice(orderId).state, advancedPP.DISPUTED());
     }
@@ -312,7 +311,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         for (uint256 i; i < orderIds.length; i++) {
             bytes32 key = orderIds[i];
 
-            vm.prank(buyerOne);
             advancedPP.createDispute(key);
         }
 
@@ -343,7 +341,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
         advancedPP.handleDispute(orderId, dismissed, basisPoint);
 
-        vm.prank(buyerOne);
         advancedPP.createDispute(orderId);
 
         uint256 buyerBalanceBefore = IERC20(mockUsdc).balanceOf(buyerOne);
@@ -385,7 +382,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
         advancedPP.resolveDispute(orderId);
 
-        vm.prank(buyerOne);
         advancedPP.createDispute(orderId);
 
         advancedPP.resolveDispute(orderId);
@@ -417,8 +413,8 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         sellers[1] = sellerOne;
 
         uint256[] memory prices = new uint256[](2);
-        prices[0] = 0.01e8;
-        prices[1] = 0.02e8;
+        prices[0] = 100e8;
+        prices[1] = 100e8;
 
         uint32[] memory responseTime = new uint32[](2);
         responseTime[0] = 1 days;
@@ -458,9 +454,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         sellers[2] = sellerOne;
 
         uint256[] memory prices = new uint256[](3);
-        prices[0] = 0.01e8;
-        prices[1] = 0.02e8;
-        prices[2] = 0.02e8;
+        prices[0] = 100e8;
+        prices[1] = 200e8;
+        prices[2] = 200e8;
 
         uint32[] memory responseTime = new uint32[](3);
         responseTime[0] = 1 days;

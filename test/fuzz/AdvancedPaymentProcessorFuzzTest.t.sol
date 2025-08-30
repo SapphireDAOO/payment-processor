@@ -150,7 +150,6 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         vm.prank(buyerOne);
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
 
-        vm.prank(buyerOne);
         advancedPP.createDispute(orderId);
 
         advancedPP.handleDispute(orderId, resolution.toUint8(), sellerShare);
