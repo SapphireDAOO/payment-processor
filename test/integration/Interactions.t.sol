@@ -182,7 +182,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         uint256 buyerShare = advancedPP.applyBasisPoints(tokenValue, advancedPP.BASIS_POINTS() - sellerPercentage);
 
         uint256 sellerShare = advancedPP.applyBasisPoints(tokenValue, sellerPercentage);
-        uint256 fee = advancedPP.applyBasisPoints(sellerShare, FEE);
+        uint256 fee = advancedPP.applyBasisPoints(sellerShare, FEE_RATE);
 
         assertEq(advancedPP.getInvoice(orderId).state, advancedPP.DISPUTE_SETTLED());
         assertEq(IERC20(USDC).balanceOf(sellerOne), sellerBalanceBefore + sellerShare - fee);

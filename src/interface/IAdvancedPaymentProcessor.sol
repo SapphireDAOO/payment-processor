@@ -9,6 +9,9 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when an account attempts to withdraw or spend more than its available balance.
     error InsufficientBalance();
 
+    /// @notice Thrown when the provided price does not meet the required minimum threshold.
+    error PriceIsTooLow();
+
     /// @notice Thrown when the caller lacks the required role or permission.
     error NotAuthorized();
 
@@ -69,6 +72,8 @@ interface IAdvancedPaymentProcessor {
         uint256 price;
         /// @notice Returns the current balance of the escrow associated with the order, accounting for the total amount paid minus any refunds or released amounts.
         uint256 balance;
+        /// @notice The timestamp when funds in escrow can be released to the seller.
+        uint256 releaseAt;
         /// @notice Identifier linking the invoice to a meta invoice. bytes32(0) if not part of any meta invoice.specifically to handle payment
         bytes32 metaInvoiceId;
     }
@@ -87,6 +92,8 @@ interface IAdvancedPaymentProcessor {
         address seller;
         /// @notice Price or amount to be paid for the invoice.
         uint256 price;
+        /// @notice Duration (in seconds) that the escrow will lock the payment before it's releasable.
+        uint256 escrowHoldPeriod;
     }
 
     // ================================================================
@@ -179,13 +186,6 @@ interface IAdvancedPaymentProcessor {
     function release(bytes32 orderId, uint256 sellerShare) external;
 
     /**
-     * @notice Updates the marketplace address allowed to perform privileged operations.
-     * @dev Callable only by the contract owner.
-     * @param marketplaceAddr The new marketplace address.
-     */
-    function setMarketplace(address marketplaceAddr) external;
-
-    /**
      * @notice
      * @param token The address of the ERC20 token.
      * @param aggregator The address of the Chainlink aggregator for the token.
@@ -237,12 +237,6 @@ interface IAdvancedPaymentProcessor {
      * @return The equivalent amount in the payment token's smallest unit (according to its decimals).
      */
     function getTokenValueFromUsd(address paymentToken, uint256 price) external view returns (uint256);
-
-    /**
-     * @notice Returns the address of the authorized marketplace contract.
-     * @return The marketplace address allowed to manage invoice creation and updates.
-     */
-    function getMarketplace() external view returns (address);
 
     // ================================================================
     //                              EVENTS
@@ -296,6 +290,13 @@ interface IAdvancedPaymentProcessor {
      * @param amount The amount paid in the token's smallest denomination (based on token decimals).
      */
     event InvoicePaid(bytes32 indexed orderId, address paymentToken, address escrowAddress, uint256 amount);
+
+    /**
+     * @notice Emitted when the escrow release time is updated for a given invoice.
+     * @param orderId The unique identifier of the invoice whose release time was modified.
+     * @param newHoldPeriod The updated escrow hold duration in seconds.
+     */
+    event UpdateReleaseTime(bytes32 indexed orderId, uint256 newHoldPeriod);
 
     /**
      * @notice Emitted when the payment is released to the seller.

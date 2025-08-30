@@ -33,9 +33,6 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when the fee value provided is zero.
     error FeeValueCanNotBeZero();
 
-    /// @notice Thrown when the hold period provided is zero, which is invalid.
-    error HoldPeriodCanNotBeZero();
-
     /// @notice Thrown when a zero address (`address(0)`) is provided.
     error ZeroAddressIsNotAllowed();
 
@@ -158,16 +155,16 @@ interface ISimplePaymentProcessor {
      * @notice Sets a custom hold period for a specific invoice.
      * @dev Overrides the default hold period for this invoice.
      * @param orderId The ID of the invoice.
-     * @param _holdPeriod The new hold period in seconds.
+     * @param holdPeriod The new hold period in seconds.
      */
-    function setInvoiceReleaseTime(bytes32 orderId, uint32 _holdPeriod) external;
+    function setInvoiceReleaseTime(bytes32 orderId, uint32 holdPeriod) external;
 
     /**
      *  @notice Updates the minimum allowed invoice value required for creating an invoice.
      * @dev Should only be callable by the contract owner or an authorized role.
-     * @param _minimumInvoiceValue The new minimum invoice value to set (in wei).
+     * @param minimumInvoiceValue The new minimum invoice value to set (in wei).
      */
-    function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) external;
+    function setMinimumInvoiceValue(uint256 minimumInvoiceValue) external;
 
     /**
      * @notice Refunds the seller of a specific invoice.
@@ -179,23 +176,10 @@ interface ISimplePaymentProcessor {
     function refundBuyer(bytes32 orderId) external;
 
     /**
-     * @notice Updates the default hold period for all new invoices.
-     * @dev Only callable by the contract owner.
-     * @param _newDefaultHoldPeriod The new default hold period in seconds.
-     */
-    function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) external;
-
-    /**
      * @notice Gets the current invoice ID counter.
      * @return The current invoice ID.
      */
     function getNextInvoiceId() external view returns (uint256);
-
-    /**
-     * @notice Gets the default hold period for invoices.
-     * @return The default hold period in seconds.
-     */
-    function getDefaultHoldPeriod() external view returns (uint256);
 
     /**
      * @notice Returns the total number of invoices created.

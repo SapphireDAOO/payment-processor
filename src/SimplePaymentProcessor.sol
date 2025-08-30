@@ -13,9 +13,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
 
     IPaymentProcessorStorage public immutable ppStorage;
 
-    /// @notice The default hold period for funds in escrow, measured in seconds.
-    uint256 private defaultHoldPeriod;
-
     /// @notice The minimum allowed value (in wei) required to create a new invoice.
     uint256 private minimumInvoiceValue;
 
@@ -61,12 +58,10 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
      * @notice Initializes the payment processor with owner, fee settings, and default hold period.
      * @dev Sets the fee receiver address, the fee rate (in basis points), and the default escrow hold time.
      * @param paymentProcessorStorageAddress The address of the shared payment processor storage contract.
-     * @param initialDefaultHoldPeriod The default period (in seconds) to hold funds in escrow after acceptance.
-     * * @param minimumInvoicePrice The new minimum default invoice value to set (in wei).
+     * @param minimumInvoicePrice The new minimum default invoice value to set (in wei).
      */
-    constructor(address paymentProcessorStorageAddress, uint256 initialDefaultHoldPeriod, uint256 minimumInvoicePrice) {
+    constructor(address paymentProcessorStorageAddress, uint256 minimumInvoicePrice) {
         ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
-        setDefaultHoldPeriod(initialDefaultHoldPeriod);
         setMinimumInvoiceValue(minimumInvoicePrice);
     }
 
@@ -189,7 +184,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         Invoice memory invoice = invoiceData[orderId];
         _validateInvoiceStateForPaymentDecision(invoice);
         invoice.status = ACCEPTED;
-        uint256 holdPeriod = invoice.releaseAt == 0 ? defaultHoldPeriod : invoice.releaseAt;
+        uint256 holdPeriod = invoice.releaseAt == 0 ? ppStorage.getDefaultHoldPeriod() : invoice.releaseAt;
         invoice.releaseAt = (holdPeriod + block.timestamp).toUint32();
         invoiceData[orderId] = invoice;
 
@@ -222,14 +217,14 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
 
     /// @inheritdoc ISimplePaymentProcessor
     function setInvoiceReleaseTime(bytes32 orderId, uint32 holdPeriod) external {
-        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
+        if (msg.sender != address(ppStorage)) revert NotAuthorized();
         Invoice memory invoice = invoiceData[orderId];
-
-        uint256 newReleaseTime = invoice.releaseAt + holdPeriod;
 
         if (invoice.status < ACCEPTED) {
             revert InvoiceHasNotBeenAccepted();
         }
+
+        uint256 newReleaseTime = block.timestamp + holdPeriod;
 
         if (newReleaseTime > type(uint32).max) revert ReleaseTimeOverflow();
 
@@ -241,13 +236,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     /// @inheritdoc ISimplePaymentProcessor
     function calculateFee(uint256 amount) public view returns (uint256) {
         return (amount * ppStorage.getFeeRate()) / BASIS_POINTS;
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function setDefaultHoldPeriod(uint256 newDefaultHoldPeriod) public {
-        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
-        if (newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
-        defaultHoldPeriod = newDefaultHoldPeriod;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -264,11 +252,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     /// @inheritdoc ISimplePaymentProcessor
     function totalInvoiceCreated() external view returns (uint256) {
         return ppStorage.totalInvoiceCreated();
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function getDefaultHoldPeriod() external view returns (uint256) {
-        return defaultHoldPeriod;
     }
 
     /// @inheritdoc ISimplePaymentProcessor

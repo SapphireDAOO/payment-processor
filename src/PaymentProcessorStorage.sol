@@ -12,41 +12,30 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     uint256 private nextInvoiceId;
 
     /**
-     * @notice Platform fee rate in basis points (BPS).
-     * @dev 100 BPS = 1%; 10,000 BPS = 100%.
-     */
-    uint256 private feeRate;
-
-    /**
-     * @notice Address that receives platform fees upon seller payout.
-     */
-    address private feeReceiver;
-
-    /**
      * @notice Tracks whether an address is authorized to perform restricted actions.
      *  @dev Maps an address to a boolean indicating its authorization status.
      */
     mapping(address => bool) private isAuthorized;
+
+    Configuration private config;
 
     /**
      * @notice Ensures that only authorized addresses can call the function.
      * @dev Reverts with `NotAuthorized` if `msg.sender` is not authorized.
      */
     modifier onlyAuthorized() {
-        if (!isAuthorized[msg.sender]) revert NotAuthorized();
+        if (!isAuthorized[msg.sender]) {
+            revert NotAuthorized();
+        }
         _;
     }
 
-    /**
-     *  @notice Initializes the contract with the owner, fee receiver, and initial fee rate.
-     * @param ownerAddress The address to be set as the contract owner.
-     *  @param feeReceiverAddress The address that will receive platform fees.
-     *  @param initialFeeRate The initial fee rate in basis points (e.g., 100 = 1%).
-     */
-    constructor(address ownerAddress, address feeReceiverAddress, uint256 initialFeeRate) {
-        _initializeOwner(ownerAddress);
-        feeReceiver = feeReceiverAddress;
-        feeRate = initialFeeRate;
+    // /**
+    //  *  @notice Initializes the contract with the owner, fee receiver, and initial fee rate.
+    //  */
+    constructor(Configuration memory configuration) {
+        _initializeOwner(configuration.owner);
+        config = configuration;
         nextInvoiceId = 1;
     }
 
@@ -58,7 +47,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
 
     /// @inheritdoc IPaymentProcessorStorage
     function setFeeReceiver(address feeReceiverAddress) external onlyOwner {
-        feeReceiver = feeReceiverAddress;
+        config.feeReceiver = feeReceiverAddress;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
@@ -68,7 +57,33 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
 
     /// @inheritdoc IPaymentProcessorStorage
     function setFeeRate(uint256 newFeeRate) external onlyOwner {
-        feeRate = newFeeRate;
+        config.feeRate = newFeeRate;
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function setDefaultHoldPeriod(uint256 newDefaultHoldPeriod) public onlyOwner {
+        if (newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
+        config.defaultHoldPeriod = newDefaultHoldPeriod;
+    }
+
+    function execute(address target, bytes calldata data) external {
+        (bool success, bytes memory result) = target.call(data);
+
+        if (!success) {
+            if (result.length > 0) {
+                assembly {
+                    let returnDataSize := mload(result)
+                    revert(add(0x20, result), returnDataSize)
+                }
+            } else {
+                revert CallFailed();
+            }
+        }
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function setMarketplace(address marketplaceAddress) external onlyOwner {
+        config.marketplace = marketplaceAddress;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
@@ -83,11 +98,21 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
 
     /// @inheritdoc IPaymentProcessorStorage
     function getFeeRate() external view returns (uint256) {
-        return feeRate;
+        return config.feeRate;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
     function getFeeReceiver() external view returns (address) {
-        return feeReceiver;
+        return config.feeReceiver;
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function getMarketplace() external view returns (address) {
+        return config.marketplace;
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function getDefaultHoldPeriod() external view returns (uint256) {
+        return config.defaultHoldPeriod;
     }
 }

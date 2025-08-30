@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
+import { ISimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
 
 error NotAuthorized();
 
 contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_storage_state() public view {
-        assertEq(ppStorage.getFeeRate(), FEE);
+        assertEq(ppStorage.getFeeRate(), FEE_RATE);
         assertEq(ppStorage.getFeeReceiver(), feeReceiver);
         assertEq(simplePP.getNextInvoiceId(), 1);
-        assertEq(simplePP.getDefaultHoldPeriod(), DEFAULT_HOLD_PERIOD);
+        assertEq(ppStorage.getDefaultHoldPeriod(), DEFAULT_HOLD_PERIOD);
     }
 
     function test_invoice_creation() public {

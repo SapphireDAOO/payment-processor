@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
+import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 import { Test, console } from "forge-std/Test.sol";
 
 abstract contract BaseSetUp is Test {
@@ -15,7 +15,9 @@ abstract contract BaseSetUp is Test {
     address internal feeReceiver = address(6);
 
     uint256 constant INITIAL_BALANCE = 100_000 ether;
-    uint256 public constant FEE = 500;
+    uint256 public constant FEE_RATE = 500;
+
+    uint256 constant DEFAULT_HOLD_PERIOD = 1 days;
 
     function initialize() public virtual returns (address) {
         vm.deal(buyerOne, INITIAL_BALANCE);
@@ -24,8 +26,16 @@ abstract contract BaseSetUp is Test {
         vm.deal(buyerTwo, INITIAL_BALANCE);
         vm.deal(sellerTwo, INITIAL_BALANCE);
 
+        IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
+            owner: msg.sender,
+            feeReceiver: msg.sender,
+            marketplace: msg.sender,
+            feeRate: FEE_RATE,
+            defaultHoldPeriod: DEFAULT_HOLD_PERIOD
+        });
+
         vm.prank(admin);
-        ppStorage = new PaymentProcessorStorage(admin, feeReceiver, FEE);
+        ppStorage = new PaymentProcessorStorage(config);
 
         return address(ppStorage);
     }

@@ -364,7 +364,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint256 buyerShare = advancedPP.applyBasisPoints(tokenValue, advancedPP.BASIS_POINTS() - sellerPercentage);
 
         uint256 sellerShare = advancedPP.applyBasisPoints(tokenValue, sellerPercentage);
-        uint256 fee = advancedPP.applyBasisPoints(sellerShare, FEE);
+        uint256 fee = advancedPP.applyBasisPoints(sellerShare, FEE_RATE);
 
         console.log("balances after", IERC20(mockUsdc).balanceOf(buyerOne), IERC20(mockUsdc).balanceOf(sellerOne));
 

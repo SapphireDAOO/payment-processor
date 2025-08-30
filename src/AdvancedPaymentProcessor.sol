@@ -26,9 +26,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     /// @notice The next available meta-invoice ID to be assigned.
     uint256 private nextMetaInvoiceId;
 
-    /// @notice Address authorized to interact with invoice creation and specific management functions.
-    address private marketplace;
-
     /// @notice Chainlink price feed aggregator for the native token.
     address private nativeTokenAggregator;
 
@@ -89,23 +86,17 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
      * @dev Reverts with NotAuthorized() if the caller is not the marketplace.
      */
     modifier onlyMarketplace() {
-        if (msg.sender != marketplace) revert NotAuthorized();
+        if (msg.sender != ppStorage.getMarketplace()) revert NotAuthorized();
         _;
     }
     /**
      * @notice Initializes the AdvancedPaymentProcessor contract with core configuration.
      * @param paymentProcessorStorageAddress The address of the shared payment processor storage contract.
-     * @param marketplaceAddress The address authorized to manage invoice operations.
-     * @param nativeTokenAggregatorAddress The Chainlink aggregator address for the native token (e.g., ETH/USD).
+     * @param nativeTokenAggregatorAddress The Chainlink aggregator address for the native token (e.g., ETH/USD, POL/USD).
      */
 
-    constructor(
-        address paymentProcessorStorageAddress,
-        address marketplaceAddress,
-        address nativeTokenAggregatorAddress
-    ) {
+    constructor(address paymentProcessorStorageAddress, address nativeTokenAggregatorAddress) {
         ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
-        marketplace = marketplaceAddress;
         nativeTokenAggregator = nativeTokenAggregatorAddress;
         nextMetaInvoiceId = 1;
     }
@@ -181,9 +172,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function createDispute(bytes32 orderId) external {
+    function createDispute(bytes32 orderId) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
-        _validateSender(inv.buyer);
         if (inv.state != PAID) revert InvalidInvoiceState();
 
         inv.state = DISPUTED;
@@ -239,9 +229,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function cancelInvoice(bytes32 orderId) public {
+    function cancelInvoice(bytes32 orderId) public onlyMarketplace {
         if (invoice[orderId].state != INITIATED) revert InvalidInvoiceState();
-        _validateSender(invoice[orderId].buyer);
         invoice[orderId].state = CANCELED;
         emit InvoiceCanceled(orderId);
     }
@@ -259,10 +248,14 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         priceFeed[token] = aggregator;
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function setMarketplace(address marketplaceAddress) external {
-        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
-        marketplace = marketplaceAddress;
+    function setInvoiceReleaseTime(bytes32 orderId, uint256 holdPeriod) external {
+        if (msg.sender != address(ppStorage)) revert NotAuthorized();
+        Invoice memory inv = invoice[orderId];
+        if (inv.state != PAID) revert InvalidInvoiceState();
+
+        inv.releaseAt = block.timestamp + holdPeriod;
+
+        emit UpdateReleaseTime(orderId, holdPeriod);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -281,15 +274,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
      */
     function _isReleasable(Invoice memory inv) internal pure returns (bool) {
         return inv.state == PAID || inv.state == DISPUTE_RESOLVED || inv.state == DISPUTE_DISMISSED;
-    }
-
-    /**
-     * @notice Validates that the caller is the authorized sender.
-     * @dev Reverts with NotAuthorized() if msg.sender is not the given address.
-     * @param authorizedSender The address allowed to call the function.
-     */
-    function _validateSender(address authorizedSender) internal view {
-        if (msg.sender != authorizedSender && msg.sender != marketplace) revert NotAuthorized();
     }
 
     /**
@@ -330,6 +314,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         inv.paidAt = (block.timestamp).toUint48();
         inv.balance = price;
         inv.amountPaid = price;
+        inv.releaseAt = inv.releaseAt == 0 ? block.timestamp + ppStorage.getDefaultHoldPeriod() : inv.releaseAt;
 
         if (!isNative) {
             inv.paymentToken = paymentToken;
@@ -350,6 +335,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         returns (bytes32)
     {
         if (param.price == 0) revert PriceCannotBeZero();
+        if(param.price < 1e8) revert PriceIsTooLow();
         Invoice memory inv;
         inv.seller = param.seller;
         inv.price = param.price;
@@ -453,10 +439,5 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     /// @inheritdoc IAdvancedPaymentProcessor
     function getNextMetaInvoiceId() external view returns (uint256) {
         return nextMetaInvoiceId;
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function getMarketplace() external view returns (address) {
-        return marketplace;
     }
 }

@@ -55,7 +55,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (advancedPP.getInvoice(keccak256(abi.encode(totalSingleInvoiceCreated))).state != 0) return;
         price = bound(price, 1e8, 1_000e8);
 
-        vm.prank(advancedPP.getMarketplace());
+        vm.prank(advancedPP.ppStorage().getMarketplace());
 
         bytes32 id = advancedPP.createSingleInvoice(getInvoiceCreationParam(totalSingleInvoiceCreated, seller, price));
 
@@ -78,7 +78,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
             getInvoiceCreationParams(totalSingleInvoiceCreated, sellers, prices);
 
-        vm.prank(advancedPP.getMarketplace());
+        vm.prank(advancedPP.ppStorage().getMarketplace());
         bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
         metaInvoiceOrderIds.push(metaInvoiceOrderId);
 
@@ -167,7 +167,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.DISPUTED()) return;
 
-        vm.prank(advancedPP.getMarketplace());
+        vm.prank(advancedPP.ppStorage().getMarketplace());
         advancedPP.handleDispute(orderId, resolution.toUint8(), sellerShare);
     }
 
@@ -180,7 +180,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.PAID()) return;
 
-        vm.prank(advancedPP.getMarketplace());
+        vm.prank(advancedPP.ppStorage().getMarketplace());
         advancedPP.refund(orderId, share);
     }
 
@@ -192,7 +192,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.PAID()) return;
 
-        vm.prank(advancedPP.getMarketplace());
+        vm.prank(advancedPP.ppStorage().getMarketplace());
         advancedPP.release(orderId, sellerShare);
     }
 

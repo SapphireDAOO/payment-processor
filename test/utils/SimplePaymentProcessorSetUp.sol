@@ -8,7 +8,6 @@ import { BaseSetUp } from "./BaseSetUp.sol";
 abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     SimplePaymentProcessor simplePP;
     uint256 constant MINIMUM_INVOICE_VALUE = 1 ether;
-    uint256 constant DEFAULT_HOLD_PERIOD = 1 days;
 
     function setUp() public virtual {
         address storageAddress = initialize();
@@ -17,7 +16,7 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
 
     function _simplePaymentProcessorSetUp(address storageAddress) internal virtual returns (SimplePaymentProcessor) {
         vm.startPrank(admin);
-        simplePP = new SimplePaymentProcessor(storageAddress, DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
+        simplePP = new SimplePaymentProcessor(storageAddress, MINIMUM_INVOICE_VALUE);
 
         PaymentProcessorStorage(storageAddress).setAuthorizedAddress(address(simplePP), true);
         vm.stopPrank();

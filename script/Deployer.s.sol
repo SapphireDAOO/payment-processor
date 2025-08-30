@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { Script, console } from "forge-std/Script.sol";
-import { PaymentProcessorStorage } from "../src/PaymentProcessorStorage.sol";
+import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../src/PaymentProcessorStorage.sol";
 import { SimplePaymentProcessor } from "../src/SimplePaymentProcessor.sol";
 import { AdvancedPaymentProcessor } from "../src/AdvancedPaymentProcessor.sol";
 import { MockUsdc, MockWbtc } from "../test/mock/mERC20.sol";
@@ -43,13 +43,20 @@ contract Deployer is Script {
         vm.startBroadcast();
         Addr memory addr = _setUp();
 
-        PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(msg.sender, msg.sender, FEE_RATE);
+        IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
+            owner: msg.sender,
+            feeReceiver: msg.sender,
+            marketplace: msg.sender,
+            feeRate: FEE_RATE,
+            defaultHoldPeriod: DEFAULT_HOLD_PERIOD
+        });
 
-        SimplePaymentProcessor simplePP =
-            new SimplePaymentProcessor(address(ppStorage), DEFAULT_HOLD_PERIOD, MINIMUM_INVOICE_VALUE);
+        PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(config);
+
+        SimplePaymentProcessor simplePP = new SimplePaymentProcessor(address(ppStorage), MINIMUM_INVOICE_VALUE);
 
         AdvancedPaymentProcessor advancedPP =
-            new AdvancedPaymentProcessor(address(ppStorage), msg.sender, addr.nativeTokenPriceFeed);
+            new AdvancedPaymentProcessor(address(ppStorage), addr.nativeTokenPriceFeed);
 
         ppStorage.setAuthorizedAddress(address(simplePP), true);
         PaymentProcessorStorage(ppStorage).setAuthorizedAddress(address(advancedPP), true);
