@@ -67,15 +67,16 @@ interface IPaymentProcessorStorage {
      */
     function setFeeRate(uint256 feeRate) external;
 
-    /**
-     * @notice Executes a low-level call to an invoice contract.
-     * @dev Used by ppStorage to trigger state changes (e.g., setting release times)
-     *      in external invoice contracts. The target and calldata must be properly
-     *      encoded off-chain. Only callable by authorized contracts or managers.
-     * @param target The address of the invoice contract to call.
-     * @param data ABI-encoded calldata including the function selector and arguments.
-     */
-    function execute(address target, bytes calldata data) external;
+    // /**
+    //  * @notice Executes a low-level call to an invoice contract.
+    //  * @dev Used by ppStorage to trigger state changes (e.g., setting release times)
+    //  *      in external invoice contracts. The target and calldata must be properly
+    //  *      encoded off-chain. Only callable by authorized contracts or managers.
+    //  * @param target The address of the invoice contract to call.
+    //  * @param data ABI-encoded calldata including the function selector and arguments.
+    //  * @return result The raw returned data from the low-level call.
+    //  */
+    // function execute(address target, bytes calldata data) external returns (bytes memory);
 
     /**
      * @notice Returns the ID that will be assigned to the next invoice.

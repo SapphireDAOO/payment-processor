@@ -335,7 +335,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         returns (bytes32)
     {
         if (param.price == 0) revert PriceCannotBeZero();
-        if(param.price < 1e8) revert PriceIsTooLow();
+        if (param.price < 1e8) revert PriceIsTooLow();
         Invoice memory inv;
         inv.seller = param.seller;
         inv.price = param.price;

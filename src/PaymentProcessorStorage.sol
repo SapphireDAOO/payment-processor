@@ -2,9 +2,12 @@
 pragma solidity 0.8.28;
 
 import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
+import { LibCall } from "solady/utils/LibCall.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 
 contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
+    using LibCall for address;
+
     /**
      * @notice The next available unique invoice ID.
      * @dev Used to track and increment standalone or sub-invoice identifiers.
@@ -66,19 +69,8 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         config.defaultHoldPeriod = newDefaultHoldPeriod;
     }
 
-    function execute(address target, bytes calldata data) external onlyOwner {
-        (bool success, bytes memory result) = target.call(data);
-
-        if (!success) {
-            if (result.length > 0) {
-                assembly {
-                    let returnDataSize := mload(result)
-                    revert(add(0x20, result), returnDataSize)
-                }
-            } else {
-                revert CallFailed();
-            }
-        }
+    function execute(address target, bytes calldata data) external onlyOwner returns (bytes memory) {
+        return target.callContract(data);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
