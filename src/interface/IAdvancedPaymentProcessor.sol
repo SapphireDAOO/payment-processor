@@ -181,9 +181,8 @@ interface IAdvancedPaymentProcessor {
      * @notice Releases payment to the seller for a successfully completed invoice.
      * @dev Callable only by the marketplace. Only valid for ACCEPTED invoices.
      * @param orderId The ID of the invoice.
-     * @param sellerShare The portion of the invoice price (in basis points) to be awarded to the seller.
      */
-    function release(bytes32 orderId, uint256 sellerShare) external;
+    function release(bytes32 orderId) external;
 
     /**
      * @notice
@@ -302,9 +301,8 @@ interface IAdvancedPaymentProcessor {
      * @notice Emitted when the payment is released to the seller.
      * @param orderId The ID of the invoice for which payment was released.
      * @param sellerAmount The amount transferred to the seller.
-     * @param buyerAmount The amount refunded to the buyer.
      */
-    event PaymentReleased(bytes32 indexed orderId, uint256 sellerAmount, uint256 buyerAmount);
+    event PaymentReleased(bytes32 indexed orderId, uint256 sellerAmount);
 
     /**
      * @notice Emitted when a dispute is raised for an invoice by the buyer.

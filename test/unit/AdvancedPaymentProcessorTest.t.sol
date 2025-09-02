@@ -394,15 +394,15 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.release(orderId, 10_000);
+        advancedPP.release(orderId);
 
         vm.prank(buyerOne);
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
 
-        advancedPP.release(orderId, 10_000);
+        advancedPP.release(orderId);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.release(orderId, 10_000);
+        advancedPP.release(orderId);
 
         assertEq(advancedPP.getInvoice(orderId).state, advancedPP.RELEASED());
     }
@@ -437,7 +437,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
 
         for (uint256 i = 0; i < orderIds.length; i++) {
-            advancedPP.release(orderIds[i], 10_000);
+            advancedPP.release(orderIds[i]);
         }
 
         for (uint256 i = 0; i < orderIds.length; i++) {
@@ -509,32 +509,8 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         releaseableAmount -= (releaseableAmount * ppStorage.getFeeRate()) / advancedPP.BASIS_POINTS();
 
         uint256 sellerBalance = sellerOne.balance;
-        advancedPP.release(orderId, 10_000);
+        advancedPP.release(orderId);
         assertEq(sellerBalance + releaseableAmount, sellerOne.balance);
-    }
-
-    function test_partial_refund() public {
-        uint256 price = 1500e8;
-        bytes32 orderId =
-            advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
-        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(mockUsdc), price);
-
-        vm.prank(buyerOne);
-        advancedPP.paySingleInvoice(orderId, address(mockUsdc));
-
-        uint256 sellerShare = 7_000;
-
-        uint256 releaseableAmount = (tokenValue * sellerShare) / 10_000;
-        uint256 refundableAmount = tokenValue - releaseableAmount;
-
-        uint256 buyerBalance = IERC20(mockUsdc).balanceOf(buyerOne);
-        uint256 sellerBalance = IERC20(mockUsdc).balanceOf(sellerOne);
-        advancedPP.release(orderId, sellerShare);
-
-        releaseableAmount -= (releaseableAmount * ppStorage.getFeeRate()) / advancedPP.BASIS_POINTS();
-
-        assertEq(IERC20(mockUsdc).balanceOf(buyerOne), buyerBalance + refundableAmount);
-        assertEq(IERC20(mockUsdc).balanceOf(sellerOne), sellerBalance + releaseableAmount);
     }
 
     function test_MetaInvoiceTotalPrice() public {

@@ -205,13 +205,14 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function release(bytes32 orderId, uint256 sellerShare) external onlyMarketplace {
+    function release(bytes32 orderId) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
         invoice[orderId].state = RELEASED;
         invoice[orderId].balance = 0;
         if (!_isReleasable(inv)) revert InvalidInvoiceState();
-        (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(inv, sellerShare);
-        emit PaymentReleased(orderId, sellerReceivingValue, buyerReceivingValue);
+
+        uint256 sellerNetAmount = _processSellerPayout(inv, inv.balance);
+        emit PaymentReleased(orderId, sellerNetAmount);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -389,12 +390,15 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
      * @notice Distributes the seller's payout from the escrow, applying platform fees.
      * @param inv The invoice data containing escrow and recipient info.
      * @param sellerReceivingValue The gross amount owed to the seller before fees.
+     * @return The amount the seller receives after fees are deducted.
      */
-    function _processSellerPayout(Invoice memory inv, uint256 sellerReceivingValue) internal {
+    function _processSellerPayout(Invoice memory inv, uint256 sellerReceivingValue) internal returns (uint256) {
         uint256 fee = _applyBasisPoints(sellerReceivingValue, ppStorage.getFeeRate());
-        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.seller, sellerReceivingValue - fee);
+        uint256 amount = sellerReceivingValue - fee;
+        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.seller, amount);
 
         IEscrow(inv.escrow).withdraw(inv.paymentToken, ppStorage.getFeeReceiver(), fee);
+        return amount;
     }
 
     /**

@@ -193,7 +193,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (inv.state != advancedPP.PAID()) return;
 
         vm.prank(advancedPP.ppStorage().getMarketplace());
-        advancedPP.release(orderId, sellerShare);
+        advancedPP.release(orderId);
     }
 
     function resolveDispute(uint256 index, uint256 senderIndex)

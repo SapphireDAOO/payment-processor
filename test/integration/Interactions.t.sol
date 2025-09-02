@@ -198,7 +198,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         vm.prank(NATIVE_TOKEN_BUYER);
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
 
-        advancedPP.release(orderId, 10_000);
+        advancedPP.release(orderId);
 
         assertEq(advancedPP.getInvoice(orderId).state, advancedPP.RELEASED());
     }
