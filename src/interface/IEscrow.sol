@@ -36,7 +36,7 @@ interface IEscrow {
      * @param orderId The unique key of the invoice associated with the deposit.
      * @param value The amount of funds deposited in wei.
      */
-    event FundsDeposited(bytes32 indexed orderId, uint256 indexed value);
+    event FundsDeposited(uint256 indexed orderId, uint256 indexed value);
 
     /**
      * @notice Emitted when a fee is successfully paid to a payment processor.

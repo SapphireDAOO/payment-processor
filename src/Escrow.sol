@@ -17,7 +17,7 @@ contract Escrow is IEscrow {
     address public immutable paymentProcessor;
 
     /// @notice The invoice ID associated with the escrow.
-    bytes32 public immutable invoice;
+    uint256 public immutable invoice;
 
     modifier onlyPaymentProcessor() {
         _onlyPaymentProcessor();
@@ -36,7 +36,7 @@ contract Escrow is IEscrow {
      * @param payer The address of the payer for the invoice.
      * @param paymentProcessorAddress The address of the payment processor contract managing the invoice.
      */
-    constructor(bytes32 orderId, address creator, address payer, address paymentProcessorAddress) payable {
+    constructor(uint256 orderId, address creator, address payer, address paymentProcessorAddress) payable {
         invoice = orderId;
         seller = creator;
         buyer = payer;

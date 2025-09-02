@@ -23,11 +23,11 @@ contract AdvancedPaymentProcessorHandler is Test {
 
     mapping(bytes4 => uint256) calls;
 
-    bytes32[] singleOrderIds;
-    bytes32[] metaInvoiceOrderIds;
-    bytes32[] singleAndSubInvoice;
+    uint256[] singleOrderIds;
+    uint256[] metaInvoiceOrderIds;
+    uint256[] singleAndSubInvoice;
 
-    mapping(bytes32 => bytes32[]) subInvoice;
+    mapping(uint256 => uint256[]) subInvoice;
 
     modifier countCall(bytes4 key) {
         calls[key]++;
@@ -52,12 +52,14 @@ contract AdvancedPaymentProcessorHandler is Test {
     }
 
     function createInvoice(uint256 price) public countCall(this.createInvoice.selector) {
-        if (advancedPP.getInvoice(keccak256(abi.encode(totalSingleInvoiceCreated))).state != 0) return;
+        if (advancedPP.getInvoice(uint256(keccak256(abi.encode(totalSingleInvoiceCreated)))).state != 0) {
+            return;
+        }
         price = bound(price, 1e8, 1_000e8);
 
         vm.prank(advancedPP.ppStorage().getMarketplace());
 
-        bytes32 id = advancedPP.createSingleInvoice(getInvoiceCreationParam(totalSingleInvoiceCreated, seller, price));
+        uint256 id = advancedPP.createSingleInvoice(getInvoiceCreationParam(totalSingleInvoiceCreated, seller, price));
 
         singleAndSubInvoice.push(id);
         totalSingleInvoiceCreated++;
@@ -75,11 +77,11 @@ contract AdvancedPaymentProcessorHandler is Test {
         prices[0] = priceO;
         prices[1] = priceT;
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory orderIds) =
             getInvoiceCreationParams(totalSingleInvoiceCreated, sellers, prices);
 
         vm.prank(advancedPP.ppStorage().getMarketplace());
-        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+        uint256 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
         metaInvoiceOrderIds.push(metaInvoiceOrderId);
 
         for (uint256 i = 0; i < orderIds.length; i++) {
@@ -98,7 +100,7 @@ contract AdvancedPaymentProcessorHandler is Test {
     {
         if (singleOrderIds.length == 0) return;
         index = bound(index, 0, singleOrderIds.length - 1);
-        bytes32 orderId = singleOrderIds[index];
+        uint256 orderId = singleOrderIds[index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), inv.price);
@@ -114,12 +116,12 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (metaInvoiceOrderIds.length == 0) return;
 
         index = bound(index, 0, length - 1);
-        bytes32 orderId = metaInvoiceOrderIds[index];
+        uint256 orderId = metaInvoiceOrderIds[index];
         IAdvancedPaymentProcessor.MetaInvoice memory metaInv = advancedPP.getMetaInvoice(orderId);
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), metaInv.price);
 
-        bytes32[] memory ids = subInvoice[orderId];
+        uint256[] memory ids = subInvoice[orderId];
 
         bool paid;
         for (uint256 i; i < ids.length; i++) {
@@ -135,7 +137,7 @@ contract AdvancedPaymentProcessorHandler is Test {
     function cancelInvoice(uint256 index) public onlyExistingInvoice countCall(this.cancelInvoice.selector) {
         if (singleOrderIds.length == 0) return;
         index = bound(index, 0, singleOrderIds.length - 1);
-        bytes32 orderId = singleOrderIds[index];
+        uint256 orderId = singleOrderIds[index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.PAID()) return;
 
@@ -146,7 +148,7 @@ contract AdvancedPaymentProcessorHandler is Test {
     function createDispute(uint256 index) public onlyExistingInvoice countCall(this.createDispute.selector) {
         if (singleOrderIds.length == 0) return;
         index = bound(index, 0, singleOrderIds.length - 1);
-        bytes32 orderId = singleOrderIds[index];
+        uint256 orderId = singleOrderIds[index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.PAID()) return;
 
@@ -161,7 +163,7 @@ contract AdvancedPaymentProcessorHandler is Test {
     {
         if (singleOrderIds.length == 0) return;
         index = bound(index, 0, singleOrderIds.length - 1);
-        bytes32 orderId = singleOrderIds[index];
+        uint256 orderId = singleOrderIds[index];
         resolution = bound(resolution, advancedPP.DISPUTE_DISMISSED(), advancedPP.DISPUTE_SETTLED());
         sellerShare = bound(sellerShare, 0, advancedPP.BASIS_POINTS());
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
@@ -175,7 +177,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (singleOrderIds.length == 0) return;
         index = bound(index, 0, singleOrderIds.length - 1);
         share = bound(share, 100, 10_000);
-        bytes32 orderId = singleOrderIds[index];
+        uint256 orderId = singleOrderIds[index];
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.PAID()) return;
@@ -188,7 +190,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (singleOrderIds.length == 0) return;
         index = bound(index, 0, singleOrderIds.length - 1);
         sellerShare = bound(sellerShare, 100, 10_000);
-        bytes32 orderId = singleOrderIds[index];
+        uint256 orderId = singleOrderIds[index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.PAID()) return;
 
@@ -204,7 +206,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (singleOrderIds.length == 0) return;
         index = bound(index, 0, singleOrderIds.length - 1);
         senderIndex = bound(senderIndex, 0, 1);
-        bytes32 orderId = singleOrderIds[index];
+        uint256 orderId = singleOrderIds[index];
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         if (inv.state != advancedPP.DISPUTED()) return;

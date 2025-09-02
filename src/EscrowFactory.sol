@@ -8,7 +8,7 @@ import { IEscrowFactory } from "./interface/IEscrowFactory.sol";
 
 abstract contract EscrowFactory is IEscrowFactory {
     /// @inheritdoc IEscrowFactory
-    function computeSalt(address seller, address buyer, bytes32 orderId) public pure returns (bytes32) {
+    function computeSalt(address seller, address buyer, uint256 orderId) public pure returns (bytes32) {
         return keccak256(abi.encode(seller, buyer, orderId));
     }
 

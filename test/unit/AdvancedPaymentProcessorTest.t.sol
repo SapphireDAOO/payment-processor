@@ -33,7 +33,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
         advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, sellerOne, price));
 
-        bytes32 orderId = advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, sellerOne, price));
+        uint256 orderId = advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, sellerOne, price));
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvoiceAlreadyExists.selector);
         advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, sellerOne, price));
@@ -43,7 +43,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(inv.price, price);
         assertEq(inv.seller, sellerOne);
         assertEq(inv.createdAt, block.timestamp);
-        // assertEq(inv.orderId, bytes32(0));
+        // assertEq(inv.orderId, uint256(0));
         assertEq(inv.invoiceId, advancedPP.totalUniqueInvoiceCreated());
         assertEq(nextInvoiceId, 2);
     }
@@ -60,11 +60,11 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         prices[0] = 0.01 ether;
         prices[1] = 0.02 ether;
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory keys) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory keys) =
             getInvoiceCreationParams(invoiceId, sellers, prices);
 
         // create invoice
-        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+        uint256 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
 
         uint256 upper = advancedPP.getNextInvoiceId() - 1;
 
@@ -88,7 +88,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_nativeTokenPaymentForSingleInvoice() public {
         uint256 price = 100e8;
-        bytes32 orderId =
+        uint256 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         vm.startPrank(buyerOne);
@@ -125,16 +125,16 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         prices[0] = 150e8;
         prices[1] = 250e8;
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory orderIds) =
             getInvoiceCreationParams(invoiceId, sellers, prices);
 
         // create meta invoice
-        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+        uint256 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
 
         uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvoiceDoesNotExist.selector);
-        advancedPP.payMetaInvoice{ value: 0.03 ether }(keccak256(""), address(0));
+        advancedPP.payMetaInvoice{ value: 0.03 ether }(0, address(0));
 
         vm.startPrank(buyerOne);
 
@@ -167,7 +167,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_erc20PaymentForSingleInvoice() public {
         uint256 price = 100e8;
-        bytes32 orderId =
+        uint256 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         vm.prank(buyerOne);
@@ -198,10 +198,10 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         // create meta invoice
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory orderIds) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
-        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+        uint256 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
 
         // make payment
         vm.prank(buyerOne);
@@ -231,7 +231,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
     function test_cancel_invoice() public {
         // single invoice
         uint256 price = 100e8;
-        bytes32 orderId =
+        uint256 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         advancedPP.cancelInvoice(orderId);
@@ -254,7 +254,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         prices[1] = 500e8;
         prices[2] = 1400e8;
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory orderIds) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
         advancedPP.createMetaInvoice(param);
@@ -269,7 +269,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_disputeCreation() public {
         uint256 price = 100e8;
-        bytes32 orderId =
+        uint256 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
@@ -300,16 +300,16 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         prices[0] = 0.01 ether;
         prices[1] = 0.02 ether;
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory orderIds) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
-        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+        uint256 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
 
         vm.prank(buyerOne);
         advancedPP.payMetaInvoice(metaInvoiceOrderId, address(mockUsdc));
 
         for (uint256 i; i < orderIds.length; i++) {
-            bytes32 key = orderIds[i];
+            uint256 key = orderIds[i];
 
             advancedPP.createDispute(key);
         }
@@ -327,7 +327,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_settledDispute() public {
         uint256 price = 100e8;
-        bytes32 orderId =
+        uint256 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(mockUsdc), price);
@@ -373,7 +373,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_resolveDispute() public {
         uint256 price = 100e8;
-        bytes32 orderId =
+        uint256 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         vm.prank(buyerOne);
@@ -389,7 +389,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_invoiceRelease() public {
         uint256 price = 100e8;
-        bytes32 orderId =
+        uint256 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
@@ -424,10 +424,10 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[0] = 1 days;
         disputeWindow[1] = 4 days;
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory orderIds) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
-        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+        uint256 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
 
         uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
 
@@ -468,10 +468,10 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         disputeWindow[1] = 4 days;
         disputeWindow[2] = 3 days;
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, bytes32[] memory orderIds) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory orderIds) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
-        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+        uint256 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
 
         advancedPP.cancelInvoice(orderIds[0]);
 
@@ -486,7 +486,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_refund_and_release() public {
         uint256 price = 1500e8;
-        bytes32 orderId =
+        uint256 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
@@ -527,7 +527,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param,) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
-        bytes32 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+        uint256 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
         IAdvancedPaymentProcessor.MetaInvoice memory metaInv = advancedPP.getMetaInvoice(metaInvoiceOrderId);
         assertEq(metaInv.price, prices[0] + prices[1] + prices[2]);
     }

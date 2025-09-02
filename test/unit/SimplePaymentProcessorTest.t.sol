@@ -18,7 +18,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         uint256 cOneInvoicePrice = 100 ether;
         vm.startPrank(sellerOne);
 
-        bytes32 orderId = simplePP.createInvoice(cOneInvoicePrice);
+        uint256 orderId = simplePP.createInvoice(cOneInvoicePrice);
         vm.stopPrank();
 
         ISimplePaymentProcessor.Invoice memory invoiceDataOne = simplePP.getInvoiceData(orderId);
@@ -52,7 +52,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_cancel_invoice() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
-        bytes32 orderId = simplePP.createInvoice(invoicePrice);
+        uint256 orderId = simplePP.createInvoice(invoicePrice);
 
         vm.expectRevert(NotAuthorized.selector);
         simplePP.cancelInvoice(orderId);
@@ -80,7 +80,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         uint256 invoicePrice = 100 ether;
         deal(sellerOne, 1);
         vm.startPrank(sellerOne);
-        bytes32 orderId = simplePP.createInvoice(invoicePrice);
+        uint256 orderId = simplePP.createInvoice(invoicePrice);
 
         vm.expectRevert(ISimplePaymentProcessor.SellerCannotPayOwnedInvoice.selector);
         simplePP.makeInvoicePayment{ value: 1 }(orderId);
@@ -126,7 +126,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_payment_acceptance() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
-        bytes32 orderId = simplePP.createInvoice(invoicePrice);
+        uint256 orderId = simplePP.createInvoice(invoicePrice);
 
         vm.prank(sellerTwo);
         vm.expectRevert(NotAuthorized.selector);
@@ -152,7 +152,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_payment_acceptance_after_acceptance_window() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
-        bytes32 orderId = simplePP.createInvoice(invoicePrice);
+        uint256 orderId = simplePP.createInvoice(invoicePrice);
 
         vm.prank(buyerOne);
         simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
@@ -166,7 +166,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_payer_refund_acceptance_window() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
-        bytes32 orderId = simplePP.createInvoice(invoicePrice);
+        uint256 orderId = simplePP.createInvoice(invoicePrice);
 
         // 10000
         uint256 balanceBeforePayment = buyerOne.balance;
@@ -190,7 +190,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_payment_rejection() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
-        bytes32 orderId = simplePP.createInvoice(invoicePrice);
+        uint256 orderId = simplePP.createInvoice(invoicePrice);
 
         vm.prank(buyerOne);
         simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
@@ -208,7 +208,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         // CREATE
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
-        bytes32 orderId = simplePP.createInvoice(invoicePrice);
+        uint256 orderId = simplePP.createInvoice(invoicePrice);
 
         uint256 fee = simplePP.calculateFee(invoicePrice);
 
@@ -252,7 +252,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         // CREATE
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
-        bytes32 orderId = simplePP.createInvoice(invoicePrice);
+        uint256 orderId = simplePP.createInvoice(invoicePrice);
 
         uint256 fee = simplePP.calculateFee(invoicePrice);
 

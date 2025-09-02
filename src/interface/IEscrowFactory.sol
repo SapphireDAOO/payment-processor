@@ -5,7 +5,7 @@ interface IEscrowFactory {
     struct EscrowCreationParams {
         address seller;
         address buyer;
-        bytes32 orderId;
+        uint256 orderId;
         uint256 value;
         address paymentToken;
     }
@@ -28,12 +28,12 @@ interface IEscrowFactory {
      * @param orderId A hash representing the invoice content or metadata.
      * @return  A `bytes32` salt value uniquely derived from the input parameters.
      */
-    function computeSalt(address seller, address buyer, bytes32 orderId) external pure returns (bytes32);
+    function computeSalt(address seller, address buyer, uint256 orderId) external pure returns (bytes32);
 
     /**
      * @notice Emitted when a new escrow contract is created.
      * @param orderId The unique ID of the invoice associated with the escrow.
      * @param escrow The address of the newly created escrow contract.
      */
-    event EscrowCreated(bytes32 indexed orderId, address indexed escrow);
+    event EscrowCreated(uint256 indexed orderId, address indexed escrow);
 }

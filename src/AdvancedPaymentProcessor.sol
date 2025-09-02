@@ -66,7 +66,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
      * @notice Mapping from unique invoice ID to its invoice data.
      * @dev Used for standalone invoices (not part of a meta-invoice).
      */
-    mapping(bytes32 orderId => Invoice data) private invoice;
+    mapping(uint256 orderId => Invoice data) private invoice;
 
     /**
      * @notice Mapping of payment tokens to their Chainlink price feed aggregator.
@@ -79,7 +79,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
      * @dev Stores metadata for grouped payments consisting of multiple sub-invoices.
      *      Each MetaInvoice contains the total price and all associated sub-invoice IDs.
      */
-    mapping(bytes32 metaInvoiceId => MetaInvoice invoice) private metaInvoice;
+    mapping(uint256 metaInvoiceId => MetaInvoice invoice) private metaInvoice;
 
     /**
      * @notice Restricts function access to the authorized marketplace address.
@@ -102,24 +102,24 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function createSingleInvoice(InvoiceCreationParam memory param) external onlyMarketplace returns (bytes32) {
-        bytes32 orderId = _createInvoice(ppStorage.updateInvoiceId(1), 0, param);
+    function createSingleInvoice(InvoiceCreationParam memory param) external onlyMarketplace returns (uint256) {
+        uint256 orderId = _createInvoice(ppStorage.updateInvoiceId(1), 0, param);
         return orderId;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function createMetaInvoice(InvoiceCreationParam[] memory param) external onlyMarketplace returns (bytes32) {
+    function createMetaInvoice(InvoiceCreationParam[] memory param) external onlyMarketplace returns (uint256) {
         uint256 totalPrice;
         uint256 startInvoiceId = ppStorage.getNextInvoiceId();
         uint256 length = param.length;
         uint256 upperInvoiceId = length + startInvoiceId - 1;
 
-        bytes32 metaInvoiceOrderId = _computeMetaInvoiceOrderId(startInvoiceId, upperInvoiceId, nextMetaInvoiceId);
+        uint256 metaInvoiceOrderId = _computeMetaInvoiceOrderId(startInvoiceId, upperInvoiceId, nextMetaInvoiceId);
         if (metaInvoice[metaInvoiceOrderId].price != 0) revert MetaInvoiceAlreadyExists();
 
         for (uint256 i = 0; i < length; i++) {
             totalPrice += param[i].price;
-            bytes32 subOrderId = _createInvoice(startInvoiceId + i, metaInvoiceOrderId, param[i]);
+            uint256 subOrderId = _createInvoice(startInvoiceId + i, metaInvoiceOrderId, param[i]);
             metaInvoice[metaInvoiceOrderId].subInvoiceIds.push(subOrderId);
         }
 
@@ -135,7 +135,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function paySingleInvoice(bytes32 orderId, address paymentToken) external payable {
+    function paySingleInvoice(uint256 orderId, address paymentToken) external payable {
         if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
 
         Invoice memory inv = invoice[orderId];
@@ -144,18 +144,18 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function payMetaInvoice(bytes32 orderId, address paymentToken) external payable {
+    function payMetaInvoice(uint256 orderId, address paymentToken) external payable {
         if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
         MetaInvoice memory metaInv = metaInvoice[orderId];
 
         if (metaInv.price == 0) revert InvoiceDoesNotExist();
 
-        bytes32[] memory subOrderIds = metaInvoice[orderId].subInvoiceIds;
+        uint256[] memory subOrderIds = metaInvoice[orderId].subInvoiceIds;
 
         bool done;
 
         for (uint256 i = 0; i < subOrderIds.length; i++) {
-            bytes32 subOrderId = subOrderIds[i];
+            uint256 subOrderId = subOrderIds[i];
             Invoice memory inv = invoice[subOrderId];
 
             if (inv.state != INITIATED) continue;
@@ -172,7 +172,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function createDispute(bytes32 orderId) external onlyMarketplace {
+    function createDispute(uint256 orderId) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
@@ -182,7 +182,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function handleDispute(bytes32 orderId, uint8 resolution, uint256 sellerShare) external onlyMarketplace {
+    function handleDispute(uint256 orderId, uint8 resolution, uint256 sellerShare) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
 
         if (inv.state != DISPUTED) revert InvalidInvoiceState();
@@ -205,7 +205,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function release(bytes32 orderId) external onlyMarketplace {
+    function release(uint256 orderId) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
         invoice[orderId].state = RELEASED;
         invoice[orderId].balance = 0;
@@ -216,7 +216,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function refund(bytes32 orderId, uint256 refundShare) external onlyMarketplace {
+    function refund(uint256 orderId, uint256 refundShare) external onlyMarketplace {
         Invoice memory inv = invoice[orderId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
@@ -230,14 +230,14 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function cancelInvoice(bytes32 orderId) public onlyMarketplace {
+    function cancelInvoice(uint256 orderId) public onlyMarketplace {
         if (invoice[orderId].state != INITIATED) revert InvalidInvoiceState();
         invoice[orderId].state = CANCELED;
         emit InvoiceCanceled(orderId);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function resolveDispute(bytes32 orderId) external onlyMarketplace {
+    function resolveDispute(uint256 orderId) external onlyMarketplace {
         if (invoice[orderId].state != DISPUTED) revert InvalidInvoiceState();
         invoice[orderId].state = DISPUTE_RESOLVED;
         emit DisputeResolved(orderId);
@@ -249,7 +249,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         priceFeed[token] = aggregator;
     }
 
-    function setInvoiceReleaseTime(bytes32 orderId, uint256 holdPeriod) external {
+    function setInvoiceReleaseTime(uint256 orderId, uint256 holdPeriod) external {
         if (msg.sender != address(ppStorage)) revert NotAuthorized();
         Invoice memory inv = invoice[orderId];
         if (inv.state != PAID) revert InvalidInvoiceState();
@@ -290,7 +290,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
      * - Creates an escrow contract and updates the invoice with payment info.
      * - Transfers tokens to escrow if the payment is in ERC20.
      */
-    function _invoicePayment(Invoice memory inv, bytes32 orderId, address paymentToken, uint256 value) internal {
+    function _invoicePayment(Invoice memory inv, uint256 orderId, address paymentToken, uint256 value) internal {
         if (msg.sender == inv.seller) revert BuyerCannotBeSeller();
         uint256 price = getTokenValueFromUsd(paymentToken, inv.price);
         if (inv.state != INITIATED) revert InvalidInvoiceState();
@@ -331,9 +331,9 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
      * @param param The parameters required to create the invoice.
      * @return orderId The keccak256 hash representing the invoice ID.
      */
-    function _createInvoice(uint256 id, bytes32 metaInvoiceId, InvoiceCreationParam memory param)
+    function _createInvoice(uint256 id, uint256 metaInvoiceId, InvoiceCreationParam memory param)
         internal
-        returns (bytes32)
+        returns (uint256)
     {
         if (param.price == 0) revert PriceCannotBeZero();
         if (param.price < 1e8) revert PriceIsTooLow();
@@ -345,7 +345,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         inv.state = INITIATED;
         inv.invoiceId = id;
 
-        bytes32 orderId = keccak256(abi.encode(param.orderId));
+        uint256 orderId = uint256(keccak256(abi.encode(param.orderId)));
 
         if (invoice[orderId].createdAt != 0) revert InvoiceAlreadyExists();
 
@@ -411,17 +411,17 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
      * @param salt A user-provided or system-generated value (e.g., nextMetaInvoiceId) to ensure uniqueness.
      * @return A keccak256 hash representing the deterministic meta-invoice order ID.
      */
-    function _computeMetaInvoiceOrderId(uint256 lower, uint256 upper, uint256 salt) internal view returns (bytes32) {
-        return keccak256(abi.encode(lower, upper, salt, address(this)));
+    function _computeMetaInvoiceOrderId(uint256 lower, uint256 upper, uint256 salt) internal view returns (uint256) {
+        return uint256(uint256(keccak256(abi.encode(lower, upper, salt, address(this)))) & ((1 << 216) - 1));
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getInvoice(bytes32 orderId) external view returns (Invoice memory) {
+    function getInvoice(uint256 orderId) external view returns (Invoice memory) {
         return invoice[orderId];
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getMetaInvoice(bytes32 metaInvoiceId) public view returns (MetaInvoice memory) {
+    function getMetaInvoice(uint256 metaInvoiceId) public view returns (MetaInvoice memory) {
         return metaInvoice[metaInvoiceId];
     }
 
