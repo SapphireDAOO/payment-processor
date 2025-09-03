@@ -14,7 +14,8 @@ library TaskQueueLib {
         internal
     {
         if (index[id] != 0) revert DuplicateTask();
-        heap.push(encode(id, dueTime));
+        uint256 key = encode(id, dueTime);
+        heap.data.push(key);
 
         uint256 i = heap.data.length - 1;
         index[id] = i + 1;
@@ -24,13 +25,13 @@ library TaskQueueLib {
     function removeAt(MinHeapLib.Heap storage heap, uint256 i, mapping(uint216 => uint256) storage index) internal {
         uint256 last = heap.data.length - 1;
         uint256 removedKey = heap.data[i];
-        uint216 removedId = uint216(removedKey);
+        uint192 removedId = uint192(removedKey);
 
         if (i != last) {
             uint256 movedKey = heap.data[last];
             heap.data[i] = movedKey;
 
-            uint216 movedId = uint216(movedKey);
+            uint192 movedId = uint192(movedKey);
             index[movedId] = i + 1;
 
             heap.data.pop();
@@ -64,6 +65,12 @@ library TaskQueueLib {
         } else if (newDueAt > oldDueAt) {
             _siftDown(heap, i, index);
         }
+    }
+
+    function due(MinHeapLib.Heap storage heap) internal view returns (bool) {
+        if (heap.length() == 0) return false;
+        (, uint40 dueAt) = peek(heap);
+        return block.timestamp >= dueAt;
     }
 
     function peek(MinHeapLib.Heap storage heap) internal view returns (uint216, uint40) {
@@ -119,5 +126,17 @@ library TaskQueueLib {
 
         index[uint216(a)] = j + 1;
         index[uint216(b)] = i + 1;
+    }
+
+    function getItems(MinHeapLib.Heap storage heap) external view returns (uint256[] memory) {
+        uint256 size = heap.data.length;
+        if (size == 0) return new uint256[](0);
+        uint256[] memory items = new uint256[](size);
+        for (uint256 i = 0; i < size; i++) {
+            (uint216 it,) = decode(heap.data[i]);
+            items[i] = uint256(it);
+        }
+
+        return items;
     }
 }

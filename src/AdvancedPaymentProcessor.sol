@@ -215,14 +215,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function release(uint216 orderId) external onlyMarketplace {
-        Invoice memory inv = invoice[orderId];
-        invoice[orderId].state = RELEASED;
-        invoice[orderId].balance = 0;
-        if (!_isReleasable(inv)) revert InvalidInvoiceState();
-
-        heap.removeAt(index[orderId] - 1, index);
-        uint256 sellerNetAmount = _processSellerPayout(inv, inv.balance);
-        emit PaymentReleased(orderId, sellerNetAmount);
+        if (!_release(orderId)) revert InvalidInvoiceState();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -258,6 +251,27 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         emit DisputeResolved(orderId);
     }
 
+    function checkUpkeep(bytes calldata) external view returns (bool, bytes memory) {
+        return (heap.due(), bytes(""));
+    }
+
+    function performUpkeep(bytes calldata) external {
+        uint256 gasThresold = 5_000_000;
+        while (gasleft() > gasThresold && heap.due()) {
+            (uint216 orderId,) = heap.peek();
+
+            bool released = _release(orderId);
+            if (!released) {
+                uint256 pos = index[orderId];
+                if (pos > 0 && pos <= heap.data.length) {
+                    heap.removeAt(pos - 1, index);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
     /// @inheritdoc IAdvancedPaymentProcessor
     function setPriceFeed(address token, address aggregator) external {
         if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
@@ -290,8 +304,24 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     /**
      * @dev Checks if an invoice state is eligible for release.
      */
-    function _isReleasable(Invoice memory inv) internal pure returns (bool) {
-        return inv.state == PAID || inv.state == DISPUTE_RESOLVED || inv.state == DISPUTE_DISMISSED;
+    function _isReleasable(Invoice memory inv) internal view returns (bool) {
+        return (inv.state == PAID || inv.state == DISPUTE_RESOLVED || inv.state == DISPUTE_DISMISSED)
+            && block.timestamp >= inv.releaseAt;
+    }
+
+    function _release(uint216 orderId) internal returns (bool) {
+        Invoice memory inv = invoice[orderId];
+        invoice[orderId].state = RELEASED;
+        invoice[orderId].balance = 0;
+        if (!_isReleasable(inv)) return false;
+
+        uint256 pos = index[orderId];
+        if (pos == 0 || pos > heap.data.length) return false;
+
+        heap.removeAt(pos - 1, index);
+        uint256 sellerNetAmount = _processSellerPayout(inv, inv.balance);
+        emit PaymentReleased(orderId, sellerNetAmount);
+        return true;
     }
 
     /**

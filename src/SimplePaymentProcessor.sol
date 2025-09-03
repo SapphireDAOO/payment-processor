@@ -153,8 +153,29 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         emit InvoiceCanceled(orderId);
     }
 
+    function _release(uint216 orderId) internal returns (bool) {
+        Invoice memory invoice = invoiceData[orderId];
+
+        if (invoice.status == RELEASED) return false;
+        if (invoice.status != ACCEPTED) return false;
+        if (block.timestamp < invoice.releaseAt) return false;
+
+        uint256 feeValue = calculateFee(invoice.price);
+
+        invoiceData[orderId].status = RELEASED;
+
+        uint256 pos = index[orderId];
+        if (pos == 0 || pos > heap.data.length) return false;
+
+        heap.removeAt(pos - 1, index);
+
+        IEscrow(invoice.escrow).withdraw(address(0), invoice.seller, invoice.price - feeValue);
+        emit InvoiceReleased(orderId);
+        return true;
+    }
+
     /// @inheritdoc ISimplePaymentProcessor
-    function releaseInvoice(uint216 orderId) external {
+    function releaseInvoice(uint216 orderId) public {
         Invoice memory invoice = invoiceData[orderId];
 
         if (invoice.status == RELEASED) revert InvoiceHasAlreadyBeenReleased();
@@ -172,7 +193,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
 
         invoiceData[orderId].status = RELEASED;
 
-        console.log("index", index[orderId]);
         heap.removeAt(index[orderId] - 1, index);
 
         IEscrow(invoice.escrow).withdraw(address(0), msg.sender, invoice.price - feeValue);
@@ -209,13 +229,34 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function rejectPayment(uint216 orderId) external {
+    function rejectPayment(uint216 orderId) public {
         Invoice memory invoice = invoiceData[orderId];
         _validateInvoiceStateForPaymentDecision(invoice);
         invoiceData[orderId].status = REJECTED;
         IEscrow(invoice.escrow).withdraw(address(0), invoice.buyer, invoice.price);
 
         emit InvoiceRejected(orderId);
+    }
+
+    function checkUpkeep(bytes calldata) external view returns (bool, bytes memory) {
+        return (heap.due(), bytes(""));
+    }
+
+    function performUpkeep(bytes calldata) external {
+        uint256 gasThresold = 100_000;
+
+        while (gasleft() > gasThresold && heap.due()) {
+            (uint216 orderId,) = heap.peek();
+
+            if (!_release(orderId)) {
+                uint256 pos = index[orderId];
+                if (pos > 0 && pos <= heap.data.length) {
+                    heap.removeAt(pos - 1, index);
+                } else {
+                    break;
+                }
+            }
+        }
     }
 
     /**
@@ -277,5 +318,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     /// @inheritdoc ISimplePaymentProcessor
     function getMinimumInvoiceValue() external view returns (uint256) {
         return minimumInvoiceValue;
+    }
+
+    function getItems() external view returns (uint256[] memory) {
+        return heap.getItems();
     }
 }

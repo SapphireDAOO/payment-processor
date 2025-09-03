@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import { ISimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
+import { console } from "forge-std/console.sol";
 
 error NotAuthorized();
 
@@ -273,5 +274,46 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         assertEq(sellerOne.balance, INITIAL_BALANCE + invoicePrice - fee);
         assertEq(simplePP.getInvoiceData(orderId).status, simplePP.RELEASED());
+    }
+
+    function test_automatedRelease() public {
+        uint256 invoicePrice = 100 ether;
+
+        uint256 numberOfInvoice = 10;
+        uint216[] memory orderIds = new uint216[](numberOfInvoice);
+
+        for (uint256 i = 0; i < numberOfInvoice; i++) {
+            vm.prank(sellerOne);
+            uint216 orderId = simplePP.createInvoice(invoicePrice);
+
+            // PAY
+            vm.prank(buyerOne);
+            simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
+
+            // ACCEPT
+            vm.prank(sellerOne);
+            simplePP.acceptPayment(orderId);
+            orderIds[i] = orderId;
+        }
+
+        vm.prank(admin);
+        bytes memory data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, orderIds[9], 100 days);
+        ppStorage.execute(address(simplePP), data);
+
+        vm.warp(block.timestamp + 5 days);
+
+        (bool upkeepNeeded,) = simplePP.checkUpkeep("");
+        assertTrue(upkeepNeeded);
+
+        uint256[] memory o = simplePP.getItems();
+        for (uint256 i = 0; i < o.length; i++) {
+            console.log("items in heap before up keep", o[i]);
+        }
+
+        simplePP.performUpkeep("");
+        for (uint256 i = 0; i < numberOfInvoice; i++) {
+            console.log("order:", orderIds[i], simplePP.getInvoiceData(orderIds[i]).status, i);
+        }
+        assertEq(simplePP.getInvoiceData(orderIds[9]).status, 2);
     }
 }
