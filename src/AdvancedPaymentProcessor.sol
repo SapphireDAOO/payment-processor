@@ -2,7 +2,6 @@
 pragma solidity 0.8.28;
 
 import { EscrowFactory } from "./EscrowFactory.sol";
-
 import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";
 
 import { IERC20 } from "./interface/IERC20.sol";
@@ -272,14 +271,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         while (gasleft() > gasThresold && heap.due()) {
             (uint216 orderId,) = heap.peek();
 
-            if (!_release(orderId)) {
-                uint256 pos = index[orderId];
-                if (pos > 0 && pos <= heap.data.length) {
-                    heap.removeAt(pos - 1, index);
-                } else {
-                    break;
-                }
-            }
+            if (!_release(orderId)) break;
         }
     }
 
