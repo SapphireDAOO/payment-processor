@@ -18,6 +18,7 @@ abstract contract BaseSetUp is Test {
     uint256 public constant FEE_RATE = 500;
 
     uint256 constant DEFAULT_HOLD_PERIOD = 1 days;
+    uint256 constant DEFAULT_GAS_THRESOLD = 100_000;
 
     function initialize() public virtual returns (address) {
         vm.deal(buyerOne, INITIAL_BALANCE);
@@ -31,7 +32,8 @@ abstract contract BaseSetUp is Test {
             feeReceiver: feeReceiver,
             marketplace: address(this),
             feeRate: FEE_RATE,
-            defaultHoldPeriod: DEFAULT_HOLD_PERIOD
+            defaultHoldPeriod: DEFAULT_HOLD_PERIOD,
+            gasThresold: DEFAULT_GAS_THRESOLD
         });
 
         vm.prank(admin);

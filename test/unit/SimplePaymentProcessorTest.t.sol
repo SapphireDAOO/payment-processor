@@ -310,6 +310,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
             console.log("items in heap before up keep", o[i]);
         }
 
+        vm.prank(admin);
         simplePP.performUpkeep("");
         for (uint256 i = 0; i < numberOfInvoice; i++) {
             console.log("order:", orderIds[i], simplePP.getInvoiceData(orderIds[i]).status, i);

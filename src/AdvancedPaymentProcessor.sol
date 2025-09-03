@@ -28,6 +28,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
 
     MinHeapLib.Heap private heap;
 
+    address private forwarder;
+
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public ppStorage;
 
@@ -258,7 +260,11 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     function performUpkeep(bytes calldata) external {
-        uint256 gasThresold = 5_000_000;
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner() && msg.sender != forwarder) {
+            revert NotAuthorized();
+        }
+
+        uint256 gasThresold = ppStorage.getGasThresold();
         while (gasleft() > gasThresold && heap.due()) {
             (uint216 orderId,) = heap.peek();
 
@@ -289,6 +295,11 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         heap.reschedule(orderId, uint40(inv.releaseAt), index);
 
         emit UpdateReleaseTime(orderId, holdPeriod);
+    }
+
+    function setForwarderAddress(address forwarderAddress) external {
+        if (msg.sender != address(ppStorage)) revert NotAuthorized();
+        forwarder = forwarderAddress;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor

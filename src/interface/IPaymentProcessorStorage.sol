@@ -23,6 +23,7 @@ interface IPaymentProcessorStorage {
         uint256 feeRate;
         /// @notice The default hold period for funds in escrow, measured in seconds.
         uint256 defaultHoldPeriod;
+        uint256 gasThresold;
     }
 
     /**
@@ -113,4 +114,6 @@ interface IPaymentProcessorStorage {
      * @return The default hold period in seconds.
      */
     function getDefaultHoldPeriod() external view returns (uint256);
+
+    function getGasThresold() external view returns (uint256);
 }

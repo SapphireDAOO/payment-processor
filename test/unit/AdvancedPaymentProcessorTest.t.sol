@@ -571,7 +571,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         bytes memory data = abi.encodeWithSelector(advancedPP.setInvoiceReleaseTime.selector, orderIds[length], 3 days);
 
-        vm.prank(admin);
+        vm.startPrank(admin);
         ppStorage.execute(address(advancedPP), data);
 
         advancedPP.performUpkeep("");
@@ -584,6 +584,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         vm.warp(block.timestamp + 3 days);
         advancedPP.performUpkeep("");
+        vm.stopPrank();
         assertEq(advancedPP.getInvoice(orderIds[length]).state, advancedPP.RELEASED());
     }
 }

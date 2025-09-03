@@ -53,6 +53,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     /// @notice Basis points denominator used for percentage calculations (1% = 100).
     uint256 public constant BASIS_POINTS = 10000;
 
+    address public forwarder;
+
     /**
      * @notice Stores the `Invoice` structs, keyed by a unique invoice ID.
      * @dev The key is an unsigned integer representing the invoice ID, and the value
@@ -243,8 +245,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     }
 
     function performUpkeep(bytes calldata) external {
-        uint256 gasThresold = 100_000;
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner() && msg.sender != forwarder) {
+            revert NotAuthorized();
+        }
 
+        uint256 gasThresold = ppStorage.getGasThresold();
         while (gasleft() > gasThresold && heap.due()) {
             (uint216 orderId,) = heap.peek();
 
@@ -298,6 +303,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     function setMinimumInvoiceValue(uint256 newMinimumInvoiceValue) public {
         if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
         minimumInvoiceValue = newMinimumInvoiceValue;
+    }
+
+    function setForwarderAddress(address forwarderAddress) external {
+        if (msg.sender != address(ppStorage)) revert NotAuthorized();
+        forwarder = forwarderAddress;
     }
 
     /// @inheritdoc ISimplePaymentProcessor

@@ -63,6 +63,10 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         config.feeRate = newFeeRate;
     }
 
+    function setGasThresold(uint256 newGasThresold) external onlyOwner {
+        config.gasThresold = newGasThresold;
+    }
+
     /// @inheritdoc IPaymentProcessorStorage
     function setDefaultHoldPeriod(uint256 newDefaultHoldPeriod) public onlyOwner {
         if (newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
@@ -106,5 +110,10 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @inheritdoc IPaymentProcessorStorage
     function getDefaultHoldPeriod() external view returns (uint256) {
         return config.defaultHoldPeriod;
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function getGasThresold() external view returns (uint256) {
+        return config.gasThresold;
     }
 }
