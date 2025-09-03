@@ -1,12 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+/**
+ * @title IEscrowFactory
+ * @notice Interface for contracts responsible for deploying and managing escrow instances.
+ * @dev Used to abstract the creation and configuration of escrow contracts.
+ */
 interface IEscrowFactory {
+    /// @notice Parameters required to initialize an escrow contract.
     struct EscrowCreationParams {
+        ///  @notice The address of the seller who will receive the funds upon successful transaction.
         address seller;
+        ///  @notice The address of the buyer who deposits the funds into escrow.
         address buyer;
-        uint256 orderId;
+        ///  @notice The unique identifier associated with the invoice or order.
+        uint216 orderId;
+        ///  @notice The total amount to be held in escrow, denominated in the payment token or native currency.
         uint256 value;
+        ///  @notice The address of the token used for payment. Use address(0) for native currency (e.g., ETH).
         address paymentToken;
     }
 
@@ -28,12 +39,12 @@ interface IEscrowFactory {
      * @param orderId A hash representing the invoice content or metadata.
      * @return  A `bytes32` salt value uniquely derived from the input parameters.
      */
-    function computeSalt(address seller, address buyer, uint256 orderId) external pure returns (bytes32);
+    function computeSalt(address seller, address buyer, uint216 orderId) external pure returns (bytes32);
 
     /**
      * @notice Emitted when a new escrow contract is created.
      * @param orderId The unique ID of the invoice associated with the escrow.
      * @param escrow The address of the newly created escrow contract.
      */
-    event EscrowCreated(uint256 indexed orderId, address indexed escrow);
+    event EscrowCreated(uint216 indexed orderId, address indexed escrow);
 }

@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+/**
+ * @title IPaymentProcessorStorage
+ * @notice Interface for storage layer used by payment processor contracts.
+ * @dev Allows interaction with invoice data
+ */
 interface IPaymentProcessorStorage {
     /// @notice Thrown when a low-level external call fails.
     error CallFailed();
@@ -31,6 +36,17 @@ interface IPaymentProcessorStorage {
      * @dev Should be implemented to increment or modify the invoice ID tracker as needed.
      */
     function updateInvoiceId(uint216 by) external returns (uint216);
+
+    /**
+     * @notice Executes a low-level call to an invoice contract.
+     * @dev Used by ppStorage to trigger state changes (e.g., setting release times)
+     *      in external invoice contracts. The target and calldata must be properly
+     *      encoded off-chain. Only callable by authorized contracts or managers.
+     * @param target The address of the invoice contract to call.
+     * @param data ABI-encoded calldata including the function selector and arguments.
+     * @return result The raw returned data from the low-level call.
+     */
+    function execute(address target, bytes calldata data) external returns (bytes memory);
 
     /**
      * @notice Sets or revokes authorization for a specific address.
@@ -68,16 +84,13 @@ interface IPaymentProcessorStorage {
      */
     function setFeeRate(uint256 feeRate) external;
 
-    // /**
-    //  * @notice Executes a low-level call to an invoice contract.
-    //  * @dev Used by ppStorage to trigger state changes (e.g., setting release times)
-    //  *      in external invoice contracts. The target and calldata must be properly
-    //  *      encoded off-chain. Only callable by authorized contracts or managers.
-    //  * @param target The address of the invoice contract to call.
-    //  * @param data ABI-encoded calldata including the function selector and arguments.
-    //  * @return result The raw returned data from the low-level call.
-    //  */
-    // function execute(address target, bytes calldata data) external returns (bytes memory);
+    /**
+     * @notice Updates the gas threshold used in automated upkeep logic.
+     * @dev Callable only by authorized roles (e.g., admin or owner).
+     *      This threshold determines the minimum gas required to continue processing during `performUpkeep`.
+     * @param newGasThresold The new gas threshold value (in units of gas).
+     */
+    function setGasThresold(uint256 newGasThresold) external;
 
     /**
      * @notice Returns the ID that will be assigned to the next invoice.
@@ -115,5 +128,10 @@ interface IPaymentProcessorStorage {
      */
     function getDefaultHoldPeriod() external view returns (uint256);
 
+    /**
+     * @notice Returns the current gas threshold used to limit the execution loop in automated upkeep.
+     * @dev This threshold is typically used to prevent out-of-gas errors during batch operations in Chainlink Automation.
+     * @return The gas threshold value in units of gas.
+     */
     function getGasThresold() external view returns (uint256);
 }

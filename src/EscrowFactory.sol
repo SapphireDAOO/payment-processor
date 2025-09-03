@@ -3,12 +3,17 @@ pragma solidity 0.8.28;
 
 import { CREATE3 } from "solady/utils/CREATE3.sol";
 
-import { Escrow, IEscrow } from "./Escrow.sol";
+import { Escrow } from "./Escrow.sol";
 import { IEscrowFactory } from "./interface/IEscrowFactory.sol";
 
+/**
+ * @title EscrowFactory
+ * @notice Abstract factory for deploying Escrow contracts deterministically.
+ * @dev Uses CREATE3 or CREATE2 to generate predictable addresses. Must be inherited by a processor contract.
+ */
 abstract contract EscrowFactory is IEscrowFactory {
     /// @inheritdoc IEscrowFactory
-    function computeSalt(address seller, address buyer, uint256 orderId) public pure returns (bytes32) {
+    function computeSalt(address seller, address buyer, uint216 orderId) public pure returns (bytes32) {
         return keccak256(abi.encode(seller, buyer, orderId));
     }
 

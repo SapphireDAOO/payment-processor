@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
-import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
+import { SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { BaseSetUp } from "./BaseSetUp.sol";
 
 abstract contract SimplePaymentProcessorSetUp is BaseSetUp {

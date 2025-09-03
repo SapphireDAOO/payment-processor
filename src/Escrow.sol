@@ -4,20 +4,25 @@ pragma solidity 0.8.28;
 import { IEscrow } from "./interface/IEscrow.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 
+/**
+ * @title Escrow
+ * @notice Implements the core escrow functionality for holding and releasing payments between buyers and sellers.
+ * @dev Conforms to the IEscrow interface. Used by the payment processor for individual invoice escrow handling.
+ */
 contract Escrow is IEscrow {
     using SafeTransferLib for address;
 
     /// @notice The address of the buyer associated with this escrow.
-    address public immutable buyer;
+    address public immutable BUYER;
 
     /// @notice The address of the seller associated with this escrow.
-    address public immutable seller;
+    address public immutable SELLER;
 
     /// @notice The address of the payment processor.
-    address public immutable paymentProcessor;
+    address public immutable PAYMENT_PROCESSOR;
 
     /// @notice The invoice ID associated with the escrow.
-    uint256 public immutable invoice;
+    uint256 public immutable INVOICE;
 
     modifier onlyPaymentProcessor() {
         _onlyPaymentProcessor();
@@ -36,11 +41,11 @@ contract Escrow is IEscrow {
      * @param payer The address of the payer for the invoice.
      * @param paymentProcessorAddress The address of the payment processor contract managing the invoice.
      */
-    constructor(uint256 orderId, address creator, address payer, address paymentProcessorAddress) payable {
-        invoice = orderId;
-        seller = creator;
-        buyer = payer;
-        paymentProcessor = paymentProcessorAddress;
+    constructor(uint216 orderId, address creator, address payer, address paymentProcessorAddress) payable {
+        INVOICE = orderId;
+        SELLER = creator;
+        BUYER = payer;
+        PAYMENT_PROCESSOR = paymentProcessorAddress;
         emit FundsDeposited(orderId, msg.value);
     }
 
@@ -58,7 +63,7 @@ contract Escrow is IEscrow {
      * @dev Reverts with `Unauthorized` if `msg.sender` is not equal to `paymentProcessor`.
      */
     function _onlyPaymentProcessor() internal view {
-        if (msg.sender != paymentProcessor) {
+        if (msg.sender != PAYMENT_PROCESSOR) {
             revert Unauthorized();
         }
     }

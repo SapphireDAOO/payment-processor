@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { StdInvariant } from "forge-std/StdInvariant.sol";
-import { Test, console } from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 
 import { BaseSetUp, PaymentProcessorStorage } from "../utils/BaseSetUp.sol";
 

@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
-import { Test, console } from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 
 abstract contract BaseSetUp is Test {
     PaymentProcessorStorage ppStorage;

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+/**
+ *  @title IAdvancedPaymentProcessor
+ *  @notice Interface for the advanced payment processor contract with escrow, meta-invoice, and dispute support.
+ */
 interface IAdvancedPaymentProcessor {
     // ================================================================
     //                              ERRORS
@@ -49,6 +53,7 @@ interface IAdvancedPaymentProcessor {
     //                              STRUCTS
     // ================================================================
 
+    /// @notice Represents a single invoice created by a buyer to pay a seller, with escrow and payment tracking.
     struct Invoice {
         /// @notice A unique identifier assigned to this invoice, typically sequentially.
         uint256 invoiceId;
@@ -74,10 +79,11 @@ interface IAdvancedPaymentProcessor {
         uint256 balance;
         /// @notice The timestamp when funds in escrow can be released to the seller.
         uint256 releaseAt;
-        /// @notice Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.specifically to handle payment
+        /// @notice Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.
         uint216 metaInvoiceId;
     }
 
+    /// @notice Represents a collection of sub-invoices grouped into a single meta-invoice for batch payment and tracking.
     struct MetaInvoice {
         /// @notice Total price of all sub-invoices under this meta invoice.
         uint256 price;
@@ -85,6 +91,7 @@ interface IAdvancedPaymentProcessor {
         uint216[] subInvoiceIds;
     }
 
+    /// @notice Parameters used to create a new invoice or sub-invoice.
     struct InvoiceCreationParam {
         /// @notice A unique string identifier for the invoice.
         string orderId;
@@ -152,7 +159,7 @@ interface IAdvancedPaymentProcessor {
     /**
      * @notice Issues a refund for a given order.
      * @param orderId The identifier of the order to refund.
-     * @param refundShare The portion of the invoice price (in basis points) to be refunded to the buyer.
+     * @param refundShare The portion of the invoice price to refund, specified in basis points (1% = 100).
      */
     function refund(uint216 orderId, uint256 refundShare) external;
 
@@ -178,18 +185,25 @@ interface IAdvancedPaymentProcessor {
     function resolveDispute(uint216 orderId) external;
 
     /**
-     * @notice Releases payment to the seller for a successfully completed invoice.
-     * @dev Callable only by the marketplace. Only valid for ACCEPTED invoices.
+     *  @notice Releases escrowed funds to the seller after the release window has passed.
+     * @dev Callable only by the marketplace. Only valid for invoices in the ACCEPTED state
+     *      and only after `releaseAt` timestamp has been reached.
      * @param orderId The ID of the invoice.
      */
     function release(uint216 orderId) external;
 
     /**
-     * @notice
+     * @notice Sets the Chainlink price feed aggregator for a specific payment token.
      * @param token The address of the ERC20 token.
      * @param aggregator The address of the Chainlink aggregator for the token.
      */
     function setPriceFeed(address token, address aggregator) external;
+
+    /**
+     * @notice Updates the address of the forwarder contract used for relayed or automated calls.
+     * @param forwarderAddress The new forwarder contract address to be set.
+     */
+    function setForwarderAddress(address forwarderAddress) external;
 
     /**
      * @notice Retrieves the invoice data for a specific invoice ID.
@@ -209,25 +223,38 @@ interface IAdvancedPaymentProcessor {
      * @notice Returns the total number of unique invoices created.
      * @return The count of invoices created so far.
      */
-    function totalUniqueInvoiceCreated() external view returns (uint256);
+    function totalUniqueInvoiceCreated() external view returns (uint216);
 
     /**
      * @notice Returns the total number of meta-invoices created.
      * @return The count of meta-invoices created so far.
      */
-    function totalMetaInvoiceCreated() external view returns (uint256);
+    function totalMetaInvoiceCreated() external view returns (uint216);
+
+    /**
+     * @notice Returns the address of the configured forwarder contract.
+     * @return The forwarder contract address.
+     */
+    function getForwarder() external view returns (address);
 
     /**
      * @notice Returns the ID that will be assigned to the next invoice.
      * @return The next invoice ID.
      */
-    function getNextInvoiceId() external view returns (uint256);
+    function getNextInvoiceId() external view returns (uint216);
 
     /**
      * @notice Returns the ID that will be assigned to the next meta-invoice.
      * @return The next meta-invoice ID.
      */
-    function getNextMetaInvoiceId() external view returns (uint256);
+    function getNextMetaInvoiceId() external view returns (uint216);
+
+    /**
+     * @notice Returns a list of all task IDs currently in the heap.
+     * @dev Retrieves the uint216 task identifiers extracted from the internal encoded heap structure.
+     * @return An array of task IDs (uint256) currently stored in the heap.
+     */
+    function getItems() external view returns (uint216[] memory);
 
     /**
      * @notice Converts a USD-denominated price to the equivalent amount in the specified payment token.
@@ -245,33 +272,33 @@ interface IAdvancedPaymentProcessor {
      * @notice Emitted when a dispute is dismissed and no party receives a refund or payout.
      * @param orderId The ID of the invoice involved in the dispute.
      */
-    event DisputeDismissed(uint256 indexed orderId);
+    event DisputeDismissed(uint216 indexed orderId);
 
     /**
      * @notice Emitted when a dispute is resolved in favor of one party without partial refund.
      * @param orderId The ID of the invoice involved in the dispute.
      */
-    event DisputeResolved(uint256 indexed orderId);
+    event DisputeResolved(uint216 indexed orderId);
 
     /**
      * @notice Emitted when a new invoice is created.
      * @param orderId The ID of the newly created invoice.
      * @param invoice The invoice data.
      */
-    event InvoiceCreated(uint256 indexed orderId, Invoice invoice);
+    event InvoiceCreated(uint216 indexed orderId, Invoice invoice);
 
     /**
      * @notice Emitted when a meta-invoice is successfully created.
      * @param metaInvoiceId The unique identifier of the newly created meta-invoice.
      * @param totalPrice The aggregated total price (in USD, 8 decimals) of all sub-invoices under this meta-invoice.
      */
-    event MetaInvoiceCreated(uint256 indexed metaInvoiceId, uint256 indexed totalPrice);
+    event MetaInvoiceCreated(uint216 indexed metaInvoiceId, uint256 indexed totalPrice);
 
     /**
      * @notice Emitted when an invoice is canceled by the seller and the buyer is refunded.
      * @param orderId The ID of the canceled invoice.
      */
-    event InvoiceCanceled(uint256 indexed orderId);
+    event InvoiceCanceled(uint216 indexed orderId);
 
     /**
      * @notice Emitted when a dispute is settled and the funds are split between buyer and seller.
@@ -279,7 +306,7 @@ interface IAdvancedPaymentProcessor {
      * @param sellerAmount The amount transferred to the seller.
      * @param buyerAmount The amount refunded to the buyer.
      */
-    event DisputeSettled(uint256 indexed orderId, uint256 sellerAmount, uint256 buyerAmount);
+    event DisputeSettled(uint216 indexed orderId, uint256 sellerAmount, uint256 buyerAmount);
 
     /**
      * @notice Emitted when an invoice has been successfully paid and escrow is created.
@@ -288,32 +315,32 @@ interface IAdvancedPaymentProcessor {
      * @param escrowAddress The address of the newly created escrow contract holding the funds.
      * @param amount The amount paid in the token's smallest denomination (based on token decimals).
      */
-    event InvoicePaid(uint256 indexed orderId, address paymentToken, address escrowAddress, uint256 amount);
+    event InvoicePaid(uint216 indexed orderId, address paymentToken, address escrowAddress, uint256 amount);
 
     /**
      * @notice Emitted when the escrow release time is updated for a given invoice.
      * @param orderId The unique identifier of the invoice whose release time was modified.
      * @param newHoldPeriod The updated escrow hold duration in seconds.
      */
-    event UpdateReleaseTime(uint256 indexed orderId, uint256 newHoldPeriod);
+    event UpdateReleaseTime(uint216 indexed orderId, uint256 newHoldPeriod);
 
     /**
      * @notice Emitted when the payment is released to the seller.
      * @param orderId The ID of the invoice for which payment was released.
      * @param sellerAmount The amount transferred to the seller.
      */
-    event PaymentReleased(uint256 indexed orderId, uint256 sellerAmount);
+    event PaymentReleased(uint216 indexed orderId, uint256 sellerAmount);
 
     /**
      * @notice Emitted when a dispute is raised for an invoice by the buyer.
      * @param orderId The ID of the disputed invoice.
      */
-    event DisputeCreated(uint256 indexed orderId);
+    event DisputeCreated(uint216 indexed orderId);
 
     /**
      * @notice Emitted when a refund is issued for a specific order.
      * @param orderId The unique identifier of the refunded order.
      * @param amount The amount refunded to the buyer.
      */
-    event Refunded(uint256 indexed orderId, uint256 indexed amount);
+    event Refunded(uint216 indexed orderId, uint256 indexed amount);
 }

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
+import { ISimplePaymentProcessor } from "../../src/interface/ISimplePaymentProcessor.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
-import { console } from "forge-std/console.sol";
 
 contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
     function testFuzz_invoice_creation(uint256 _amount) public {

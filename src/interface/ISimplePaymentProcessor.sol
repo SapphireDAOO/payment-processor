@@ -80,6 +80,7 @@ interface ISimplePaymentProcessor {
     //                              STRUCTS
     // ================================================================
 
+    /// @notice Represents an invoice between a buyer and seller, with escrow, timestamps, and status tracking.
     struct Invoice {
         /// @notice A unique identifier assigned to this invoice, typically sequentially.
         uint256 invoiceId;
@@ -167,6 +168,12 @@ interface ISimplePaymentProcessor {
     function setMinimumInvoiceValue(uint256 minimumInvoiceValue) external;
 
     /**
+     * @notice Updates the address of the forwarder contract used for relayed or automated calls.
+     * @param forwarderAddress The new forwarder contract address to be set.
+     */
+    function setForwarderAddress(address forwarderAddress) external;
+
+    /**
      * @notice Refunds the seller of a specific invoice.
      * @dev This function allows the buyer to be refund if the acceptance window has not been exceeded
      *      and the invoice is eligible for a refund. The refund will be processed through the escrow contract.
@@ -179,13 +186,13 @@ interface ISimplePaymentProcessor {
      * @notice Gets the current invoice ID counter.
      * @return The current invoice ID.
      */
-    function getNextInvoiceId() external view returns (uint256);
+    function getNextInvoiceId() external view returns (uint216);
 
     /**
      * @notice Returns the total number of invoices created.
      * @return The total count of invoices created as a `uint256` value.
      */
-    function totalInvoiceCreated() external view returns (uint256);
+    function totalInvoiceCreated() external view returns (uint216);
 
     /**
      * @notice Retrieves detailed data for a specific invoice.
@@ -203,10 +210,23 @@ interface ISimplePaymentProcessor {
     function calculateFee(uint256 _amount) external view returns (uint256);
 
     /**
+     * @notice Returns the address of the configured forwarder contract.
+     * @return The forwarder contract address.
+     */
+    function getForwarder() external view returns (address);
+
+    /**
      * @notice Returns the minimum allowed invoice value required for invoice creation.
      * @return The minimum invoice value in wei.
      */
     function getMinimumInvoiceValue() external view returns (uint256);
+
+    /**
+     * @notice Returns a list of all task IDs currently in the heap.
+     * @dev Retrieves the uint216 task identifiers extracted from the internal encoded heap structure.
+     * @return An array of task IDs (uint256) currently stored in the heap.
+     */
+    function getItems() external view returns (uint216[] memory);
 
     // ================================================================
     //                              EVENTS
@@ -217,49 +237,49 @@ interface ISimplePaymentProcessor {
      * @param orderId The unique identifier (hash) for the created invoice.
      * @param invoice The full invoice struct containing buyer, price, timestamps, state, and metadata.
      */
-    event InvoiceCreated(uint256 indexed orderId, Invoice invoice);
+    event InvoiceCreated(uint216 indexed orderId, Invoice invoice);
 
     /**
      * @notice Emitted when an invoice payment is made.
      * @param orderId The unique key of the accepted invoice.
      * @param amountPaid The amount paid towards the invoice in wei.
      */
-    event InvoicePaid(uint256 indexed orderId, address indexed buyer, uint256 indexed amountPaid);
+    event InvoicePaid(uint216 indexed orderId, address indexed buyer, uint256 indexed amountPaid);
 
     /**
      * @notice Emitted when an invoice is rejected by the seller.
      * @param orderId The unique key of the rejected invoice.
      */
-    event InvoiceRejected(uint256 indexed orderId);
+    event InvoiceRejected(uint216 indexed orderId);
 
     /**
      * @notice Emitted when an invoice is refunded to the buyer.
      * @param orderId The unique key of the rejected invoice.
      */
-    event InvoiceRefunded(uint256 indexed orderId);
+    event InvoiceRefunded(uint216 indexed orderId);
 
     /**
      * @notice Emitted when an invoice is accepted by the seller.
      * @param orderId The unique key of the accepted invoice.
      */
-    event InvoiceAccepted(uint256 indexed orderId);
+    event InvoiceAccepted(uint216 indexed orderId);
 
     /**
      * @notice Emitted when an invoice is canceled.
      * @param orderId The unique key of the canceled invoice.
      */
-    event InvoiceCanceled(uint256 indexed orderId);
+    event InvoiceCanceled(uint216 indexed orderId);
 
     /**
      * @notice Emitted when an invoice is released (funds disbursed from escrow).
      * @param orderId The unique key of the released invoice.
      */
-    event InvoiceReleased(uint256 indexed orderId);
+    event InvoiceReleased(uint216 indexed orderId);
 
     /**
      * @notice Emitted when the hold period of a given invoice is updated to a new timestamp.
      * @param orderId The key of the invoice whose hold period was updated.
      * @param releaseDueTimestamp The new hold period expressed as a UNIX timestamp.
      */
-    event UpdateHoldPeriod(uint256 indexed orderId, uint256 indexed releaseDueTimestamp);
+    event UpdateHoldPeriod(uint216 indexed orderId, uint256 indexed releaseDueTimestamp);
 }

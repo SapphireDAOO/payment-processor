@@ -23,5 +23,14 @@ fail_on_revert = true
 amoy = "${TEST_NET_RPC_URL}"
 anvil = "http://127.0.0.1:8545"
 
+[lint]
+exclude_lints = [
+    "screaming-snake-case-const",
+    "screaming-snake-case-immutable",
+    "mixed-case-variable",
+    "asm-keccak256",
+]
+# mixed-case-function = false
+
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

@@ -5,6 +5,11 @@ import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.s
 import { LibCall } from "solady/utils/LibCall.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 
+/**
+ * @title PaymentProcessorStorage
+ * @notice Stores global state and metadata for invoices, escrow configurations, and contract parameters.
+ * @dev Ownable contract that exposes controlled write access to update internal mappings and counters.
+ */
 contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     using LibCall for address;
 
@@ -19,7 +24,10 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
      *  @dev Maps an address to a boolean indicating its authorization status.
      */
     mapping(address => bool) private isAuthorized;
-
+    /**
+     * @notice Stores the configuration settings for the contract (e.g., default hold period, gas threshold).
+     *  @dev Struct containing modifiable parameters used throughout the contract.
+     */
     Configuration private config;
 
     /**
@@ -33,9 +41,11 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         _;
     }
 
-    // /**
-    //  *  @notice Initializes the contract with the owner, fee receiver, and initial fee rate.
-    //  */
+    /**
+     * @notice Initializes the contract with the given configuration.
+     * @dev Sets the contract owner, stores the initial configuration parameters, and initializes the invoice ID counter.
+     * @param configuration The initial configuration parameters including owner, forwarder address, gas threshold, and hold period.
+     */
     constructor(Configuration memory configuration) {
         _initializeOwner(configuration.owner);
         config = configuration;
@@ -46,6 +56,11 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     function updateInvoiceId(uint216 by) external onlyAuthorized returns (uint216) {
         nextInvoiceId += by;
         return totalInvoiceCreated();
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function execute(address target, bytes calldata data) external onlyOwner returns (bytes memory) {
+        return target.callContract(data);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
@@ -63,6 +78,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         config.feeRate = newFeeRate;
     }
 
+    /// @inheritdoc IPaymentProcessorStorage
     function setGasThresold(uint256 newGasThresold) external onlyOwner {
         config.gasThresold = newGasThresold;
     }
@@ -71,10 +87,6 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     function setDefaultHoldPeriod(uint256 newDefaultHoldPeriod) public onlyOwner {
         if (newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
         config.defaultHoldPeriod = newDefaultHoldPeriod;
-    }
-
-    function execute(address target, bytes calldata data) external onlyOwner returns (bytes memory) {
-        return target.callContract(data);
     }
 
     /// @inheritdoc IPaymentProcessorStorage

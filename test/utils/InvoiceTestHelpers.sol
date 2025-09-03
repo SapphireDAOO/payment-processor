@@ -37,7 +37,7 @@ function applyBasisPoints(AdvancedPaymentProcessor pp, uint256 amount, uint256 b
     return (amount * basisPoints) / pp.BASIS_POINTS();
 }
 
-function getEscrowAddress(AdvancedPaymentProcessor pp, address seller, address buyer, uint256 orderId)
+function getEscrowAddress(AdvancedPaymentProcessor pp, address seller, address buyer, uint216 orderId)
     view
     returns (address)
 {

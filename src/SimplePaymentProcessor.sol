@@ -3,20 +3,21 @@ pragma solidity 0.8.28;
 
 import { Escrow, IEscrow } from "./Escrow.sol";
 
-import { console } from "forge-std/console.sol";
-
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
-import { Ownable } from "solady/auth/Ownable.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
-import { MinHeapLib } from "solady/utils/MinHeapLib.sol";
 
+/**
+ * @title SimplePaymentProcessor
+ * @notice Lightweight payment processor for single-invoice flows with native or ERC20 payments.
+ * @dev Implements basic escrow release, refund, and dispute resolution. Compliant with ISimplePaymentProcessor.
+ */
 contract SimplePaymentProcessor is ISimplePaymentProcessor {
     using SafeCastLib for uint256;
-    using TaskQueueLib for MinHeapLib.Heap;
+    using TaskQueueLib for TaskQueueLib.Heap;
 
-    MinHeapLib.Heap private heap;
+    TaskQueueLib.Heap private heap;
 
     IPaymentProcessorStorage public immutable ppStorage;
 
@@ -305,18 +306,24 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         minimumInvoiceValue = newMinimumInvoiceValue;
     }
 
+    /// @inheritdoc ISimplePaymentProcessor
     function setForwarderAddress(address forwarderAddress) external {
         if (msg.sender != address(ppStorage)) revert NotAuthorized();
         forwarder = forwarderAddress;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getNextInvoiceId() external view returns (uint256) {
+    function getForwarder() external view returns (address) {
+        return forwarder;
+    }
+
+    /// @inheritdoc ISimplePaymentProcessor
+    function getNextInvoiceId() external view returns (uint216) {
         return ppStorage.getNextInvoiceId();
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function totalInvoiceCreated() external view returns (uint256) {
+    function totalInvoiceCreated() external view returns (uint216) {
         return ppStorage.totalInvoiceCreated();
     }
 
@@ -330,7 +337,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         return minimumInvoiceValue;
     }
 
-    function getItems() external view returns (uint256[] memory) {
+    /// @inheritdoc ISimplePaymentProcessor
+    function getItems() external view returns (uint216[] memory) {
         return heap.getItems();
     }
 }

@@ -3,38 +3,42 @@ pragma solidity 0.8.28;
 
 import { EscrowFactory } from "./EscrowFactory.sol";
 
-import { console } from "forge-std/console.sol";
-
 import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";
 
 import { IERC20 } from "./interface/IERC20.sol";
 import { IEscrow } from "./interface/IEscrow.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { IAdvancedPaymentProcessor } from "./interface/IAdvancedPaymentProcessor.sol";
+import { AutomationCompatibleInterface } from "./interface/AutomationCompatibleInterface.sol";
 
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
-import { MinHeapLib } from "solady/utils/MinHeapLib.sol";
 
-contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
+/**
+ * @title AdvancedPaymentProcessor
+ * @notice Handles the creation, payment, and lifecycle management of single and meta invoices with escrow logic.
+ * @dev Inherits interfaces for payment processing, Chainlink Automation compatibility, and escrow deployment.
+ */
+contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompatibleInterface, EscrowFactory {
+    using TaskQueueLib for TaskQueueLib.Heap;
     using { SafeTransferLib.safeTransferFrom } for address;
     using { SafeCastLib.toUint48, SafeCastLib.toUint216 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
     using { FixedPointMathLib.mulDiv } for uint256;
 
-    using TaskQueueLib for MinHeapLib.Heap;
+    /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
+    TaskQueueLib.Heap private heap;
 
-    MinHeapLib.Heap private heap;
-
+    /// @notice Address of the forwarder contract responsible for calling performUpkeep or similar relayed actions.
     address private forwarder;
 
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public ppStorage;
 
     /// @notice The next available meta-invoice ID to be assigned.
-    uint256 private nextMetaInvoiceId;
+    uint216 private nextMetaInvoiceId;
 
     /// @notice Chainlink price feed aggregator for the native token.
     address private nativeTokenAggregator;
@@ -297,9 +301,15 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         emit UpdateReleaseTime(orderId, holdPeriod);
     }
 
+    /// @inheritdoc IAdvancedPaymentProcessor
     function setForwarderAddress(address forwarderAddress) external {
         if (msg.sender != address(ppStorage)) revert NotAuthorized();
         forwarder = forwarderAddress;
+    }
+
+    /// @inheritdoc IAdvancedPaymentProcessor
+    function getForwarder() external view returns (address) {
+        return forwarder;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -326,7 +336,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         if (!_isReleasable(inv)) return false;
 
         uint256 pos = index[orderId];
-        console.log("POS", pos, heap.data.length);
         if (pos == 0 || pos > heap.data.length) return false;
 
         invoice[orderId].state = RELEASED;
@@ -489,26 +498,27 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function totalUniqueInvoiceCreated() external view returns (uint256) {
+    function totalUniqueInvoiceCreated() external view returns (uint216) {
         return ppStorage.totalInvoiceCreated();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function totalMetaInvoiceCreated() external view returns (uint256) {
+    function totalMetaInvoiceCreated() external view returns (uint216) {
         return nextMetaInvoiceId - 1;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getNextInvoiceId() external view returns (uint256) {
+    function getNextInvoiceId() external view returns (uint216) {
         return ppStorage.getNextInvoiceId();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getNextMetaInvoiceId() external view returns (uint256) {
+    function getNextMetaInvoiceId() external view returns (uint216) {
         return nextMetaInvoiceId;
     }
 
-    function getItems() external view returns (uint256[] memory) {
+    /// @inheritdoc IAdvancedPaymentProcessor
+    function getItems() external view returns (uint216[] memory) {
         return heap.getItems();
     }
 }

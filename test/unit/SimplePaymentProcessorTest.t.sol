@@ -305,7 +305,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         (bool upkeepNeeded,) = simplePP.checkUpkeep("");
         assertTrue(upkeepNeeded);
 
-        uint256[] memory o = simplePP.getItems();
+        uint216[] memory o = simplePP.getItems();
         for (uint256 i = 0; i < o.length; i++) {
             console.log("items in heap before up keep", o[i]);
         }

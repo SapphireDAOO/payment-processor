@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { Test } from "forge-std/Test.sol";
-import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
-import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
-import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
+import { IAdvancedPaymentProcessor } from "../../src/interface/IAdvancedPaymentProcessor.sol";
 import { getInvoiceCreationParam, getInvoiceCreationParams } from "../utils/InvoiceTestHelpers.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
-import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 import { AdvancedPaymentProcessorSetUp } from "../utils/AdvancedPaymentProcessorSetUp.sol";
 
