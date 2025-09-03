@@ -25,13 +25,13 @@ library TaskQueueLib {
     function removeAt(MinHeapLib.Heap storage heap, uint256 i, mapping(uint216 => uint256) storage index) internal {
         uint256 last = heap.data.length - 1;
         uint256 removedKey = heap.data[i];
-        uint192 removedId = uint192(removedKey);
+        uint216 removedId = uint216(removedKey);
 
         if (i != last) {
             uint256 movedKey = heap.data[last];
             heap.data[i] = movedKey;
 
-            uint192 movedId = uint192(movedKey);
+            uint216 movedId = uint216(movedKey);
             index[movedId] = i + 1;
 
             heap.data.pop();

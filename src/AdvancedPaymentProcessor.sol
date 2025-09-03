@@ -3,6 +3,8 @@ pragma solidity 0.8.28;
 
 import { EscrowFactory } from "./EscrowFactory.sol";
 
+import { console } from "forge-std/console.sol";
+
 import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";
 
 import { IERC20 } from "./interface/IERC20.sol";
@@ -260,8 +262,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
         while (gasleft() > gasThresold && heap.due()) {
             (uint216 orderId,) = heap.peek();
 
-            bool released = _release(orderId);
-            if (!released) {
+            if (!_release(orderId)) {
                 uint256 pos = index[orderId];
                 if (pos > 0 && pos <= heap.data.length) {
                     heap.removeAt(pos - 1, index);
@@ -311,12 +312,14 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
 
     function _release(uint216 orderId) internal returns (bool) {
         Invoice memory inv = invoice[orderId];
-        invoice[orderId].state = RELEASED;
-        invoice[orderId].balance = 0;
         if (!_isReleasable(inv)) return false;
 
         uint256 pos = index[orderId];
+        console.log("POS", pos, heap.data.length);
         if (pos == 0 || pos > heap.data.length) return false;
+
+        invoice[orderId].state = RELEASED;
+        invoice[orderId].balance = 0;
 
         heap.removeAt(pos - 1, index);
         uint256 sellerNetAmount = _processSellerPayout(inv, inv.balance);
@@ -492,5 +495,9 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory {
     /// @inheritdoc IAdvancedPaymentProcessor
     function getNextMetaInvoiceId() external view returns (uint256) {
         return nextMetaInvoiceId;
+    }
+
+    function getItems() external view returns (uint256[] memory) {
+        return heap.getItems();
     }
 }

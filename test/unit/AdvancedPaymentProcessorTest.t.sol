@@ -399,6 +399,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.prank(buyerOne);
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
 
+        vm.warp(block.timestamp + 1 days);
         advancedPP.release(orderId);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
@@ -436,6 +437,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.prank(buyerTwo);
         advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
 
+        console.log("length", advancedPP.getItems().length, orderIds.length);
+
+        vm.warp(block.timestamp + 1 days);
         for (uint256 i = 0; i < orderIds.length; i++) {
             advancedPP.release(orderIds[i]);
         }
@@ -509,6 +513,8 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         releaseableAmount -= (releaseableAmount * ppStorage.getFeeRate()) / advancedPP.BASIS_POINTS();
 
         uint256 sellerBalance = sellerOne.balance;
+
+        vm.warp(block.timestamp + 1 days);
         advancedPP.release(orderId);
         assertEq(sellerBalance + releaseableAmount, sellerOne.balance);
     }
@@ -530,5 +536,54 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint216 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
         IAdvancedPaymentProcessor.MetaInvoice memory metaInv = advancedPP.getMetaInvoice(metaInvoiceOrderId);
         assertEq(metaInv.price, prices[0] + prices[1] + prices[2]);
+    }
+
+    function test_automatedReleaseViaUpkeep() public {
+        address[] memory sellers = new address[](3);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerOne;
+        sellers[2] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 100e8;
+        prices[1] = 100e8;
+        prices[2] = 300e8;
+
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory orderIds) =
+            getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
+
+        uint256 length = orderIds.length - 1;
+
+        uint216 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+
+        uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1] + prices[2]);
+
+        vm.prank(buyerTwo);
+        advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
+
+        (bool upkeepNeeded,) = advancedPP.checkUpkeep("");
+        assertFalse(upkeepNeeded);
+
+        vm.warp(block.timestamp + 1 days);
+
+        (upkeepNeeded,) = advancedPP.checkUpkeep("");
+        assertTrue(upkeepNeeded);
+
+        bytes memory data = abi.encodeWithSelector(advancedPP.setInvoiceReleaseTime.selector, orderIds[length], 3 days);
+
+        vm.prank(admin);
+        ppStorage.execute(address(advancedPP), data);
+
+        advancedPP.performUpkeep("");
+
+        for (uint256 i = 0; i < length; i++) {
+            assertEq(advancedPP.getInvoice(orderIds[i]).state, advancedPP.RELEASED());
+        }
+
+        assertEq(advancedPP.getInvoice(orderIds[length]).state, advancedPP.PAID());
+
+        vm.warp(block.timestamp + 3 days);
+        advancedPP.performUpkeep("");
+        assertEq(advancedPP.getInvoice(orderIds[length]).state, advancedPP.RELEASED());
     }
 }
