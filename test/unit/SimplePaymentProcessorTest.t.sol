@@ -245,8 +245,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(admin);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceHasNotBeenAccepted.selector);
 
-        bytes memory data =
-            abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, 0, adminHoldPeriod);
+        bytes memory data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, 0, adminHoldPeriod);
         ppStorage.execute(address(simplePP), data);
 
         // CREATE
