@@ -21,7 +21,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
     function testFuzz_createSingleInvoice(uint256 price) public {
         price = bound(price, 1e8, type(uint128).max);
 
-        uint256 orderId =
+        uint216 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         uint256 nextInvoiceId = advancedPP.getNextInvoiceId();
@@ -35,7 +35,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
     function testFuzz_paySingleInvoice(uint256 price) public {
         price = bound(price, 1e8, 100e8);
 
-        uint256 orderId =
+        uint216 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerTwo, price));
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
@@ -73,7 +73,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param,) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
-        uint256 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+        uint216 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
 
         uint256 id = advancedPP.totalMetaInvoiceCreated();
 
@@ -106,7 +106,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param,) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
-        uint256 orderId = advancedPP.createMetaInvoice(param);
+        uint216 orderId = advancedPP.createMetaInvoice(param);
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(mockUsdc), priceO + priceT);
 
@@ -119,7 +119,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         price = bound(price, 1e8, 100e8);
         sellerShare = bound(sellerShare, 0, advancedPP.BASIS_POINTS());
 
-        uint256 orderId =
+        uint216 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(advancedPP.getNextInvoiceId(), sellerOne, price));
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
@@ -142,7 +142,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         resolution = bound(resolution, advancedPP.DISPUTE_DISMISSED(), advancedPP.DISPUTE_SETTLED());
         sellerShare = bound(sellerShare, 0, advancedPP.BASIS_POINTS());
 
-        uint256 orderId =
+        uint216 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(advancedPP.getNextInvoiceId(), sellerOne, price));
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
@@ -164,7 +164,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         assertGt(val, 0);
     }
 
-    function _executePayment(address buyer, uint256 orderId, uint256 tokenValue) internal {
+    function _executePayment(address buyer, uint216 orderId, uint256 tokenValue) internal {
         mockUsdc.mint(buyer, INITIAL_BALANCE);
 
         vm.startPrank(buyer);

@@ -29,7 +29,7 @@ interface IPaymentProcessorStorage {
      * @notice Updates the invoice ID counter.
      * @dev Should be implemented to increment or modify the invoice ID tracker as needed.
      */
-    function updateInvoiceId(uint256 by) external returns (uint256);
+    function updateInvoiceId(uint216 by) external returns (uint216);
 
     /**
      * @notice Sets or revokes authorization for a specific address.
@@ -82,13 +82,13 @@ interface IPaymentProcessorStorage {
      * @notice Returns the ID that will be assigned to the next invoice.
      * @return The next invoice ID.
      */
-    function getNextInvoiceId() external view returns (uint256);
+    function getNextInvoiceId() external view returns (uint216);
 
     /**
      * @notice Returns the total number of unique invoices created.
      * @return The count of invoices created so far.
      */
-    function totalInvoiceCreated() external view returns (uint256);
+    function totalInvoiceCreated() external view returns (uint216);
 
     /**
      * @notice Returns the current platform fee rate in basis points.

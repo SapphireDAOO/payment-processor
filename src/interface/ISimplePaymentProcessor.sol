@@ -109,17 +109,17 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Creates a new invoice with a specified price.
-     * @param _invoicePrice The price of the invoice in wei.
+     * @param invoicePrice The price of the invoice in wei.
      * @return The ID of the newly created invoice.
      */
-    function createInvoice(uint256 _invoicePrice) external returns (uint256);
+    function createInvoice(uint256 invoicePrice) external returns (uint216);
 
     /**
      * @notice Makes a payment for a specific invoice.
      * @param orderId The ID of the invoice being paid.
      * @return The address of the escrow contract managing the payment.
      */
-    function makeInvoicePayment(uint256 orderId) external payable returns (address);
+    function makeInvoicePayment(uint216 orderId) external payable returns (address);
 
     /**
      * @notice Marks the specified invoice as accepted.
@@ -127,7 +127,7 @@ interface ISimplePaymentProcessor {
      *      It is expected that the creator is approving the payment for the invoice.
      * @param orderId The key of the invoice being accepted.
      */
-    function acceptPayment(uint256 orderId) external;
+    function acceptPayment(uint216 orderId) external;
 
     /**
      * @notice Marks the specified invoice as rejected and refunds the payer.
@@ -136,20 +136,20 @@ interface ISimplePaymentProcessor {
      * @param orderId The key of the invoice being rejected.
      * address and payer.
      */
-    function rejectPayment(uint256 orderId) external;
+    function rejectPayment(uint216 orderId) external;
 
     /**
      * @notice Cancels an existing invoice.
      * @dev Only callable by the invoice seller.
      * @param orderId The ID of the invoice to cancel.
      */
-    function cancelInvoice(uint256 orderId) external;
+    function cancelInvoice(uint216 orderId) external;
 
     /**
      * @notice Releases the funds held in escrow for a specific invoice to the seller.
      * @param orderId The ID of the invoice for which funds are released.
      */
-    function releaseInvoice(uint256 orderId) external;
+    function releaseInvoice(uint216 orderId) external;
 
     /**
      * @notice Sets a custom hold period for a specific invoice.
@@ -157,7 +157,7 @@ interface ISimplePaymentProcessor {
      * @param orderId The ID of the invoice.
      * @param holdPeriod The new hold period in seconds.
      */
-    function setInvoiceReleaseTime(uint256 orderId, uint32 holdPeriod) external;
+    function setInvoiceReleaseTime(uint216 orderId, uint32 holdPeriod) external;
 
     /**
      *  @notice Updates the minimum allowed invoice value required for creating an invoice.
@@ -173,7 +173,7 @@ interface ISimplePaymentProcessor {
      * @param orderId The ID of the invoice to be refunded.
      *
      */
-    function refundBuyer(uint256 orderId) external;
+    function refundBuyer(uint216 orderId) external;
 
     /**
      * @notice Gets the current invoice ID counter.
@@ -192,7 +192,7 @@ interface ISimplePaymentProcessor {
      * @param orderId The ID of the invoice.
      * @return A struct containing the invoice's details.
      */
-    function getInvoiceData(uint256 orderId) external view returns (Invoice memory);
+    function getInvoiceData(uint216 orderId) external view returns (Invoice memory);
 
     /**
      * @notice Calculates the fee based on the provided amount and current fee rate.

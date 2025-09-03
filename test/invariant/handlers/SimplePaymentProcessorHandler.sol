@@ -16,7 +16,7 @@ contract SimplePaymentProcessorHandler is Test {
 
     uint256 constant BUYERS_INITIAL_FUND = 10_000 ether;
 
-    uint256[] orderIds;
+    uint216[] orderIds;
 
     mapping(bytes4 => uint256) public calls;
     mapping(uint256 => uint256) public price;
@@ -42,7 +42,7 @@ contract SimplePaymentProcessorHandler is Test {
     function createInvoice(uint256 _price) public countCall(this.createInvoice.selector) {
         _price = bound(_price, 1.01 ether, INVOICE_PRICE);
         vm.prank(seller);
-        uint256 orderId = pp.createInvoice(_price);
+        uint216 orderId = pp.createInvoice(_price);
         price[orderId] = _price;
         orderIds.push(orderId);
         totalInvoiceCreated++;
@@ -50,7 +50,7 @@ contract SimplePaymentProcessorHandler is Test {
 
     function cancelInvoice(uint256 index) public invoiceExists countCall(this.cancelInvoice.selector) {
         index = _bound(index);
-        uint256 orderId = orderIds[index];
+        uint216 orderId = orderIds[index];
         if (pp.getInvoiceData(orderId).status != pp.CREATED()) return;
         vm.prank(seller);
         pp.cancelInvoice(orderId);
@@ -58,7 +58,7 @@ contract SimplePaymentProcessorHandler is Test {
 
     function makePayment(uint256 index, uint256 _value) public invoiceExists countCall(this.makePayment.selector) {
         index = _bound(index);
-        uint256 orderId = orderIds[index];
+        uint216 orderId = orderIds[index];
         if (pp.getInvoiceData(orderId).status != pp.CREATED()) return;
         uint256 iPrice = pp.getInvoiceData(orderId).price;
         _value = bound(_value, iPrice, iPrice);
@@ -71,7 +71,7 @@ contract SimplePaymentProcessorHandler is Test {
 
     function acceptPayment(uint256 index) public invoiceExists countCall(this.acceptPayment.selector) {
         index = _bound(index);
-        uint256 orderId = orderIds[index];
+        uint216 orderId = orderIds[index];
         ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(orderId);
         if (i.status != pp.PAID()) return;
         vm.prank(seller);
@@ -80,7 +80,7 @@ contract SimplePaymentProcessorHandler is Test {
 
     function rejectPayment(uint256 index) public invoiceExists countCall(this.rejectPayment.selector) {
         index = _bound(index);
-        uint256 orderId = orderIds[index];
+        uint216 orderId = orderIds[index];
         ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(orderId);
         if (i.status != pp.PAID()) return;
         vm.prank(seller);
@@ -89,7 +89,7 @@ contract SimplePaymentProcessorHandler is Test {
 
     function releaseInvoice(uint256 index) public invoiceExists countCall(this.releaseInvoice.selector) {
         index = _bound(index);
-        uint256 orderId = orderIds[index];
+        uint216 orderId = orderIds[index];
         if (pp.getInvoiceData(orderId).status == pp.RELEASED()) return;
         vm.assume(block.timestamp > block.timestamp + pp.ACCEPTANCE_WINDOW());
         vm.prank(seller);

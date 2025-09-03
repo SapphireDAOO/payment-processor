@@ -12,7 +12,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
      * @notice The next available unique invoice ID.
      * @dev Used to track and increment standalone or sub-invoice identifiers.
      */
-    uint256 private nextInvoiceId;
+    uint216 private nextInvoiceId;
 
     /**
      * @notice Tracks whether an address is authorized to perform restricted actions.
@@ -43,7 +43,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function updateInvoiceId(uint256 by) external onlyAuthorized returns (uint256) {
+    function updateInvoiceId(uint216 by) external onlyAuthorized returns (uint216) {
         nextInvoiceId += by;
         return totalInvoiceCreated();
     }
@@ -79,12 +79,12 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getNextInvoiceId() external view returns (uint256) {
+    function getNextInvoiceId() external view returns (uint216) {
         return nextInvoiceId;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function totalInvoiceCreated() public view returns (uint256) {
+    function totalInvoiceCreated() public view returns (uint216) {
         return nextInvoiceId - 1;
     }
 

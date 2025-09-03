@@ -24,7 +24,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
     function test_nativeTokenPaymentForSingleInvoice() public {
         uint256 price = 100e8;
-        uint256 orderId =
+        uint216 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
@@ -51,10 +51,10 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         // create invoice
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory orderIds) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory orderIds) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
-        uint256 metaOrderId = advancedPP.createMetaInvoice(param);
+        uint216 metaOrderId = advancedPP.createMetaInvoice(param);
 
         // make payment
         uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
@@ -76,7 +76,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
     function test_erc20PaymentForSingleInvoice() public {
         uint256 price = 100e8;
-        uint256 orderId =
+        uint216 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         vm.prank(USDC_BUYER);
@@ -100,13 +100,13 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         prices[0] = 100e8;
         prices[1] = 200e8;
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory orderIds) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory orderIds) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
-        uint256 metaorderId = advancedPP.createMetaInvoice(param);
+        uint216 metaOrderId = advancedPP.createMetaInvoice(param);
 
         vm.startPrank(WTBC_BUYER);
-        advancedPP.payMetaInvoice(metaorderId, address(WBTC));
+        advancedPP.payMetaInvoice(metaOrderId, address(WBTC));
 
         vm.stopPrank();
 
@@ -126,7 +126,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
     function test_sellerCancelInitiatedInvoice() public {
         // single invoice
         uint256 price = 100e8;
-        uint256 orderId =
+        uint216 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         advancedPP.cancelInvoice(orderId);
@@ -146,7 +146,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         prices[1] = 500e8;
         prices[2] = 1400e8;
 
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint256[] memory orderIds) =
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory orderIds) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
 
         advancedPP.createMetaInvoice(param);
@@ -159,7 +159,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
     function test_settledDispute() public {
         uint256 price = 100e8;
-        uint256 orderId =
+        uint216 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(USDC), price);
@@ -191,7 +191,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
     function test_invoiceRelease() public {
         uint256 price = 100e8;
-        uint256 orderId =
+        uint216 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 

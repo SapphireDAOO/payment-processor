@@ -3,6 +3,8 @@ pragma solidity 0.8.28;
 
 import { Escrow, IEscrow } from "./Escrow.sol";
 
+import { console } from "forge-std/console.sol";
+
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
@@ -57,9 +59,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
      *      is an `Invoice` struct that contains detailed information such as the
      *      creator, payer, status, amount, escrow address, timestamps, etc.
      */
-    mapping(uint256 orderId => Invoice invoice) private invoiceData;
+    mapping(uint216 orderId => Invoice invoice) private invoiceData;
 
-    mapping(uint256 => uint256) private index;
+    mapping(uint216 => uint256) private index;
 
     /**
      * @notice Initializes the payment processor with owner, fee settings, and default hold period.
@@ -73,7 +75,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function createInvoice(uint256 invoicePrice) external returns (uint256) {
+    function createInvoice(uint256 invoicePrice) external returns (uint216) {
         if (invoicePrice < minimumInvoiceValue) revert ValueIsTooLow();
         Invoice memory invoice;
         invoice.seller = msg.sender;
@@ -82,7 +84,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         invoice.status = CREATED;
         invoice.invoiceId = ppStorage.updateInvoiceId(1);
 
-        uint256 orderId = _computeOrderId(msg.sender, invoice.invoiceId);
+        uint216 orderId = _computeOrderId(msg.sender, invoice.invoiceId);
 
         if (invoiceData[orderId].status != 0) revert InvoiceAlreadyExists();
 
@@ -94,7 +96,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function makeInvoicePayment(uint256 orderId) external payable returns (address) {
+    function makeInvoicePayment(uint216 orderId) external payable returns (address) {
         Invoice memory invoice = invoiceData[orderId];
 
         if (invoice.status != CREATED) {
@@ -139,7 +141,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function cancelInvoice(uint256 orderId) external {
+    function cancelInvoice(uint216 orderId) external {
         Invoice memory invoice = invoiceData[orderId];
         if (invoice.seller != msg.sender) {
             revert NotAuthorized();
@@ -152,7 +154,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function releaseInvoice(uint256 orderId) external {
+    function releaseInvoice(uint216 orderId) external {
         Invoice memory invoice = invoiceData[orderId];
 
         if (invoice.status == RELEASED) revert InvoiceHasAlreadyBeenReleased();
@@ -169,14 +171,16 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         uint256 feeValue = calculateFee(invoice.price);
 
         invoiceData[orderId].status = RELEASED;
-        heap.removeAt(index[orderId], index);
+
+        console.log("index", index[orderId]);
+        heap.removeAt(index[orderId] - 1, index);
 
         IEscrow(invoice.escrow).withdraw(address(0), msg.sender, invoice.price - feeValue);
         emit InvoiceReleased(orderId);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function refundBuyer(uint256 orderId) external {
+    function refundBuyer(uint216 orderId) external {
         Invoice memory invoice = invoiceData[orderId];
         if (invoice.status != PAID || block.timestamp < invoice.paymentTime + ACCEPTANCE_WINDOW) {
             revert InvoiceNotEligibleForRefund();
@@ -189,7 +193,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function acceptPayment(uint256 orderId) external {
+    function acceptPayment(uint216 orderId) external {
         Invoice memory invoice = invoiceData[orderId];
         _validateInvoiceStateForPaymentDecision(invoice);
         invoice.status = ACCEPTED;
@@ -205,7 +209,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function rejectPayment(uint256 orderId) external {
+    function rejectPayment(uint216 orderId) external {
         Invoice memory invoice = invoiceData[orderId];
         _validateInvoiceStateForPaymentDecision(invoice);
         invoiceData[orderId].status = REJECTED;
@@ -221,12 +225,12 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
      * @param invoiceId The invoice identifier provided during creation.
      * @return The keccak256 hash representing the unique order ID.
      */
-    function _computeOrderId(address buyer, uint256 invoiceId) internal view returns (uint256) {
-        return uint256(uint256(keccak256(abi.encode(address(this), buyer, invoiceId, block.timestamp))));
+    function _computeOrderId(address buyer, uint256 invoiceId) internal view returns (uint216) {
+        return (uint256(keccak256(abi.encode(address(this), buyer, invoiceId))) & ((1 << 216) - 1)).toUint216();
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setInvoiceReleaseTime(uint256 orderId, uint32 holdPeriod) external {
+    function setInvoiceReleaseTime(uint216 orderId, uint32 holdPeriod) external {
         if (msg.sender != address(ppStorage)) revert NotAuthorized();
         Invoice memory invoice = invoiceData[orderId];
 
@@ -266,7 +270,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getInvoiceData(uint256 orderId) external view returns (Invoice memory) {
+    function getInvoiceData(uint216 orderId) external view returns (Invoice memory) {
         return invoiceData[orderId];
     }
 

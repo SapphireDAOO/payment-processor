@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import { LibString } from "solady/utils/LibString.sol";
 import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
+import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 
 function getInvoiceCreationParam(uint256 invoiceId, address seller, uint256 price)
     pure
@@ -18,16 +19,16 @@ function getInvoiceCreationParam(uint256 invoiceId, address seller, uint256 pric
 
 function getInvoiceCreationParams(uint256 invoiceId, address[] memory sellers, uint256[] memory prices)
     pure
-    returns (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory, uint256[] memory)
+    returns (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory, uint216[] memory)
 {
     uint256 numberOfInvoice = sellers.length;
     IAdvancedPaymentProcessor.InvoiceCreationParam[] memory params =
         new IAdvancedPaymentProcessor.InvoiceCreationParam[](numberOfInvoice);
-    uint256[] memory suborderIds = new uint256[](numberOfInvoice);
+    uint216[] memory suborderIds = new uint216[](numberOfInvoice);
 
     for (uint256 i; i < numberOfInvoice; i++) {
         params[i] = getInvoiceCreationParam(invoiceId + i, sellers[i], prices[i]);
-        suborderIds[i] = uint256(keccak256(abi.encode(params[i].orderId)));
+        suborderIds[i] = SafeCastLib.toUint216(uint256(keccak256(abi.encode(params[i].orderId))) & ((1 << 216) - 1));
     }
     return (params, suborderIds);
 }
