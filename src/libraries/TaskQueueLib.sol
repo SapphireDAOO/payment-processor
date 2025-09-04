@@ -119,13 +119,11 @@ library TaskQueueLib {
 
             if (result == ERROR) break;
 
-            // successful
             if (result == SUCCESSFUL) {
                 id = getId(heap.data[latestIndex]);
                 continue;
             }
 
-            // not eligible for release
             if (result == NOT_ELIGIBLE_FOR_RELEASE) {
                 uint256 nextIndex = index[id];
                 if (nextIndex == heap.data.length) break;
