@@ -18,10 +18,48 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
     using { applyBasisPoints, getEscrowAddress } for AdvancedPaymentProcessor;
 
     error NotAuthorized();
+    error HoldPeriodCanNotBeZero();
 
     function test_Initialization() public view {
         assertEq(advancedPP.getNextInvoiceId(), 1);
         assertEq(advancedPP.getNextMetaInvoiceId(), 1);
+        assertEq(advancedPP.getForwarder(), FORWARDER);
+    }
+
+    function test_storageConfig() public {
+        vm.startPrank(admin);
+        ppStorage.setFeeReceiver(address(0xa0));
+
+        ppStorage.setFeeRate(100);
+        ppStorage.setGasThresold(20_000);
+
+        vm.expectRevert(HoldPeriodCanNotBeZero.selector);
+        ppStorage.setDefaultHoldPeriod(0);
+        ppStorage.setDefaultHoldPeriod(1 days);
+
+        ppStorage.setMarketplaceAddress(address(0xb0));
+        vm.stopPrank();
+
+        assertEq(address(0xa0), ppStorage.getFeeReceiver());
+        assertEq(100, ppStorage.getFeeRate());
+        assertEq(20_000, ppStorage.getGasThresold());
+        assertEq(1 days, ppStorage.getDefaultHoldPeriod());
+        assertEq(address(0xb0), ppStorage.getMarketplace());
+    }
+
+    function test_updateInvoiceId() public {
+        vm.expectRevert(NotAuthorized.selector);
+        ppStorage.updateInvoiceId(1);
+    }
+
+    function test_setForwarder() public {
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.setForwarderAddress(address(2));
+    }
+
+    function test_setPriceFeed() public {
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.setPriceFeed(address(1), address(2));
     }
 
     function test_singleInvoiceCreation() public {
@@ -32,6 +70,12 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.prank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
         advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, sellerOne, price));
+
+        vm.expectRevert(IAdvancedPaymentProcessor.PriceCannotBeZero.selector);
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, sellerOne, 0));
+
+        vm.expectRevert(IAdvancedPaymentProcessor.PriceIsTooLow.selector);
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, sellerOne, 1));
 
         uint216 orderId = advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, sellerOne, price));
 
@@ -98,10 +142,16 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidNativePayment.selector);
         advancedPP.paySingleInvoice{ value: 0.001 ether }(orderId, address(0));
+        vm.stopPrank();
 
         uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
+
+        vm.prank(sellerOne);
+        vm.expectRevert(IAdvancedPaymentProcessor.BuyerCannotBeSeller.selector);
         advancedPP.paySingleInvoice{ value: amountInToken }(orderId, address(0));
-        vm.stopPrank();
+
+        vm.prank(buyerOne);
+        advancedPP.paySingleInvoice{ value: amountInToken }(orderId, address(0));
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
 
@@ -488,6 +538,34 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(balanceBefore - tokenAmount, buyerOne.balance);
     }
 
+    function test_fullRefund() public {
+        uint256 price = 1500e8;
+        uint216 orderId =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
+        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
+        console.log(tokenValue);
+
+        uint256 refundShare = 10_000;
+
+        vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
+        advancedPP.refund(orderId, refundShare);
+
+        vm.prank(buyerOne);
+        advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
+        uint256 buyerBalance = buyerOne.balance;
+        console.log(buyerBalance);
+
+        vm.expectRevert(IAdvancedPaymentProcessor.InsufficientBalance.selector);
+        advancedPP.refund(orderId, refundShare + 1);
+
+        advancedPP.refund(orderId, refundShare);
+
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
+        assertEq(inv.balance, 0);
+
+        assertEq(buyerOne.balance, buyerBalance + tokenValue);
+    }
+
     function test_refund_and_release() public {
         uint256 price = 1500e8;
         uint216 orderId =
@@ -554,9 +632,15 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         uint256 length = orderIds.length - 1;
 
+        bytes memory data = abi.encodeWithSelector(advancedPP.setInvoiceReleaseTime.selector, orderIds[length], 3 days);
+
         uint216 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
 
         uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1] + prices[2]);
+
+        vm.prank(admin);
+        vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
+        ppStorage.execute(address(advancedPP), data);
 
         vm.prank(buyerTwo);
         advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
@@ -569,11 +653,17 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         (upkeepNeeded,) = advancedPP.checkUpkeep("");
         assertTrue(upkeepNeeded);
 
-        bytes memory data = abi.encodeWithSelector(advancedPP.setInvoiceReleaseTime.selector, orderIds[length], 3 days);
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.setInvoiceReleaseTime(orderIds[length], 3 days);
 
-        vm.startPrank(admin);
+        vm.prank(admin);
         ppStorage.execute(address(advancedPP), data);
 
+        vm.prank(buyerOne);
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.performUpkeep("");
+
+        vm.prank(admin);
         advancedPP.performUpkeep("");
 
         for (uint256 i = 0; i < length; i++) {
@@ -583,8 +673,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(advancedPP.getInvoice(orderIds[length]).state, advancedPP.PAID());
 
         vm.warp(block.timestamp + 3 days);
+        vm.prank(admin);
         advancedPP.performUpkeep("");
-        vm.stopPrank();
+
         assertEq(advancedPP.getInvoice(orderIds[length]).state, advancedPP.RELEASED());
     }
 

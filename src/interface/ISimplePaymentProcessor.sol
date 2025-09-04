@@ -189,12 +189,6 @@ interface ISimplePaymentProcessor {
     function getNextInvoiceId() external view returns (uint216);
 
     /**
-     * @notice Returns the total number of invoices created.
-     * @return The total count of invoices created as a `uint256` value.
-     */
-    function totalInvoiceCreated() external view returns (uint216);
-
-    /**
      * @notice Retrieves detailed data for a specific invoice.
      * @param orderId The ID of the invoice.
      * @return A struct containing the invoice's details.

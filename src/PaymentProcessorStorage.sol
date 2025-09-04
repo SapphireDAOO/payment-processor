@@ -90,7 +90,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setMarketplace(address marketplaceAddress) external onlyOwner {
+    function setMarketplaceAddress(address marketplaceAddress) external onlyOwner {
         config.marketplace = marketplaceAddress;
     }
 

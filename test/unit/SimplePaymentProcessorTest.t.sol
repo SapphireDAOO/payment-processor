@@ -13,11 +13,26 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(ppStorage.getFeeReceiver(), feeReceiver);
         assertEq(simplePP.getNextInvoiceId(), 1);
         assertEq(ppStorage.getDefaultHoldPeriod(), DEFAULT_HOLD_PERIOD);
+        assertEq(simplePP.getMinimumInvoiceValue(), MINIMUM_INVOICE_VALUE);
+        assertEq(simplePP.getForwarder(), FORWARDER_TWO);
+    }
+
+    function test_setForwarder() public {
+        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
+        simplePP.setForwarderAddress(address(2));
+    }
+
+    function test_setMinimumInvoiceValue() public {
+        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
+        simplePP.setMinimumInvoiceValue(1 ether);
     }
 
     function test_invoice_creation() public {
         uint256 cOneInvoicePrice = 100 ether;
         vm.startPrank(sellerOne);
+
+        vm.expectRevert(ISimplePaymentProcessor.ValueIsTooLow.selector);
+        simplePP.createInvoice(0);
 
         uint216 orderId = simplePP.createInvoice(cOneInvoicePrice);
         vm.stopPrank();
@@ -217,6 +232,10 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(buyerOne);
         simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
 
+        vm.prank(sellerOne);
+        vm.expectRevert(abi.encodeWithSelector(ISimplePaymentProcessor.InvalidInvoiceState.selector, simplePP.PAID()));
+        simplePP.releaseInvoice(orderId);
+
         // // ACCEPT
         vm.prank(sellerOne);
         simplePP.acceptPayment(orderId);
@@ -243,10 +262,10 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_dynamic_hold_release_invoice() public {
         uint32 adminHoldPeriod = 25 days;
 
+        bytes memory data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, 0, adminHoldPeriod);
+
         vm.prank(admin);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceHasNotBeenAccepted.selector);
-
-        bytes memory data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, 0, adminHoldPeriod);
         ppStorage.execute(address(simplePP), data);
 
         // CREATE
@@ -265,6 +284,10 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.acceptPayment(orderId);
 
         data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, orderId, adminHoldPeriod);
+
+        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
+        simplePP.setInvoiceReleaseTime(orderId, adminHoldPeriod);
+
         vm.prank(admin);
         ppStorage.execute(address(simplePP), data);
 
@@ -296,9 +319,13 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
             orderIds[i] = orderId;
         }
 
-        vm.prank(admin);
-        bytes memory data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, orderIds[9], 100 days);
+        vm.startPrank(admin);
+        bytes memory data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, orderIds[2], 12 hours);
         ppStorage.execute(address(simplePP), data);
+
+        data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, orderIds[9], 100 days);
+        ppStorage.execute(address(simplePP), data);
+        vm.stopPrank();
 
         vm.warp(block.timestamp + 5 days);
 
@@ -306,9 +333,15 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertTrue(upkeepNeeded);
 
         uint216[] memory o = simplePP.getItems();
+
+        assertEq(o[0], orderIds[2]);
         for (uint256 i = 0; i < o.length; i++) {
             console.log("items in heap before up keep", o[i]);
         }
+
+        vm.prank(buyerOne);
+        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
+        simplePP.performUpkeep("");
 
         vm.prank(admin);
         simplePP.performUpkeep("");

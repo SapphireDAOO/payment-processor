@@ -9,6 +9,8 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     SimplePaymentProcessor simplePP;
     uint256 constant MINIMUM_INVOICE_VALUE = 1 ether;
 
+    address constant FORWARDER_TWO = address(0xb0);
+
     function setUp() public virtual {
         address storageAddress = initialize();
         _simplePaymentProcessorSetUp(storageAddress);
@@ -20,6 +22,9 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
 
         PaymentProcessorStorage(storageAddress).setAuthorizedAddress(address(simplePP), true);
         vm.stopPrank();
+
+        vm.prank(storageAddress);
+        simplePP.setForwarderAddress(FORWARDER_TWO);
 
         return simplePP;
     }

@@ -68,7 +68,7 @@ interface IPaymentProcessorStorage {
      * @dev Callable only by the contract owner.
      * @param marketplaceAddress The new marketplace address.
      */
-    function setMarketplace(address marketplaceAddress) external;
+    function setMarketplaceAddress(address marketplaceAddress) external;
 
     /**
      * @notice Sets the address that will receive fees collected from transactions.

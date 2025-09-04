@@ -65,6 +65,10 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
      */
     mapping(uint216 orderId => Invoice invoice) private invoiceData;
 
+    /**
+     *  @notice Maps task or invoice ID to its 1-based index position in the heap.
+     * @dev A value of 0 means the task is not present in the heap
+     */
     mapping(uint216 => uint256) private index;
 
     /**
@@ -311,11 +315,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     /// @inheritdoc ISimplePaymentProcessor
     function getNextInvoiceId() external view returns (uint216) {
         return ppStorage.getNextInvoiceId();
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function totalInvoiceCreated() external view returns (uint216) {
-        return ppStorage.totalInvoiceCreated();
     }
 
     /// @inheritdoc ISimplePaymentProcessor

@@ -25,6 +25,8 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
     int256 constant INITIAL_WBTC_PRICE = 90_000e8;
     int256 constant INITIAL_POL_PRICE = 0.6e8;
 
+    address constant FORWARDER = address(0xa0);
+
     address constant USDC = 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359;
     address constant WBTC = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
 
@@ -62,6 +64,9 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
         if (block.chainid == MAINNET_CHAIN_ID) {
             vm.makePersistent(address(advancedPP), storageAddress);
         }
+
+        vm.prank(storageAddress);
+        advancedPP.setForwarderAddress(FORWARDER);
 
         return advancedPP;
     }

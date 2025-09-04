@@ -7,15 +7,18 @@ pragma solidity 0.8.28;
  * @dev Keys are encoded into `uint256` with `dueTime` in the high 40 bits and `id` in the low 216 bits.
  */
 library TaskQueueLib {
-    uint256 constant NOT_ELIGIBLE_FOR_RELEASE = 1;
-    uint256 constant ERROR = 2;
-    uint256 constant SUCCESSFUL = 3;
-
     /// @notice Thrown when a task with a given ID is not found in the queue.
     error TaskNotFound();
 
     /// @notice Thrown when trying to insert a task that already exists in the queue.
     error DuplicateTask();
+
+    /// @notice Returned when a task is not yet eligible for release (e.g. wrong status or too early).
+    uint256 constant NOT_ELIGIBLE_FOR_RELEASE = 1;
+    /// @notice Returned when an error occurs during task processing (e.g. invalid index or heap inconsistency).
+    uint256 constant ERROR = 2;
+    /// @notice Returned when a task has been successfully released and removed from the heap.
+    uint256 constant SUCCESSFUL = 3;
 
     /// @notice Min-heap struct holding the encoded task keys.
     struct Heap {
@@ -103,6 +106,19 @@ library TaskQueueLib {
         return id;
     }
 
+    /**
+     * @notice Iterates through the heap and attempts to release due tasks based on available gas.
+     * @dev This function uses a gas threshold to avoid running out of gas. It repeatedly attempts
+     *      to release the current task using the provided `releaseCallback`. If the task is not
+     *      eligible or an error occurs, it moves to the next task in the heap using the `index` mapping.
+     *      - `SUCCESSFUL`: The task was released and the next is processed.
+     *      - `NOT_ELIGIBLE_FOR_RELEASE`: Skips to the next task.
+     *      - `ERROR`: Aborts the loop.
+     * @param heap The heap data structure storing encoded tasks.
+     * @param index Mapping of task IDs to their 1-based heap indices.
+     * @param releaseCallback A function that attempts to release a task by ID, returning a status code.
+     * @param gasThresold The minimum remaining gas required to continue processing.
+     */
     function processDueTask(
         Heap storage heap,
         mapping(uint216 => uint256) storage index,

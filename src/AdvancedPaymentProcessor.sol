@@ -96,6 +96,10 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
      */
     mapping(uint216 metaInvoiceId => MetaInvoice invoice) private metaInvoice;
 
+    /**
+     *  @notice Maps task or invoice ID to its 1-based index position in the heap.
+     * @dev A value of 0 means the task is not present in the heap
+     */
     mapping(uint216 => uint256) private index;
 
     /**
@@ -106,12 +110,12 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         if (msg.sender != ppStorage.getMarketplace()) revert NotAuthorized();
         _;
     }
+
     /**
      * @notice Initializes the AdvancedPaymentProcessor contract with core configuration.
      * @param paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      * @param nativeTokenAggregatorAddress The Chainlink aggregator address for the native token (e.g., ETH/USD, POL/USD).
      */
-
     constructor(address paymentProcessorStorageAddress, address nativeTokenAggregatorAddress) {
         ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
         nativeTokenAggregator = nativeTokenAggregatorAddress;
@@ -224,7 +228,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function release(uint216 orderId) external onlyMarketplace {
-        if (_release(orderId) != 3) revert InvalidInvoiceState();
+        if (_release(orderId) != TaskQueueLib.SUCCESSFUL) revert InvalidInvoiceState();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -235,7 +239,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         uint256 amount = _applyBasisPoints(inv.balance, refundShare);
         if (amount > inv.balance) revert InsufficientBalance();
 
-        if (refundShare == inv.balance) {
+        if (refundShare == BASIS_POINTS) {
             heap.removeAt(index[orderId] - 1, index);
         }
 
