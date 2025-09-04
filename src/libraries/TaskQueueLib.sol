@@ -242,7 +242,7 @@ library TaskQueueLib {
      * @param heap The heap storage struct.
      * @return items Array of task IDs.
      */
-    function getItems(Heap storage heap) external view returns (uint216[] memory) {
+    function getItems(Heap storage heap) internal view returns (uint216[] memory) {
         uint256 size = heap.data.length;
         if (size == 0) return new uint216[](0);
         uint216[] memory items = new uint216[](size);
