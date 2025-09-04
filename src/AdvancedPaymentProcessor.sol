@@ -22,6 +22,8 @@ import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
  */
 contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompatibleInterface, EscrowFactory {
     using TaskQueueLib for TaskQueueLib.Heap;
+    using { TaskQueueLib.getId } for uint256;
+
     using { SafeTransferLib.safeTransferFrom } for address;
     using { SafeCastLib.toUint48, SafeCastLib.toUint216 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
@@ -30,7 +32,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
     TaskQueueLib.Heap private heap;
 
-    /// @notice Address of the forwarder contract responsible for calling performUpkeep or similar relayed actions.
+    /// @notice Address of the forwarder contract responsible for calling performUpkeep.
     address private forwarder;
 
     /// @notice Reference to the external Payment Processor storage contract.
@@ -222,7 +224,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function release(uint216 orderId) external onlyMarketplace {
-        if (!_release(orderId)) revert InvalidInvoiceState();
+        if (_release(orderId) != 3) revert InvalidInvoiceState();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -268,11 +270,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         }
 
         uint256 gasThresold = ppStorage.getGasThresold();
-        while (gasleft() > gasThresold && heap.due()) {
-            (uint216 orderId,) = heap.peek();
 
-            if (!_release(orderId)) break;
-        }
+        heap.processDueTask(index, _release, gasThresold);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -287,6 +286,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         if (inv.state != PAID) revert InvalidInvoiceState();
 
         inv.releaseAt = block.timestamp + holdPeriod;
+        invoice[orderId] = inv;
 
         heap.reschedule(orderId, uint40(inv.releaseAt), index);
 
@@ -323,12 +323,12 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
             && block.timestamp >= inv.releaseAt;
     }
 
-    function _release(uint216 orderId) internal returns (bool) {
+    function _release(uint216 orderId) internal returns (uint256) {
         Invoice memory inv = invoice[orderId];
-        if (!_isReleasable(inv)) return false;
+        if (!_isReleasable(inv)) return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
 
         uint256 pos = index[orderId];
-        if (pos == 0 || pos > heap.data.length) return false;
+        if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
 
         invoice[orderId].state = RELEASED;
         invoice[orderId].balance = 0;
@@ -336,7 +336,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         heap.removeAt(pos - 1, index);
         uint256 sellerNetAmount = _processSellerPayout(inv, inv.balance);
         emit PaymentReleased(orderId, sellerNetAmount);
-        return true;
+        return TaskQueueLib.SUCCESSFUL;
     }
 
     /**

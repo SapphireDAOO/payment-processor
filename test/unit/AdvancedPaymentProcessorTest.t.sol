@@ -587,4 +587,46 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.stopPrank();
         assertEq(advancedPP.getInvoice(orderIds[length]).state, advancedPP.RELEASED());
     }
+
+    function test_automatedReleaseAfterDispute() public {
+        address[] memory sellers = new address[](4);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerOne;
+        sellers[2] = sellerTwo;
+        sellers[3] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](4);
+        prices[0] = 100e8;
+        prices[1] = 100e8;
+        prices[2] = 300e8;
+        prices[3] = 300e8;
+
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory orderIds) =
+            getInvoiceCreationParams(ppStorage.getNextInvoiceId(), sellers, prices);
+
+        uint256 length = orderIds.length;
+
+        uint216 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
+
+        uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1] + prices[2] + prices[3]);
+
+        vm.prank(buyerTwo);
+        advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
+
+        for (uint256 k = 0; k < advancedPP.getItems().length; k++) {
+            console.log("order", advancedPP.getItems()[k]);
+        }
+        console.log("");
+
+        advancedPP.createDispute(advancedPP.getItems()[3]);
+
+        vm.warp(block.timestamp + 3 days);
+
+        vm.prank(admin);
+        advancedPP.performUpkeep("");
+
+        for (uint256 i = 0; i < length; i++) {
+            console.log(orderIds[i], advancedPP.getInvoice(orderIds[i]).state);
+        }
+    }
 }

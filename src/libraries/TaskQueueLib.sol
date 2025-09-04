@@ -7,6 +7,10 @@ pragma solidity 0.8.28;
  * @dev Keys are encoded into `uint256` with `dueTime` in the high 40 bits and `id` in the low 216 bits.
  */
 library TaskQueueLib {
+    uint256 constant NOT_ELIGIBLE_FOR_RELEASE = 1;
+    uint256 constant ERROR = 2;
+    uint256 constant SUCCESSFUL = 3;
+
     /// @notice Thrown when a task with a given ID is not found in the queue.
     error TaskNotFound();
 
@@ -94,6 +98,43 @@ library TaskQueueLib {
         }
     }
 
+    function getId(uint256 key) internal pure returns (uint216) {
+        (uint216 id,) = _decode(key);
+        return id;
+    }
+
+    function processDueTask(
+        Heap storage heap,
+        mapping(uint216 => uint256) storage index,
+        function(uint216) internal returns(uint256) releaseCallback,
+        uint256 gasThresold
+    ) internal {
+        (uint216 id,) = peek(heap);
+
+        uint256 latestIndex;
+        while (gasleft() > gasThresold) {
+            uint256 result = releaseCallback(id);
+
+            if (latestIndex >= heap.data.length) break;
+
+            if (result == ERROR) break;
+
+            // successful
+            if (result == SUCCESSFUL) {
+                id = getId(heap.data[latestIndex]);
+                continue;
+            }
+
+            // not eligible for release
+            if (result == NOT_ELIGIBLE_FOR_RELEASE) {
+                uint256 nextIndex = index[id];
+                if (nextIndex == heap.data.length) break;
+                id = getId(heap.data[nextIndex]);
+                latestIndex = nextIndex - 1;
+            }
+        }
+    }
+
     /**
      * @notice Returns true if the next task is due based on the current block timestamp.
      * @param heap The heap storage struct.
@@ -132,7 +173,7 @@ library TaskQueueLib {
      * @return id The task ID.
      * @return dueDate The due time in seconds.
      */
-    function _decode(uint256 key) private pure returns (uint216, uint40) {
+    function _decode(uint256 key) internal pure returns (uint216, uint40) {
         uint216 id = uint216(key & ((1 << 216) - 1));
         uint40 dueDate = uint40(key >> 216);
 

@@ -16,6 +16,7 @@ import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
 contract SimplePaymentProcessor is ISimplePaymentProcessor {
     using SafeCastLib for uint256;
     using TaskQueueLib for TaskQueueLib.Heap;
+    using { TaskQueueLib.getId } for uint256;
 
     TaskQueueLib.Heap private heap;
 
@@ -156,25 +157,25 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         emit InvoiceCanceled(orderId);
     }
 
-    function _release(uint216 orderId) internal returns (bool) {
+    function _release(uint216 orderId) internal returns (uint256) {
         Invoice memory invoice = invoiceData[orderId];
 
-        if (invoice.status == RELEASED) return false;
-        if (invoice.status != ACCEPTED) return false;
-        if (block.timestamp < invoice.releaseAt) return false;
+        if (invoice.status == RELEASED || invoice.status != ACCEPTED || block.timestamp < invoice.releaseAt) {
+            return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
+        }
 
         uint256 feeValue = calculateFee(invoice.price);
 
         invoiceData[orderId].status = RELEASED;
 
         uint256 pos = index[orderId];
-        if (pos == 0 || pos > heap.data.length) return false;
+        if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
 
         heap.removeAt(pos - 1, index);
 
         IEscrow(invoice.escrow).withdraw(address(0), invoice.seller, invoice.price - feeValue);
         emit InvoiceReleased(orderId);
-        return true;
+        return TaskQueueLib.SUCCESSFUL;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -251,11 +252,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         }
 
         uint256 gasThresold = ppStorage.getGasThresold();
-        while (gasleft() > gasThresold && heap.due()) {
-            (uint216 orderId,) = heap.peek();
 
-            if (!_release(orderId)) break;
-        }
+        heap.processDueTask(index, _release, gasThresold);
     }
 
     /**
