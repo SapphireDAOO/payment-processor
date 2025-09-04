@@ -26,25 +26,25 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     uint256 private minimumInvoiceValue;
 
     /// @notice Status code representing that a payment or transaction has been created.
-    uint32 public constant CREATED = 1;
+    uint8 public constant CREATED = 1;
 
     /// @notice Status code representing that a payment or transaction has been accepted.
-    uint32 public constant ACCEPTED = CREATED + 1;
+    uint8 public constant ACCEPTED = CREATED + 1;
 
     /// @notice Status code representing that a payment has been completed.
-    uint32 public constant PAID = ACCEPTED + 1;
+    uint8 public constant PAID = ACCEPTED + 1;
 
     /// @notice Status code representing that a payment or transaction has been rejected.
-    uint32 public constant REJECTED = PAID + 1;
+    uint8 public constant REJECTED = PAID + 1;
 
     /// @notice Status code representing that a payment or transaction has been cancelled.
-    uint32 public constant CANCELLED = REJECTED + 1;
+    uint8 public constant CANCELLED = REJECTED + 1;
 
     /// @notice Status code representing that a payment has been refunded to the payer.
-    uint32 public constant REFUNDED = CANCELLED + 1;
+    uint8 public constant REFUNDED = CANCELLED + 1;
 
     /// @notice Status code representing that a payment has been successfully released to the payee.
-    uint32 public constant RELEASED = REFUNDED + 1;
+    uint8 public constant RELEASED = REFUNDED + 1;
 
     /// @notice The valid period for a transaction, after which it is considered expired.
     uint256 public constant VALID_PERIOD = 180 days;
@@ -55,7 +55,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
     /// @notice Basis points denominator used for percentage calculations (1% = 100).
     uint256 public constant BASIS_POINTS = 10000;
 
-    address public forwarder;
+    /// @notice Address of the forwarder contract responsible for calling performUpkeep.
+    address private forwarder;
 
     /**
      * @notice Stores the `Invoice` structs, keyed by a unique invoice ID.

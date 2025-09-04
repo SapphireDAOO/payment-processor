@@ -25,7 +25,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     using { TaskQueueLib.getId } for uint256;
 
     using { SafeTransferLib.safeTransferFrom } for address;
-    using { SafeCastLib.toUint48, SafeCastLib.toUint216 } for uint256;
+    using { SafeCastLib.toUint40, SafeCastLib.toUint216 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
     using { FixedPointMathLib.mulDiv } for uint256;
 
@@ -131,14 +131,14 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     /// @inheritdoc IAdvancedPaymentProcessor
     function createMetaInvoice(InvoiceCreationParam[] memory param) external onlyMarketplace returns (uint216) {
         uint256 totalPrice;
-        uint256 startInvoiceId = ppStorage.getNextInvoiceId();
+        uint216 startInvoiceId = ppStorage.getNextInvoiceId();
         uint256 length = param.length;
         uint256 upperInvoiceId = length + startInvoiceId - 1;
 
         uint216 metaInvoiceOrderId = _computeMetaInvoiceOrderId(startInvoiceId, upperInvoiceId, nextMetaInvoiceId);
         if (metaInvoice[metaInvoiceOrderId].price != 0) revert MetaInvoiceAlreadyExists();
 
-        for (uint256 i = 0; i < length; i++) {
+        for (uint216 i = 0; i < length; i++) {
             totalPrice += param[i].price;
             uint216 subOrderId = _createInvoice(startInvoiceId + i, metaInvoiceOrderId, param[i]);
             metaInvoice[metaInvoiceOrderId].subInvoiceIds.push(subOrderId);
@@ -284,15 +284,16 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         priceFeed[token] = aggregator;
     }
 
+    /// @inheritdoc IAdvancedPaymentProcessor
     function setInvoiceReleaseTime(uint216 orderId, uint256 holdPeriod) external {
         if (msg.sender != address(ppStorage)) revert NotAuthorized();
         Invoice memory inv = invoice[orderId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
-        inv.releaseAt = block.timestamp + holdPeriod;
+        inv.releaseAt = (block.timestamp + holdPeriod).toUint40();
         invoice[orderId] = inv;
 
-        heap.reschedule(orderId, uint40(inv.releaseAt), index);
+        heap.reschedule(orderId, inv.releaseAt, index);
 
         emit UpdateReleaseTime(orderId, holdPeriod);
     }
@@ -378,10 +379,11 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         inv.buyer = msg.sender;
         inv.state = PAID;
         inv.escrow = escrowAddress;
-        inv.paidAt = (block.timestamp).toUint48();
+        inv.paidAt = (block.timestamp).toUint40();
         inv.balance = price;
         inv.amountPaid = price;
-        inv.releaseAt = inv.releaseAt == 0 ? block.timestamp + ppStorage.getDefaultHoldPeriod() : inv.releaseAt;
+        inv.releaseAt =
+            inv.releaseAt == 0 ? (block.timestamp + ppStorage.getDefaultHoldPeriod()).toUint40() : inv.releaseAt;
 
         heap.insert(orderId, uint40(inv.releaseAt), index);
 
@@ -399,7 +401,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
      * @param param The parameters required to create the invoice.
      * @return orderId The keccak256 hash representing the invoice ID.
      */
-    function _createInvoice(uint256 id, uint216 metaInvoiceId, InvoiceCreationParam memory param)
+    function _createInvoice(uint216 id, uint216 metaInvoiceId, InvoiceCreationParam memory param)
         internal
         returns (uint216)
     {
@@ -408,7 +410,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         Invoice memory inv;
         inv.seller = param.seller;
         inv.price = param.price;
-        inv.createdAt = (block.timestamp).toUint48();
+        inv.createdAt = (block.timestamp).toUint40();
         inv.metaInvoiceId = metaInvoiceId;
         inv.state = INITIATED;
         inv.invoiceId = id;

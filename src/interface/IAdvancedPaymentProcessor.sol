@@ -56,7 +56,17 @@ interface IAdvancedPaymentProcessor {
     /// @notice Represents a single invoice created by a buyer to pay a seller, with escrow and payment tracking.
     struct Invoice {
         /// @notice A unique identifier assigned to this invoice, typically sequentially.
-        uint256 invoiceId;
+        uint216 invoiceId;
+        /// @notice Timestamp when the payment was made.
+        uint40 paidAt;
+        /// @notice Timestamp when the invoice was created.
+        uint40 createdAt;
+        /// @notice The timestamp when funds in escrow can be released to the seller.
+        uint40 releaseAt;
+        /// @notice Current state of the invoice.
+        uint8 state;
+        /// @notice Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.
+        uint216 metaInvoiceId;
         /// @notice Address of the buyer.
         address buyer;
         /// @notice Address of the seller.
@@ -65,22 +75,12 @@ interface IAdvancedPaymentProcessor {
         address escrow;
         /// @notice Token used for payment. Address zero for native currency.
         address paymentToken;
-        /// @notice Current state of the invoice.
-        uint8 state;
-        /// @notice Timestamp when the payment was made.
-        uint48 paidAt;
-        /// @notice Timestamp when the invoice was created.
-        uint48 createdAt;
         /// @notice Total amount paid by the buyer for this invoice, in the payment token (use native token if `paymentToken == address(0)`).
         uint256 amountPaid;
         /// @notice Invoice amount expressed in USD (8 decimals)
         uint256 price;
         /// @notice Returns the current balance of the escrow associated with the order, accounting for the total amount paid minus any refunds or released amounts.
         uint256 balance;
-        /// @notice The timestamp when funds in escrow can be released to the seller.
-        uint256 releaseAt;
-        /// @notice Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.
-        uint216 metaInvoiceId;
     }
 
     /// @notice Represents a collection of sub-invoices grouped into a single meta-invoice for batch payment and tracking.
@@ -198,6 +198,14 @@ interface IAdvancedPaymentProcessor {
      * @param aggregator The address of the Chainlink aggregator for the token.
      */
     function setPriceFeed(address token, address aggregator) external;
+
+    /**
+     * @notice Sets a custom release time for a given invoice by adding a hold period to the current timestamp.
+     * @dev Callable only by the storage contract (via `execute()`), not directly by users or marketplace.
+     * @param orderId The ID of the invoice to update.
+     * @param holdPeriod The duration in seconds to wait before the funds can be released.
+     */
+    function setInvoiceReleaseTime(uint216 orderId, uint256 holdPeriod) external;
 
     /**
      * @notice Updates the address of the forwarder contract used for relayed or automated calls.

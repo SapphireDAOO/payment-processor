@@ -83,7 +83,15 @@ interface ISimplePaymentProcessor {
     /// @notice Represents an invoice between a buyer and seller, with escrow, timestamps, and status tracking.
     struct Invoice {
         /// @notice A unique identifier assigned to this invoice, typically sequentially.
-        uint256 invoiceId;
+        uint216 invoiceId;
+        /// @notice The Unix timestamp when the invoice was created.
+        uint40 createdAt;
+        /// @notice The Unix timestamp when the payment was completed.
+        uint40 paymentTime;
+        /// @notice The timestamp when funds in escrow can be released to the seller.
+        uint40 releaseAt;
+        /// @notice The current status of the invoice.
+        uint8 status;
         /// @notice The address of the seller of the invoice.
         address seller;
         /// @notice The address of the buyer of the invoice.
@@ -94,14 +102,6 @@ interface ISimplePaymentProcessor {
         uint256 price;
         /// @notice The amount that has been paid.
         uint256 amountPaid;
-        /// @notice The Unix timestamp when the invoice was created.
-        uint32 createdAt;
-        /// @notice The Unix timestamp when the payment was completed.
-        uint32 paymentTime;
-        /// @notice The timestamp when funds in escrow can be released to the seller.
-        uint32 releaseAt;
-        /// @notice The current status of the invoice.
-        uint32 status;
     }
 
     // ================================================================
