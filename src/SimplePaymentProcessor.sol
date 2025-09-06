@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import { Escrow, IEscrow } from "./Escrow.sol";
 
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
+import { AutomationCompatibleInterface } from "./interface/AutomationCompatibleInterface.sol";
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
@@ -13,13 +14,14 @@ import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
  * @notice Lightweight payment processor for single-invoice flows with native or ERC20 payments.
  * @dev Implements basic escrow release, refund, and dispute resolution. Compliant with ISimplePaymentProcessor.
  */
-contract SimplePaymentProcessor is ISimplePaymentProcessor {
+contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatibleInterface {
     using SafeCastLib for uint256;
     using TaskQueueLib for TaskQueueLib.Heap;
-    using { TaskQueueLib.getId } for uint256;
 
+    /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
     TaskQueueLib.Heap private heap;
 
+    /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable ppStorage;
 
     /// @notice The minimum allowed value (in wei) required to create a new invoice.
@@ -162,27 +164,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         emit InvoiceCanceled(orderId);
     }
 
-    function _release(uint216 orderId) internal returns (uint256) {
-        Invoice memory invoice = invoiceData[orderId];
-
-        if (invoice.status == RELEASED || invoice.status != ACCEPTED || block.timestamp < invoice.releaseAt) {
-            return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
-        }
-
-        uint256 feeValue = calculateFee(invoice.price);
-
-        invoiceData[orderId].status = RELEASED;
-
-        uint256 pos = index[orderId];
-        if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
-
-        heap.removeAt(pos - 1, index);
-
-        IEscrow(invoice.escrow).withdraw(address(0), invoice.seller, invoice.price - feeValue);
-        emit InvoiceReleased(orderId);
-        return TaskQueueLib.SUCCESSFUL;
-    }
-
     /// @inheritdoc ISimplePaymentProcessor
     function releaseInvoice(uint216 orderId) public {
         Invoice memory invoice = invoiceData[orderId];
@@ -247,10 +228,12 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         emit InvoiceRejected(orderId);
     }
 
+    /// @inheritdoc AutomationCompatibleInterface
     function checkUpkeep(bytes calldata) external view returns (bool, bytes memory) {
         return (heap.due(), bytes(""));
     }
 
+    /// @inheritdoc AutomationCompatibleInterface
     function performUpkeep(bytes calldata) external {
         if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner() && msg.sender != forwarder) {
             revert NotAuthorized();
@@ -259,6 +242,39 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor {
         uint256 gasThresold = ppStorage.getGasThresold();
 
         heap.processDueTask(index, _release, gasThresold);
+    }
+
+    /**
+     * @notice Attempts to release the specified invoice if it is eligible.
+     * @dev This function performs all the checks required to determine whether
+     *      the invoice can be released, updates the invoice status, removes it
+     *      from the scheduling heap, and triggers the escrow payout.
+     * @param orderId The ID of the invoice to release.
+     * @return status A status code from TaskQueueLib indicating the outcome:
+     *         - SUCCESSFUL (3): Invoice was released and removed from heap.
+     *         - NOT_ELIGIBLE_FOR_RELEASE (1): Invoice not accepted or not yet due.
+     *         - ERROR (2): Invalid index or heap inconsistency.
+     * @return releaseAt The scheduled release timestamp of the invoice (even if not released).
+     */
+    function _release(uint216 orderId) internal returns (uint256, uint40) {
+        Invoice memory invoice = invoiceData[orderId];
+
+        if (invoice.status == RELEASED || invoice.status != ACCEPTED || block.timestamp < invoice.releaseAt) {
+            return (TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE, invoice.releaseAt);
+        }
+
+        uint256 feeValue = calculateFee(invoice.price);
+
+        invoiceData[orderId].status = RELEASED;
+
+        uint256 pos = index[orderId];
+        if (pos == 0 || pos > heap.data.length) return (TaskQueueLib.ERROR, invoice.releaseAt);
+
+        heap.removeAt(pos - 1, index);
+
+        IEscrow(invoice.escrow).withdraw(address(0), invoice.seller, invoice.price - feeValue);
+        emit InvoiceReleased(orderId);
+        return (TaskQueueLib.SUCCESSFUL, invoice.releaseAt);
     }
 
     /**

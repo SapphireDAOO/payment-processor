@@ -22,7 +22,6 @@ import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
  */
 contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompatibleInterface, EscrowFactory {
     using TaskQueueLib for TaskQueueLib.Heap;
-    using { TaskQueueLib.getId } for uint256;
 
     using { SafeTransferLib.safeTransferFrom } for address;
     using { SafeCastLib.toUint40, SafeCastLib.toUint216 } for uint256;
@@ -228,7 +227,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function release(uint216 orderId) external onlyMarketplace {
-        if (_release(orderId) != TaskQueueLib.SUCCESSFUL) revert InvalidInvoiceState();
+        (uint256 result,) = _release(orderId);
+        if (result != TaskQueueLib.SUCCESSFUL) revert InvalidInvoiceState();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -264,10 +264,12 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         emit DisputeResolved(orderId);
     }
 
+    /// @inheritdoc AutomationCompatibleInterface
     function checkUpkeep(bytes calldata) external view returns (bool, bytes memory) {
         return (heap.due(), bytes(""));
     }
 
+    /// @inheritdoc AutomationCompatibleInterface
     function performUpkeep(bytes calldata) external {
         if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner() && msg.sender != forwarder) {
             revert NotAuthorized();
@@ -328,12 +330,20 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
             && block.timestamp >= inv.releaseAt;
     }
 
-    function _release(uint216 orderId) internal returns (uint256) {
+    /**
+     * @notice Attempts to release the payment for a given invoice.
+     * @dev Performs validation checks before releasing. If successful, updates invoice state,
+     *      removes it from the heap, processes seller payout, and emits a PaymentReleased event.
+     * @param orderId The ID of the invoice to release.
+     * @return result The release status code (SUCCESSFUL, ERROR, or NOT_ELIGIBLE_FOR_RELEASE).
+     * @return releaseAt The scheduled release timestamp of the invoice.
+     */
+    function _release(uint216 orderId) internal returns (uint256, uint40) {
         Invoice memory inv = invoice[orderId];
-        if (!_isReleasable(inv)) return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
+        if (!_isReleasable(inv)) return (TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE, inv.releaseAt);
 
         uint256 pos = index[orderId];
-        if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
+        if (pos == 0 || pos > heap.data.length) return (TaskQueueLib.ERROR, inv.releaseAt);
 
         invoice[orderId].state = RELEASED;
         invoice[orderId].balance = 0;
@@ -341,7 +351,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         heap.removeAt(pos - 1, index);
         uint256 sellerNetAmount = _processSellerPayout(inv, inv.balance);
         emit PaymentReleased(orderId, sellerNetAmount);
-        return TaskQueueLib.SUCCESSFUL;
+        return (TaskQueueLib.SUCCESSFUL, inv.releaseAt);
     }
 
     /**

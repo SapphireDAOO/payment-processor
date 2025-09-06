@@ -101,11 +101,6 @@ library TaskQueueLib {
         }
     }
 
-    function getId(uint256 key) internal pure returns (uint216) {
-        (uint216 id,) = _decode(key);
-        return id;
-    }
-
     /**
      * @notice Iterates through the heap and attempts to release due tasks based on available gas.
      * @dev This function uses a gas threshold to avoid running out of gas. It repeatedly attempts
@@ -122,28 +117,30 @@ library TaskQueueLib {
     function processDueTask(
         Heap storage heap,
         mapping(uint216 => uint256) storage index,
-        function(uint216) internal returns(uint256) releaseCallback,
+        function(uint216) internal returns(uint256, uint40) releaseCallback,
         uint256 gasThresold
     ) internal {
         (uint216 id,) = peek(heap);
+        uint40 dueAt;
 
         uint256 latestIndex;
-        while (gasleft() > gasThresold) {
-            uint256 result = releaseCallback(id);
+        while (gasleft() > gasThresold && block.timestamp >= dueAt) {
+            (uint256 result, uint40 releaseAt) = releaseCallback(id);
+            dueAt = releaseAt;
 
             if (latestIndex >= heap.data.length) break;
 
             if (result == ERROR) break;
 
             if (result == SUCCESSFUL) {
-                id = getId(heap.data[latestIndex]);
+                id = _getId(heap.data[latestIndex]);
                 continue;
             }
 
             if (result == NOT_ELIGIBLE_FOR_RELEASE) {
                 uint256 nextIndex = index[id];
                 if (nextIndex == heap.data.length) break;
-                id = getId(heap.data[nextIndex]);
+                id = _getId(heap.data[nextIndex]);
                 latestIndex = nextIndex - 1;
             }
         }
@@ -167,7 +164,7 @@ library TaskQueueLib {
      * @return id The task ID.
      * @return dueAt The due timestamp in seconds.
      */
-    function peek(Heap storage heap) internal view returns (uint216, uint40) {
+    function peek(Heap storage heap) private view returns (uint216, uint40) {
         return _decode(heap.data[0]);
     }
 
@@ -187,11 +184,21 @@ library TaskQueueLib {
      * @return id The task ID.
      * @return dueDate The due time in seconds.
      */
-    function _decode(uint256 key) internal pure returns (uint216, uint40) {
+    function _decode(uint256 key) private pure returns (uint216, uint40) {
         uint216 id = uint216(key & ((1 << 216) - 1));
         uint40 dueDate = uint40(key >> 216);
 
         return (id, dueDate);
+    }
+
+    /**
+     * @notice Extracts and returns the task ID from a given heap key.
+     * @param key The encoded heap key containing the task ID and due timestamp.
+     * @return id The decoded task ID.
+     */
+    function _getId(uint256 key) private pure returns (uint216) {
+        (uint216 id,) = _decode(key);
+        return id;
     }
 
     /**
