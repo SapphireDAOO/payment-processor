@@ -239,7 +239,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             revert NotAuthorized();
         }
 
-        uint256 gasThresold = ppStorage.getGasThresold();
+        uint256 gasThresold = ppStorage.getGasThreshold();
 
         heap.processDueTask(index, _release, gasThresold);
     }

@@ -198,6 +198,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
         inv.state = DISPUTED;
         invoice[orderId] = inv;
+        heap.removeAt(index[orderId] - 1, index);
         emit DisputeCreated(orderId);
     }
 
@@ -215,11 +216,11 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         invoice[orderId] = inv;
 
         if (resolution == DISPUTE_DISMISSED) {
+            heap.insert(orderId, inv.releaseAt, index);
             emit DisputeDismissed(orderId);
         }
 
         if (resolution == DISPUTE_SETTLED) {
-            heap.removeAt(index[orderId] - 1, index);
             (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(inv, sellerShare);
             emit DisputeSettled(orderId, sellerReceivingValue, buyerReceivingValue);
         }
@@ -275,7 +276,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
             revert NotAuthorized();
         }
 
-        uint256 gasThresold = ppStorage.getGasThresold();
+        uint256 gasThresold = ppStorage.getGasThreshold();
 
         heap.processDueTask(index, _release, gasThresold);
     }
@@ -315,6 +316,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     function getTokenValueFromUsd(address paymentToken, uint256 price) public view returns (uint256) {
         address aggregator = paymentToken == address(0) ? nativeTokenAggregator : priceFeed[paymentToken];
         (, int256 answer,,,) = AggregatorV3Interface(aggregator).latestRoundData();
+        // check for stale data
         uint256 usdPerToken = answer.toUint256(); // 8 decimals from Chainlink
 
         uint8 tokenDecimals = paymentToken == address(0) ? DEFAULT_DECIMAL : IERC20(paymentToken).decimals();
@@ -395,7 +397,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         inv.releaseAt =
             inv.releaseAt == 0 ? (block.timestamp + ppStorage.getDefaultHoldPeriod()).toUint40() : inv.releaseAt;
 
-        heap.insert(orderId, uint40(inv.releaseAt), index);
+        heap.insert(orderId, inv.releaseAt, index);
 
         if (!isNative) {
             inv.paymentToken = paymentToken;

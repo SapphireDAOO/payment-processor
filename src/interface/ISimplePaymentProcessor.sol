@@ -90,7 +90,7 @@ interface ISimplePaymentProcessor {
         uint40 paymentTime;
         /// @notice The timestamp when funds in escrow can be released to the seller.
         uint40 releaseAt;
-        /// @notice The current status of the invoice.
+        /// @notice The current am of the invoice.
         uint8 status;
         /// @notice The address of the seller of the invoice.
         address seller;

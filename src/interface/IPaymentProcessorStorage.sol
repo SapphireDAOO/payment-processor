@@ -28,6 +28,7 @@ interface IPaymentProcessorStorage {
         uint256 feeRate;
         /// @notice The default hold period for funds in escrow, measured in seconds.
         uint256 defaultHoldPeriod;
+        /// @notice The minimum amount of gas that must remain to continue processing tasks.
         uint256 gasThresold;
     }
 
@@ -133,5 +134,5 @@ interface IPaymentProcessorStorage {
      * @dev This threshold is typically used to prevent out-of-gas errors during batch operations in Chainlink Automation.
      * @return The gas threshold value in units of gas.
      */
-    function getGasThresold() external view returns (uint256);
+    function getGasThreshold() external view returns (uint256);
 }

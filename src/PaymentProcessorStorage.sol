@@ -125,7 +125,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getGasThresold() external view returns (uint256) {
+    function getGasThreshold() external view returns (uint256) {
         return config.gasThresold;
     }
 }

@@ -42,7 +42,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         assertEq(address(0xa0), ppStorage.getFeeReceiver());
         assertEq(100, ppStorage.getFeeRate());
-        assertEq(20_000, ppStorage.getGasThresold());
+        assertEq(20_000, ppStorage.getGasThreshold());
         assertEq(1 days, ppStorage.getDefaultHoldPeriod());
         assertEq(address(0xb0), ppStorage.getMarketplace());
     }
