@@ -52,7 +52,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     uint256 public constant VALID_PERIOD = 180 days;
 
     /// @notice The window of time allowed for accepting a transaction after creation.
-    uint256 public constant ACCEPTANCE_WINDOW = 3 days;
+    uint256 public constant DECISION_WINDOW = 3 days;
 
     /// @notice Basis points denominator used for percentage calculations (1% = 100).
     uint256 public constant BASIS_POINTS = 10000;
@@ -135,12 +135,14 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         invoice.paymentTime = (block.timestamp).toUint32();
         invoiceData[orderId] = invoice;
 
+        heap.insert(orderId, (block.timestamp + DECISION_WINDOW).toUint32(), index);
+
         emit InvoicePaid(orderId, msg.sender, msg.value);
         return escrow;
     }
 
     function _validateInvoiceStateForPaymentDecision(Invoice memory invoice) internal view {
-        if (block.timestamp > invoice.paymentTime + ACCEPTANCE_WINDOW) {
+        if (block.timestamp > invoice.paymentTime + DECISION_WINDOW) {
             revert AcceptanceWindowExceeded();
         }
         if (invoice.seller != msg.sender) {
@@ -190,10 +192,15 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function refundBuyer(uint216 orderId) external {
+    function refundBuyer(uint216 orderId) public {
         Invoice memory invoice = invoiceData[orderId];
-        if (invoice.status != PAID || block.timestamp < invoice.paymentTime + ACCEPTANCE_WINDOW) {
+        if (invoice.status != PAID || block.timestamp < invoice.paymentTime + DECISION_WINDOW) {
             revert InvoiceNotEligibleForRefund();
+        }
+
+        uint256 pos = index[orderId];
+        if (pos != 0 && pos <= heap.data.length) {
+            heap.removeAt(pos - 1, index);
         }
 
         invoiceData[orderId].status = REFUNDED;
@@ -207,11 +214,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         Invoice memory invoice = invoiceData[orderId];
         _validateInvoiceStateForPaymentDecision(invoice);
         invoice.status = ACCEPTED;
-        uint256 holdPeriod = invoice.releaseAt == 0 ? ppStorage.getDefaultHoldPeriod() : invoice.releaseAt;
-        invoice.releaseAt = (holdPeriod + block.timestamp).toUint32();
+        uint256 holdSeconds = invoice.releaseAt == 0 ? ppStorage.getDefaultHoldPeriod() : invoice.releaseAt;
+        invoice.releaseAt = (holdSeconds + block.timestamp).toUint32();
         invoiceData[orderId] = invoice;
 
-        heap.insert(orderId, uint40(invoice.releaseAt), index);
+        heap.reschedule(orderId, uint40(invoice.releaseAt), index);
         uint256 feeValue = calculateFee(invoice.price);
         IEscrow(invoice.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), feeValue);
 
@@ -222,7 +229,10 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     function rejectPayment(uint216 orderId) public {
         Invoice memory invoice = invoiceData[orderId];
         _validateInvoiceStateForPaymentDecision(invoice);
+
         invoiceData[orderId].status = REJECTED;
+        heap.removeAt(index[orderId] - 1, index);
+
         IEscrow(invoice.escrow).withdraw(address(0), invoice.buyer, invoice.price);
 
         emit InvoiceRejected(orderId);
@@ -258,6 +268,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      */
     function _release(uint216 orderId) internal returns (uint256, uint40) {
         Invoice memory invoice = invoiceData[orderId];
+
+        if (invoice.status == PAID) {
+            refundBuyer(orderId);
+            return (TaskQueueLib.SUCCESSFUL, (invoice.paymentTime + DECISION_WINDOW).toUint40());
+        }
 
         if (invoice.status == RELEASED || invoice.status != ACCEPTED || block.timestamp < invoice.releaseAt) {
             return (TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE, invoice.releaseAt);

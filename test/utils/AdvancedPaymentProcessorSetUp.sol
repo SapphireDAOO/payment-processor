@@ -39,7 +39,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
 
     // fork test
     address constant WTBC_BUYER = 0x0AFF6665bB45bF349489B20E225A6c5D78E2280F;
-    address constant USDC_BUYER = 0x4B6f17856215eab57c29ebfA18B0a0F74A3627bb;
+    address constant USDC_BUYER = 0x166716C2838e182d64886135a96f1AABCA9A9756;
     address constant NATIVE_TOKEN_BUYER = 0x5e86A14B06a4001cA83688cc06568A0c07425f63;
 
     function setUp() public virtual {

@@ -120,16 +120,18 @@ library TaskQueueLib {
         function(uint216) internal returns(uint256, uint40) releaseCallback,
         uint256 gasThresold
     ) internal {
-        (uint216 id,) = peek(heap);
-        uint40 dueAt;
+        if (heap.data.length == 0) return;
+
+        (uint216 id, uint40 dueTime) = peek(heap);
+        uint40 dueAt = dueTime;
 
         uint256 latestIndex;
         while (gasleft() > gasThresold && block.timestamp >= dueAt) {
             (uint256 result, uint40 releaseAt) = releaseCallback(id);
             dueAt = releaseAt;
 
+            if (heap.data.length == 0) break;
             if (latestIndex >= heap.data.length) break;
-
             if (result == ERROR) break;
 
             if (result == SUCCESSFUL) {

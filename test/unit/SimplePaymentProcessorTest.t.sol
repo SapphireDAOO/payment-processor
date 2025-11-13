@@ -165,7 +165,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(ppStorage.getFeeReceiver().balance, fee);
     }
 
-    function test_payment_acceptance_after_acceptance_window() public {
+    function test_payment_acceptance_after_DECISION_WINDOW() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
         uint216 orderId = simplePP.createInvoice(invoicePrice);
@@ -173,13 +173,13 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(buyerOne);
         simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
 
-        vm.warp(block.timestamp + simplePP.ACCEPTANCE_WINDOW() + 1);
+        vm.warp(block.timestamp + simplePP.DECISION_WINDOW() + 1);
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.AcceptanceWindowExceeded.selector);
         simplePP.acceptPayment(orderId);
     }
 
-    function test_payer_refund_acceptance_window() public {
+    function test_payer_refund_DECISION_WINDOW() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
         uint216 orderId = simplePP.createInvoice(invoicePrice);
@@ -193,7 +193,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.expectRevert(ISimplePaymentProcessor.InvoiceNotEligibleForRefund.selector);
         simplePP.refundBuyer(orderId);
 
-        vm.warp(block.timestamp + simplePP.ACCEPTANCE_WINDOW() + 1);
+        vm.warp(block.timestamp + simplePP.DECISION_WINDOW() + 1);
         simplePP.refundBuyer(orderId);
         vm.stopPrank();
 
@@ -349,5 +349,27 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
             console.log("order:", orderIds[i], simplePP.getInvoiceData(orderIds[i]).status, i);
         }
         assertEq(simplePP.getInvoiceData(orderIds[9]).status, 2);
+    }
+
+    function test_automatedRefund() public {
+        uint256 invoicePrice = 100 ether;
+
+        uint216 orderId = simplePP.createInvoice(invoicePrice);
+
+        vm.prank(buyerOne);
+        simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
+
+        uint256 buyerBalanceBeforeRefund = address(buyerOne).balance;
+
+        vm.warp(block.timestamp + 3 days);
+
+        vm.prank(admin);
+        simplePP.performUpkeep("");
+
+        uint256 buyerBalanceAfterRefund = address(buyerOne).balance;
+
+        assertEq(simplePP.getInvoiceData(orderId).status, simplePP.REFUNDED());
+        assertEq(buyerBalanceBeforeRefund + invoicePrice, buyerBalanceAfterRefund);
+        assertEq(simplePP.getItems().length, 0);
     }
 }

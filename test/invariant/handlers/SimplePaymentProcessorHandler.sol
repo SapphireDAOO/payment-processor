@@ -91,7 +91,7 @@ contract SimplePaymentProcessorHandler is Test {
         index = _bound(index);
         uint216 orderId = orderIds[index];
         if (pp.getInvoiceData(orderId).status == pp.RELEASED()) return;
-        vm.assume(block.timestamp > block.timestamp + pp.ACCEPTANCE_WINDOW());
+        vm.assume(block.timestamp > block.timestamp + pp.DECISION_WINDOW());
         vm.prank(seller);
         pp.releaseInvoice(orderId);
     }
