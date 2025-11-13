@@ -44,7 +44,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /**
      * @notice Initializes the contract with the given configuration.
      * @dev Sets the contract owner, stores the initial configuration parameters, and initializes the invoice ID counter.
-     * @param configuration The initial configuration parameters including owner, forwarder address, gas threshold, and hold period.
+     * @param configuration The initial configuration parameters including owner, gas threshold, and hold period.
      */
     constructor(Configuration memory configuration) {
         _initializeOwner(configuration.owner);
