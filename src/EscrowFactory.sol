@@ -43,8 +43,9 @@ abstract contract EscrowFactory is IEscrowFactory {
             params.value = 0;
         }
 
-        address escrow =
-            CREATE3.deployDeterministic(params.value, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt);
+        address escrow = CREATE3.deployDeterministic(
+            params.value, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt
+        );
 
         emit EscrowCreated(params.orderId, escrow);
         return escrow;

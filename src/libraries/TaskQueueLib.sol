@@ -33,9 +33,7 @@ library TaskQueueLib {
      * @param dueTime The due timestamp (in seconds) of the task.
      * @param index Mapping from task ID to 1-based index in the heap.
      */
-    function insert(Heap storage heap, uint216 id, uint40 dueTime, mapping(uint216 => uint256) storage index)
-        internal
-    {
+    function insert(Heap storage heap, uint216 id, uint40 dueTime, mapping(uint216 => uint256) storage index) internal {
         if (index[id] != 0) revert DuplicateTask();
         uint256 key = _encode(id, dueTime);
         heap.data.push(key);
@@ -117,7 +115,7 @@ library TaskQueueLib {
     function processDueTask(
         Heap storage heap,
         mapping(uint216 => uint256) storage index,
-        function(uint216) internal returns(uint256, uint40) releaseCallback,
+        function(uint216) internal returns (uint256, uint40) releaseCallback,
         uint256 gasThresold
     ) internal {
         if (heap.data.length == 0) return;
