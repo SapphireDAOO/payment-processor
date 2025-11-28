@@ -29,8 +29,8 @@ exclude_lints = [
     "screaming-snake-case-immutable",
     "mixed-case-variable",
     "asm-keccak256",
+    "unsafe-typecast",
 ]
-# mixed-case-function = false
 
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

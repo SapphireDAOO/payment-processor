@@ -58,10 +58,12 @@ contract MockV3Aggregator {
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         return (
+            // forge-lint: disable-next-line(unsafe-typecast)
             uint80(latestRound),
             getAnswer[latestRound],
             getStartedAt[latestRound],
             getTimestamp[latestRound],
+            // forge-lint: disable-next-line(unsafe-typecast)
             uint80(latestRound)
         );
     }

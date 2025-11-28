@@ -106,7 +106,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
      * @dev Reverts with NotAuthorized() if the caller is not the marketplace.
      */
     modifier onlyMarketplace() {
-        if (msg.sender != ppStorage.getMarketplace()) revert NotAuthorized();
+        _onlyMarketplace();
         _;
     }
 
@@ -228,8 +228,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function release(uint216 orderId) external onlyMarketplace {
-        (uint256 result,) = _release(orderId);
-        if (result != TaskQueueLib.SUCCESSFUL) revert InvalidInvoiceState();
+        if (_release(orderId) != TaskQueueLib.SUCCESSFUL) revert InvalidInvoiceState();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -278,7 +277,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
         uint256 gasThresold = ppStorage.getGasThreshold();
 
-        heap.processDueTask(index, _release, gasThresold);
+        heap.processDueTask(_release, gasThresold);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -338,14 +337,13 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
      *      removes it from the heap, processes seller payout, and emits a PaymentReleased event.
      * @param orderId The ID of the invoice to release.
      * @return result The release status code (SUCCESSFUL, ERROR, or NOT_ELIGIBLE_FOR_RELEASE).
-     * @return releaseAt The scheduled release timestamp of the invoice.
      */
-    function _release(uint216 orderId) internal returns (uint256, uint40) {
+    function _release(uint216 orderId) internal returns (uint256) {
         Invoice memory inv = invoice[orderId];
-        if (!_isReleasable(inv)) return (TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE, inv.releaseAt);
+        if (!_isReleasable(inv)) return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
 
         uint256 pos = index[orderId];
-        if (pos == 0 || pos > heap.data.length) return (TaskQueueLib.ERROR, inv.releaseAt);
+        if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
 
         invoice[orderId].state = RELEASED;
         invoice[orderId].balance = 0;
@@ -353,7 +351,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         heap.removeAt(pos - 1, index);
         uint256 sellerNetAmount = _processSellerPayout(inv, inv.balance);
         emit PaymentReleased(orderId, sellerNetAmount);
-        return (TaskQueueLib.SUCCESSFUL, inv.releaseAt);
+        return TaskQueueLib.SUCCESSFUL;
     }
 
     /**
@@ -495,6 +493,10 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
      */
     function _computeMetaInvoiceOrderId(uint256 lower, uint256 upper, uint256 salt) internal view returns (uint216) {
         return (uint256(keccak256(abi.encode(lower, upper, salt, address(this)))) & ((1 << 216) - 1)).toUint216();
+    }
+
+    function _onlyMarketplace() internal view {
+        if (msg.sender != ppStorage.getMarketplace()) revert NotAuthorized();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor

@@ -35,9 +35,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
      * @dev Reverts with `NotAuthorized` if `msg.sender` is not authorized.
      */
     modifier onlyAuthorized() {
-        if (!isAuthorized[msg.sender]) {
-            revert NotAuthorized();
-        }
+        _onlyAuthorized();
         _;
     }
 
@@ -92,6 +90,12 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @inheritdoc IPaymentProcessorStorage
     function setMarketplaceAddress(address marketplaceAddress) external onlyOwner {
         config.marketplace = marketplaceAddress;
+    }
+
+    function _onlyAuthorized() internal view {
+        if (!isAuthorized[msg.sender]) {
+            revert NotAuthorized();
+        }
     }
 
     /// @inheritdoc IPaymentProcessorStorage

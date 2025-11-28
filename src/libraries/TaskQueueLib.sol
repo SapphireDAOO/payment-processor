@@ -83,6 +83,7 @@ library TaskQueueLib {
         internal
     {
         uint256 p = index[id];
+
         if (p == 0) revert TaskNotFound();
 
         uint256 i = p - 1;
@@ -108,41 +109,24 @@ library TaskQueueLib {
      *      - `NOT_ELIGIBLE_FOR_RELEASE`: Skips to the next task.
      *      - `ERROR`: Aborts the loop.
      * @param heap The heap data structure storing encoded tasks.
-     * @param index Mapping of task IDs to their 1-based heap indices.
      * @param releaseCallback A function that attempts to release a task by ID, returning a status code.
      * @param gasThresold The minimum remaining gas required to continue processing.
      */
     function processDueTask(
         Heap storage heap,
-        mapping(uint216 => uint256) storage index,
-        function(uint216) internal returns (uint256, uint40) releaseCallback,
+        function(uint216) internal returns (uint256) releaseCallback,
         uint256 gasThresold
     ) internal {
-        if (heap.data.length == 0) return;
+        while (heap.data.length > 0 && gasleft() > gasThresold) {
+            (uint216 id, uint40 dueAt) = peek(heap);
 
-        (uint216 id, uint40 dueTime) = peek(heap);
-        uint40 dueAt = dueTime;
+            if (block.timestamp < dueAt) break;
 
-        uint256 latestIndex;
-        while (gasleft() > gasThresold && block.timestamp >= dueAt) {
-            (uint256 result, uint40 releaseAt) = releaseCallback(id);
-            dueAt = releaseAt;
+            uint256 result = releaseCallback(id);
 
-            if (heap.data.length == 0) break;
-            if (latestIndex >= heap.data.length) break;
+            if (result == SUCCESSFUL) continue;
+            if (result == NOT_ELIGIBLE_FOR_RELEASE) break;
             if (result == ERROR) break;
-
-            if (result == SUCCESSFUL) {
-                id = _getId(heap.data[latestIndex]);
-                continue;
-            }
-
-            if (result == NOT_ELIGIBLE_FOR_RELEASE) {
-                uint256 nextIndex = index[id];
-                if (nextIndex == heap.data.length) break;
-                id = _getId(heap.data[nextIndex]);
-                latestIndex = nextIndex - 1;
-            }
         }
     }
 
@@ -185,8 +169,8 @@ library TaskQueueLib {
      * @return dueDate The due time in seconds.
      */
     function _decode(uint256 key) private pure returns (uint216, uint40) {
-        uint216 id = uint216(key & ((1 << 216) - 1));
-        uint40 dueDate = uint40(key >> 216);
+        uint216 id = uint216((key & ((1 << 216) - 1)));
+        uint40 dueDate = uint40((key >> 216));
 
         return (id, dueDate);
     }

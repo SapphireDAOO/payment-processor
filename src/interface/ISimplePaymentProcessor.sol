@@ -87,9 +87,13 @@ interface ISimplePaymentProcessor {
         /// @notice The Unix timestamp when the invoice was created.
         uint40 createdAt;
         /// @notice The Unix timestamp when the payment was completed.
-        uint40 paymentTime;
+        uint40 paidAt;
         /// @notice The timestamp when funds in escrow can be released to the seller.
         uint40 releaseAt;
+        /// @notice The timestamp after which the invoice is considered invalid if unpaid.
+        uint40 invalidateAt;
+        /// @notice The timestamp after which the seller can no longer take action (accept/reject), and the buyer would be refund.
+        uint40 expiresAt;
         /// @notice The current am of the invoice.
         uint8 status;
         /// @notice The address of the seller of the invoice.
@@ -174,6 +178,18 @@ interface ISimplePaymentProcessor {
     function setForwarderAddress(address forwarderAddress) external;
 
     /**
+     * @notice Updates the maximum validity duration for newly created invoices.
+     * @param newValidPeriod The new validity window in seconds.
+     */
+    function setValidPeriod(uint256 newValidPeriod) external;
+
+    /**
+     * @notice Updates the decision window sellers have to accept payments after buyer payment.
+     * @param newDecisionWindow The new decision window in seconds.
+     */
+    function setDecisionWindow(uint256 newDecisionWindow) external;
+
+    /**
      * @notice Refunds the seller of a specific invoice.
      * @dev This function allows the buyer to be refund if the acceptance window has not been exceeded
      *      and the invoice is eligible for a refund. The refund will be processed through the escrow contract.
@@ -229,16 +245,19 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Emitted when a new invoice is created.
      * @param orderId The unique identifier (hash) for the created invoice.
+     * @param invalidateAt The expiration timestamp beyond which the invoice is no longer valid.
      * @param invoice The full invoice struct containing buyer, price, timestamps, state, and metadata.
      */
-    event InvoiceCreated(uint216 indexed orderId, Invoice invoice);
+    event InvoiceCreated(uint216 indexed orderId, uint40 indexed invalidateAt, Invoice invoice);
 
     /**
      * @notice Emitted when an invoice payment is made.
      * @param orderId The unique key of the accepted invoice.
      * @param amountPaid The amount paid towards the invoice in wei.
+     *  @param expiresAt The timestamp by which the seller must accept or reject the invoice.
+     *          If no action is taken by then, the buyer would be refund.
      */
-    event InvoicePaid(uint216 indexed orderId, address indexed buyer, uint256 indexed amountPaid);
+    event InvoicePaid(uint216 indexed orderId, address indexed buyer, uint256 indexed amountPaid, uint40 expiresAt);
 
     /**
      * @notice Emitted when an invoice is rejected by the seller.

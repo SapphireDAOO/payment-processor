@@ -40,7 +40,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         ISimplePaymentProcessor.Invoice memory invoiceDataOne = simplePP.getInvoiceData(orderId);
         assertEq(invoiceDataOne.seller, sellerOne);
         assertEq(invoiceDataOne.createdAt, block.timestamp);
-        assertEq(invoiceDataOne.paymentTime, 0);
+        assertEq(invoiceDataOne.paidAt, 0);
         assertEq(invoiceDataOne.price, 100 ether);
         assertEq(invoiceDataOne.amountPaid, 0);
         assertEq(invoiceDataOne.buyer, address(0));
@@ -55,7 +55,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         ISimplePaymentProcessor.Invoice memory invoiceDataTwo = simplePP.getInvoiceData(orderId);
         assertEq(invoiceDataTwo.seller, sellerTwo);
         assertEq(invoiceDataTwo.createdAt, block.timestamp);
-        assertEq(invoiceDataTwo.paymentTime, 0);
+        assertEq(invoiceDataTwo.paidAt, 0);
         assertEq(invoiceDataTwo.price, 25 ether);
         assertEq(invoiceDataTwo.amountPaid, 0);
         assertEq(invoiceDataTwo.buyer, address(0));
@@ -113,12 +113,12 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.makeInvoicePayment{ value: s }(orderId);
 
         // TRY EXPIRED INVOICE
-        vm.warp(block.timestamp + simplePP.VALID_PERIOD() + 1);
+        vm.warp(block.timestamp + simplePP.validPeriod() + 1);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceIsNoLongerValid.selector);
         simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
 
         // MAKE VALID PAYMENT
-        vm.warp(block.timestamp - simplePP.VALID_PERIOD());
+        vm.warp(block.timestamp - simplePP.validPeriod());
         address escrowAddress = simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
 
         uint256 currentInvoiceStatus = simplePP.getInvoiceData(orderId).status;
@@ -165,7 +165,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(ppStorage.getFeeReceiver().balance, fee);
     }
 
-    function test_payment_acceptance_after_DECISION_WINDOW() public {
+    function test_payment_acceptance_after_decisionWindow() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
         uint216 orderId = simplePP.createInvoice(invoicePrice);
@@ -173,13 +173,13 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(buyerOne);
         simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
 
-        vm.warp(block.timestamp + simplePP.DECISION_WINDOW() + 1);
+        vm.warp(block.timestamp + simplePP.decisionWindow() + 1);
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.AcceptanceWindowExceeded.selector);
         simplePP.acceptPayment(orderId);
     }
 
-    function test_payer_refund_DECISION_WINDOW() public {
+    function test_payer_refund_decisionWindow() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
         uint216 orderId = simplePP.createInvoice(invoicePrice);
@@ -193,7 +193,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.expectRevert(ISimplePaymentProcessor.InvoiceNotEligibleForRefund.selector);
         simplePP.refundBuyer(orderId);
 
-        vm.warp(block.timestamp + simplePP.DECISION_WINDOW() + 1);
+        vm.warp(block.timestamp + simplePP.decisionWindow() + 1);
         simplePP.refundBuyer(orderId);
         vm.stopPrank();
 

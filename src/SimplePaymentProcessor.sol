@@ -18,15 +18,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     using SafeCastLib for uint256;
     using TaskQueueLib for TaskQueueLib.Heap;
 
-    /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
-    TaskQueueLib.Heap private heap;
-
-    /// @notice Reference to the external Payment Processor storage contract.
-    IPaymentProcessorStorage public immutable ppStorage;
-
-    /// @notice The minimum allowed value (in wei) required to create a new invoice.
-    uint256 private minimumInvoiceValue;
-
     /// @notice Status code representing that a payment or transaction has been created.
     uint8 public constant CREATED = 1;
 
@@ -48,14 +39,29 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @notice Status code representing that a payment has been successfully released to the payee.
     uint8 public constant RELEASED = REFUNDED + 1;
 
-    /// @notice The valid period for a transaction, after which it is considered expired.
-    uint256 public constant VALID_PERIOD = 180 days;
-
-    /// @notice The window of time allowed for accepting a transaction after creation.
-    uint256 public constant DECISION_WINDOW = 3 days;
-
     /// @notice Basis points denominator used for percentage calculations (1% = 100).
     uint256 public constant BASIS_POINTS = 10000;
+
+    /// @notice Default time window during which a created invoice remains valid for payment.
+    uint256 public constant DEFAULT_PAYMENT_VALIDITY_PERIOD = 7 days;
+
+    /// @notice Default decision period for the seller after an invoice is paid.
+    uint256 public constant DEFAULT_SELLER_DECISION_WINDOW = 3 days;
+
+    /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
+    TaskQueueLib.Heap private heap;
+
+    /// @notice Reference to the external Payment Processor storage contract.
+    IPaymentProcessorStorage public immutable ppStorage;
+
+    /// @notice The minimum allowed value (in wei) required to create a new invoice.
+    uint256 private minimumInvoiceValue;
+
+    /// @notice The valid period for a transaction, after which it is considered expired.
+    uint256 public validPeriod;
+
+    /// @notice The window of time allowed for accepting a transaction after creation.
+    uint256 public decisionWindow;
 
     /// @notice Address of the forwarder contract responsible for calling performUpkeep.
     address private forwarder;
@@ -74,6 +80,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      */
     mapping(uint216 => uint256) private index;
 
+    modifier onlyAuthorized() {
+        _isAuthorized();
+        _;
+    }
+
     /**
      * @notice Initializes the payment processor with owner, fee settings, and default hold period.
      * @dev Sets the fee receiver address, the fee rate (in basis points), and the default escrow hold time.
@@ -82,6 +93,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      */
     constructor(address paymentProcessorStorageAddress, uint256 minimumInvoicePrice) {
         ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
+        validPeriod = DEFAULT_PAYMENT_VALIDITY_PERIOD;
+        decisionWindow = DEFAULT_SELLER_DECISION_WINDOW;
         setMinimumInvoiceValue(minimumInvoicePrice);
     }
 
@@ -94,6 +107,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         invoice.price = invoicePrice;
         invoice.status = CREATED;
         invoice.invoiceId = ppStorage.updateInvoiceId(1);
+        invoice.invalidateAt = (block.timestamp + validPeriod).toUint40();
 
         uint216 orderId = _computeOrderId(msg.sender, invoice.invoiceId);
 
@@ -101,7 +115,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         invoiceData[orderId] = invoice;
 
-        emit InvoiceCreated(orderId, invoice);
+        emit InvoiceCreated(orderId, invoice.invalidateAt, invoice);
 
         return orderId;
     }
@@ -122,34 +136,38 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             revert IncorrectPaymentAmount(msg.value, invoice.price);
         }
 
-        if (block.timestamp > invoice.createdAt + VALID_PERIOD) {
+        if (block.timestamp > invoice.invalidateAt) {
             revert InvoiceIsNoLongerValid();
         }
 
         address escrow = address(new Escrow{ value: msg.value }(orderId, invoice.seller, msg.sender, address(this)));
+        uint40 expiresAt = (block.timestamp + decisionWindow).toUint40();
 
         invoice.escrow = escrow;
         invoice.buyer = msg.sender;
         invoice.status = PAID;
         invoice.amountPaid = msg.value;
-        invoice.paymentTime = (block.timestamp).toUint32();
+        invoice.paidAt = (block.timestamp).toUint32();
+        invoice.expiresAt = expiresAt;
         invoiceData[orderId] = invoice;
 
-        heap.insert(orderId, (block.timestamp + DECISION_WINDOW).toUint32(), index);
+        heap.insert(orderId, expiresAt, index);
 
-        emit InvoicePaid(orderId, msg.sender, msg.value);
+        emit InvoicePaid(orderId, msg.sender, msg.value, expiresAt);
         return escrow;
     }
 
     function _validateInvoiceStateForPaymentDecision(Invoice memory invoice) internal view {
-        if (block.timestamp > invoice.paymentTime + DECISION_WINDOW) {
-            revert AcceptanceWindowExceeded();
-        }
         if (invoice.seller != msg.sender) {
             revert NotAuthorized();
         }
+
         if (invoice.status != PAID) {
             revert InvoiceNotPaid();
+        }
+
+        if (block.timestamp > invoice.expiresAt) {
+            revert AcceptanceWindowExceeded();
         }
     }
 
@@ -194,11 +212,12 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @inheritdoc ISimplePaymentProcessor
     function refundBuyer(uint216 orderId) public {
         Invoice memory invoice = invoiceData[orderId];
-        if (invoice.status != PAID || block.timestamp < invoice.paymentTime + DECISION_WINDOW) {
+        if (invoice.status != PAID || block.timestamp < invoice.expiresAt) {
             revert InvoiceNotEligibleForRefund();
         }
 
         uint256 pos = index[orderId];
+
         if (pos != 0 && pos <= heap.data.length) {
             heap.removeAt(pos - 1, index);
         }
@@ -251,7 +270,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         uint256 gasThresold = ppStorage.getGasThreshold();
 
-        heap.processDueTask(index, _release, gasThresold);
+        heap.processDueTask(_release, gasThresold);
     }
 
     /**
@@ -264,18 +283,20 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      *         - SUCCESSFUL (3): Invoice was released and removed from heap.
      *         - NOT_ELIGIBLE_FOR_RELEASE (1): Invoice not accepted or not yet due.
      *         - ERROR (2): Invalid index or heap inconsistency.
-     * @return releaseAt The scheduled release timestamp of the invoice (even if not released).
      */
-    function _release(uint216 orderId) internal returns (uint256, uint40) {
+    function _release(uint216 orderId) internal returns (uint256) {
         Invoice memory invoice = invoiceData[orderId];
 
         if (invoice.status == PAID) {
+            if (block.timestamp < invoice.expiresAt) {
+                return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
+            }
             refundBuyer(orderId);
-            return (TaskQueueLib.SUCCESSFUL, (invoice.paymentTime + DECISION_WINDOW).toUint40());
+            return TaskQueueLib.SUCCESSFUL;
         }
 
         if (invoice.status == RELEASED || invoice.status != ACCEPTED || block.timestamp < invoice.releaseAt) {
-            return (TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE, invoice.releaseAt);
+            return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
         }
 
         uint256 feeValue = calculateFee(invoice.price);
@@ -283,13 +304,13 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         invoiceData[orderId].status = RELEASED;
 
         uint256 pos = index[orderId];
-        if (pos == 0 || pos > heap.data.length) return (TaskQueueLib.ERROR, invoice.releaseAt);
+        if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
 
         heap.removeAt(pos - 1, index);
 
         IEscrow(invoice.escrow).withdraw(address(0), invoice.seller, invoice.price - feeValue);
         emit InvoiceReleased(orderId);
-        return (TaskQueueLib.SUCCESSFUL, invoice.releaseAt);
+        return TaskQueueLib.SUCCESSFUL;
     }
 
     /**
@@ -301,6 +322,17 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      */
     function _computeOrderId(address buyer, uint256 invoiceId) internal view returns (uint216) {
         return (uint256(keccak256(abi.encode(address(this), buyer, invoiceId))) & ((1 << 216) - 1)).toUint216();
+    }
+
+    /**
+     *  @notice Internal function to validate whether the caller is authorized.
+     *  @dev Reverts if the caller is not the contract owner or the PaymentProcessorStorage contract itself.
+     * Can only be called by either the owner of the PaymentProcessor contract or the storage contract address.
+     */
+    function _isAuthorized() internal view {
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner() && msg.sender != address(ppStorage)) {
+            revert NotAuthorized();
+        }
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -317,7 +349,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         if (newReleaseTime > type(uint32).max) revert ReleaseTimeOverflow();
 
         invoiceData[orderId].releaseAt = newReleaseTime.toUint32();
-        heap.reschedule(orderId, uint40(newReleaseTime), index);
+        heap.reschedule(orderId, newReleaseTime.toUint40(), index);
 
         emit UpdateHoldPeriod(orderId, newReleaseTime);
     }
@@ -328,15 +360,24 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setMinimumInvoiceValue(uint256 newMinimumInvoiceValue) public {
-        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
+    function setMinimumInvoiceValue(uint256 newMinimumInvoiceValue) public onlyAuthorized {
         minimumInvoiceValue = newMinimumInvoiceValue;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setForwarderAddress(address forwarderAddress) external {
-        if (msg.sender != address(ppStorage)) revert NotAuthorized();
+    function setForwarderAddress(address forwarderAddress) external onlyAuthorized {
         forwarder = forwarderAddress;
+    }
+
+    /// @inheritdoc ISimplePaymentProcessor
+    function setValidPeriod(uint256 newValidPeriod) external onlyAuthorized {
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
+        validPeriod = newValidPeriod;
+    }
+
+    /// @inheritdoc ISimplePaymentProcessor
+    function setDecisionWindow(uint256 newDecisionWindow) external onlyAuthorized {
+        decisionWindow = newDecisionWindow;
     }
 
     /// @inheritdoc ISimplePaymentProcessor

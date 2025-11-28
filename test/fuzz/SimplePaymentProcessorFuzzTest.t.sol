@@ -12,7 +12,7 @@ contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
         ISimplePaymentProcessor.Invoice memory invoiceData = simplePP.getInvoiceData(orderId);
         assertEq(invoiceData.seller, sellerOne);
         assertEq(invoiceData.createdAt, block.timestamp);
-        assertEq(invoiceData.paymentTime, 0);
+        assertEq(invoiceData.paidAt, 0);
         assertEq(invoiceData.price, _amount);
         assertEq(invoiceData.amountPaid, 0);
         assertEq(invoiceData.buyer, address(0));
