@@ -372,4 +372,38 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(buyerBalanceBeforeRefund + invoicePrice, buyerBalanceAfterRefund);
         assertEq(simplePP.getItems().length, 0);
     }
+
+    function test_dynamicInvalidationPeriod() public {
+        vm.prank(admin);
+        simplePP.setValidPeriod(2 days);
+
+        uint256 invoicePrice = 100 ether;
+
+        uint216 orderId = simplePP.createInvoice(invoicePrice);
+
+        vm.warp(block.timestamp + 2 days + 1);
+
+        vm.prank(buyerOne);
+        vm.expectRevert(ISimplePaymentProcessor.InvoiceIsNoLongerValid.selector);
+        simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
+    }
+
+    function test_dynamicAcceptanceDuration() public {
+        uint256 invoicePrice = 100 ether;
+
+        uint216 orderId = simplePP.createInvoice(invoicePrice);
+
+        vm.prank(admin);
+        simplePP.setDecisionWindow(1 days);
+
+        vm.prank(buyerOne);
+        simplePP.makeInvoicePayment{ value: invoicePrice }(orderId);
+
+        vm.warp(block.timestamp + 1 days + 1);
+
+        vm.prank(admin);
+        simplePP.performUpkeep("");
+
+        assertEq(simplePP.getInvoiceData(orderId).status, simplePP.REFUNDED());
+    }
 }

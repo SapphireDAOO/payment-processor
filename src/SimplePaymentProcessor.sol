@@ -78,7 +78,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      *  @notice Maps task or invoice ID to its 1-based index position in the heap.
      * @dev A value of 0 means the task is not present in the heap
      */
-    mapping(uint216 => uint256) private index;
+    mapping(uint216 orderId => uint256 key) private index;
 
     modifier onlyAuthorized() {
         _isAuthorized();

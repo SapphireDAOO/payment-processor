@@ -495,6 +495,11 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         return (uint256(keccak256(abi.encode(lower, upper, salt, address(this)))) & ((1 << 216) - 1)).toUint216();
     }
 
+    /**
+     * @notice Ensures that the caller is the registered marketplace address.
+     * @dev Reverts with `NotAuthorized` if `msg.sender` is not equal to
+     *      the marketplace address stored in `ppStorage`.
+     */
     function _onlyMarketplace() internal view {
         if (msg.sender != ppStorage.getMarketplace()) revert NotAuthorized();
     }
