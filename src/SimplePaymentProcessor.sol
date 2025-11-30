@@ -46,7 +46,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     uint256 public constant DEFAULT_PAYMENT_VALIDITY_PERIOD = 7 days;
 
     /// @notice Default decision period for the seller after an invoice is paid.
-    uint256 public constant DEFAULT_SELLER_DECISION_WINDOW = 3 days;
+    uint256 public constant DEFAULT_SELLER_DECISION_WINDOW = 6 hours;
 
     /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
     TaskQueueLib.Heap private heap;
