@@ -7,6 +7,7 @@ import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
 import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { BaseSetUp } from "./BaseSetUp.sol";
+import { Notes } from "src/Notes.sol";
 
 struct Addr {
     address usdcPriceFeed;
@@ -43,8 +44,10 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
     address constant NATIVE_TOKEN_BUYER = 0x5e86A14B06a4001cA83688cc06568A0c07425f63;
 
     function setUp() public virtual {
-        address storageAddress = initialize();
-        _advancedPaymentProcessorSetUp(storageAddress);
+        (address storageAddress, address notesAddress) = initialize();
+
+        address ca = address(_advancedPaymentProcessorSetUp(storageAddress));
+        Notes(notesAddress).setAuthorized(ca, true);
     }
 
     function _advancedPaymentProcessorSetUp(address storageAddress) internal returns (AdvancedPaymentProcessor) {

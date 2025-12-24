@@ -8,7 +8,7 @@ contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
     function testFuzz_invoice_creation(uint256 _amount) public {
         vm.assume(_amount > 1 ether);
         vm.prank(sellerOne);
-        uint216 orderId = simplePP.createInvoice(_amount);
+        uint216 orderId = simplePP.createInvoice(_amount, "", false);
         ISimplePaymentProcessor.Invoice memory invoiceData = simplePP.getInvoiceData(orderId);
         assertEq(invoiceData.seller, sellerOne);
         assertEq(invoiceData.createdAt, block.timestamp);
@@ -26,14 +26,14 @@ contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
         _invoicePrice = bound(_invoicePrice, 1 ether, 1000 ether);
 
         vm.prank(sellerOne);
-        uint216 orderId = simplePP.createInvoice(_invoicePrice);
+        uint216 orderId = simplePP.createInvoice(_invoicePrice, "", false);
 
         ISimplePaymentProcessor.Invoice memory invoice = simplePP.getInvoiceData(orderId);
         assertEq(invoice.price, _invoicePrice);
         assertEq(invoice.status, simplePP.CREATED());
 
         vm.prank(buyerOne);
-        address escrow = simplePP.makeInvoicePayment{ value: _invoicePrice }(orderId);
+        address escrow = simplePP.pay{ value: _invoicePrice }(orderId, "", false);
 
         ISimplePaymentProcessor.Invoice memory updated = simplePP.getInvoiceData(orderId);
         assertEq(updated.buyer, buyerOne);

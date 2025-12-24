@@ -24,12 +24,19 @@ contract Escrow is IEscrow {
     /// @notice The invoice ID associated with the escrow.
     uint256 public immutable INVOICE;
 
+    /**
+     * @notice Restricts access to the payment processor contract.
+     * @dev Reverts with Unauthorized if the caller is not the payment processor.
+     */
     modifier onlyPaymentProcessor() {
         _onlyPaymentProcessor();
         _;
     }
 
+    /// @notice Handles unknown calls and accepts ETH.
     fallback() external payable { }
+
+    /// @notice Accepts plain ETH transfers.
     receive() external payable { }
 
     /**

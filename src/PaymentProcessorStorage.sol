@@ -92,6 +92,10 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         config.marketplace = marketplaceAddress;
     }
 
+    /**
+     * @notice Ensures the caller is an authorized address.
+     * @dev Reverts with NotAuthorized if the caller is not authorized.
+     */
     function _onlyAuthorized() internal view {
         if (!isAuthorized[msg.sender]) {
             revert NotAuthorized();

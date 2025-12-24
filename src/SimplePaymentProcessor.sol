@@ -8,6 +8,7 @@ import { AutomationCompatibleInterface } from "./interface/AutomationCompatibleI
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
+import { INotes } from "./interface/INotes.sol";
 
 /**
  * @title SimplePaymentProcessor
@@ -17,6 +18,9 @@ import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
 contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatibleInterface {
     using SafeCastLib for uint256;
     using TaskQueueLib for TaskQueueLib.Heap;
+
+    /// @notice Notes contract used for encrypted invoice notes.
+    INotes private notes;
 
     /// @notice Status code representing that a payment or transaction has been created.
     uint8 public constant CREATED = 1;
@@ -80,6 +84,10 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      */
     mapping(uint216 orderId => uint256 key) private index;
 
+    /**
+     * @notice Restricts access to the payment processor owner or storage contract.
+     * @dev Reverts with NotAuthorized if the caller is not permitted.
+     */
     modifier onlyAuthorized() {
         _isAuthorized();
         _;
@@ -90,16 +98,18 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      * @dev Sets the fee receiver address, the fee rate (in basis points), and the default escrow hold time.
      * @param paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      * @param minimumInvoicePrice The new minimum default invoice value to set (in wei).
+     * @param notesAddress Address of the notes contract used for invoice notes.
      */
-    constructor(address paymentProcessorStorageAddress, uint256 minimumInvoicePrice) {
+    constructor(address paymentProcessorStorageAddress, uint256 minimumInvoicePrice, address notesAddress) {
         ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
+        notes = INotes(notesAddress);
         validPeriod = DEFAULT_PAYMENT_VALIDITY_PERIOD;
         decisionWindow = DEFAULT_SELLER_DECISION_WINDOW;
         setMinimumInvoiceValue(minimumInvoicePrice);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function createInvoice(uint256 invoicePrice) external returns (uint216) {
+    function createInvoice(uint256 invoicePrice, bytes memory storageRef, bool share) external returns (uint216) {
         if (invoicePrice < minimumInvoiceValue) revert ValueIsTooLow();
         Invoice memory invoice;
         invoice.seller = msg.sender;
@@ -115,13 +125,15 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         invoiceData[orderId] = invoice;
 
+        if (storageRef.length != 0) notes.createNote(orderId, msg.sender, storageRef, share);
+
         emit InvoiceCreated(orderId, invoice.invalidateAt, invoice);
 
         return orderId;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function makeInvoicePayment(uint216 orderId) external payable returns (address) {
+    function pay(uint216 orderId, bytes memory storageRef, bool share) external payable returns (address) {
         Invoice memory invoice = invoiceData[orderId];
 
         if (invoice.status != CREATED) {
@@ -152,11 +164,17 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         invoiceData[orderId] = invoice;
 
         heap.insert(orderId, expiresAt, index);
+        if (storageRef.length != 0) notes.createNote(orderId, msg.sender, storageRef, share);
 
         emit InvoicePaid(orderId, msg.sender, msg.value, expiresAt);
         return escrow;
     }
 
+    /**
+     * @notice Validates that the caller can accept or reject a payment.
+     * @dev Ensures caller is the seller and invoice is within the decision window.
+     * @param invoice The invoice data to validate.
+     */
     function _validateInvoiceStateForPaymentDecision(Invoice memory invoice) internal view {
         if (invoice.seller != msg.sender) {
             revert NotAuthorized();
@@ -371,7 +389,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
     /// @inheritdoc ISimplePaymentProcessor
     function setValidPeriod(uint256 newValidPeriod) external onlyAuthorized {
-        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) {
+            revert NotAuthorized();
+        }
         validPeriod = newValidPeriod;
     }
 

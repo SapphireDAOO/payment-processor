@@ -114,17 +114,23 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Creates a new invoice with a specified price.
+     * @dev Optionally stores a reference to the user's off-chain notes file.
      * @param invoicePrice The price of the invoice in wei.
-     * @return The ID of the newly created invoice.
+     * @param storageRef A bytes-encoded reference to the user's notes storage.
+     * @param share Whether the note is shared with non-authors.
+     * @return invoiceId The unique ID of the newly created invoice.
      */
-    function createInvoice(uint256 invoicePrice) external returns (uint216);
+    function createInvoice(uint256 invoicePrice, bytes memory storageRef, bool share) external returns (uint216);
 
     /**
-     * @notice Makes a payment for a specific invoice.
+     * @notice Pays for an existing invoice and optionally updates the user's notes storage reference.
+     * @dev The caller must send enough ETH to cover the invoice price.
      * @param orderId The ID of the invoice being paid.
-     * @return The address of the escrow contract managing the payment.
+     * @param storageRef A bytes-encoded reference to the caller's notes storage.
+     * @param share Whether the note is shared with non-authors.
+     * @return escrow The address of the escrow contract created for this payment.
      */
-    function makeInvoicePayment(uint216 orderId) external payable returns (address);
+    function pay(uint216 orderId, bytes memory storageRef, bool share) external payable returns (address);
 
     /**
      * @notice Marks the specified invoice as accepted.

@@ -42,7 +42,7 @@ contract SimplePaymentProcessorHandler is Test {
     function createInvoice(uint256 _price) public countCall(this.createInvoice.selector) {
         _price = bound(_price, 1.01 ether, INVOICE_PRICE);
         vm.prank(seller);
-        uint216 orderId = pp.createInvoice(_price);
+        uint216 orderId = pp.createInvoice(_price, "", false);
         price[orderId] = _price;
         orderIds.push(orderId);
         totalInvoiceCreated++;
@@ -66,7 +66,7 @@ contract SimplePaymentProcessorHandler is Test {
         _value = bound(_value, 0, price[orderId]);
 
         vm.prank(buyer);
-        pp.makeInvoicePayment{ value: _value }(orderId);
+        pp.pay{ value: _value }(orderId, "", false);
     }
 
     function acceptPayment(uint256 index) public invoiceExists countCall(this.acceptPayment.selector) {

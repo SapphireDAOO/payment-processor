@@ -156,7 +156,9 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function paySingleInvoice(uint216 orderId, address paymentToken) external payable {
-        if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
+        if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) {
+            revert InvalidPaymentToken();
+        }
 
         Invoice memory inv = invoice[orderId];
         _invoicePayment(inv, orderId, paymentToken, msg.value);
@@ -165,7 +167,9 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function payMetaInvoice(uint216 orderId, address paymentToken) external payable {
-        if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) revert InvalidPaymentToken();
+        if (paymentToken != address(0) && address(priceFeed[paymentToken]) == address(0)) {
+            revert InvalidPaymentToken();
+        }
         MetaInvoice memory metaInv = metaInvoice[orderId];
 
         if (metaInv.price == 0) revert InvoiceDoesNotExist();
@@ -282,7 +286,9 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function setPriceFeed(address token, address aggregator) external {
-        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
+        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) {
+            revert NotAuthorized();
+        }
         priceFeed[token] = aggregator;
     }
 

@@ -7,6 +7,7 @@ import { SimplePaymentProcessor } from "../src/SimplePaymentProcessor.sol";
 import { AdvancedPaymentProcessor } from "../src/AdvancedPaymentProcessor.sol";
 import { MockUsdc, MockWbtc } from "../test/mock/mERC20.sol";
 import { MockV3Aggregator } from "../test/mock/MockV3Aggregator.sol";
+import { Notes } from "../src/Notes.sol";
 
 struct Addr {
     address usdcPriceFeed;
@@ -42,6 +43,9 @@ contract Deployer is Script {
     function run() external {
         console.log("-----Deploying-----");
         vm.startBroadcast();
+
+        console.log("------");
+
         Addr memory addr = _setUp();
 
         IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
@@ -55,10 +59,17 @@ contract Deployer is Script {
 
         PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(config);
 
-        SimplePaymentProcessor simplePP = new SimplePaymentProcessor(address(ppStorage), MINIMUM_INVOICE_VALUE);
+        Notes notes = new Notes(msg.sender);
+
+        SimplePaymentProcessor simplePP =
+            new SimplePaymentProcessor(address(ppStorage), MINIMUM_INVOICE_VALUE, address(notes));
 
         AdvancedPaymentProcessor advancedPP =
             new AdvancedPaymentProcessor(address(ppStorage), addr.nativeTokenPriceFeed);
+
+        notes.setAuthorized(msg.sender, true);
+        notes.setAuthorized(address(simplePP), true);
+        notes.setAuthorized(address(advancedPP), true);
 
         ppStorage.setAuthorizedAddress(address(simplePP), true);
         PaymentProcessorStorage(ppStorage).setAuthorizedAddress(address(advancedPP), true);
