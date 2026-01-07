@@ -5,8 +5,6 @@ import { INotes } from "src/Notes.sol";
 import { NotesSetUp } from "../utils/NotesSetUp.sol";
 
 contract NotesTest is NotesSetUp {
-    // function setUp() public { }
-
     function test_createNote() public {
         uint216 invoiceId = 1;
         vm.expectRevert(INotes.EmptyContent.selector);

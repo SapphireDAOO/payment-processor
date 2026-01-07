@@ -458,7 +458,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(advancedPP.getInvoice(invoiceId).state, advancedPP.RELEASED());
     }
 
-    function test_releaseOrderPayment() public {
+    function test_releaseInvoicePayment() public {
         address[] memory sellers = new address[](2);
         sellers[0] = sellerOne;
         sellers[1] = sellerOne;
@@ -632,15 +632,13 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         uint256 length = invoiceIds.length - 1;
 
-        bytes memory data = abi.encodeWithSelector(advancedPP.setInvoiceReleaseTime.selector, invoiceIds[length], 3 days);
-
         uint216 metaInvoiceId = advancedPP.createMetaInvoice(param);
 
         uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1] + prices[2]);
 
         vm.prank(admin);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        // ppStorage.execute(address(advancedPP), data);
+        advancedPP.setInvoiceReleaseTime(invoiceIds[length], 3 days);
 
         vm.prank(buyerTwo);
         advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceId, address(0));
@@ -657,7 +655,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.setInvoiceReleaseTime(invoiceIds[length], 3 days);
 
         vm.prank(admin);
-        // ppStorage.execute(address(advancedPP), data);
+        advancedPP.setInvoiceReleaseTime(invoiceIds[length], 3 days);
 
         vm.prank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
@@ -705,7 +703,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceId, address(0));
 
         for (uint256 k = 0; k < advancedPP.getItems().length; k++) {
-            console.log("order", advancedPP.getItems()[k]);
+            console.log("invoice", advancedPP.getItems()[k]);
         }
         console.log("");
 

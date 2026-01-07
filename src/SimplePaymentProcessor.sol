@@ -25,14 +25,14 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @notice Status code representing that a payment or transaction has been created.
     uint8 public constant CREATED = 1;
 
-    /// @notice Status code representing that a payment or transaction has been accepted.
-    uint8 public constant ACCEPTED = CREATED + 1;
-
     /// @notice Status code representing that a payment has been completed.
-    uint8 public constant PAID = ACCEPTED + 1;
+    uint8 public constant PAID = CREATED + 1;
+
+    /// @notice Status code representing that a payment or transaction has been accepted.
+    uint8 public constant ACCEPTED = PAID + 1;
 
     /// @notice Status code representing that a payment or transaction has been rejected.
-    uint8 public constant REJECTED = PAID + 1;
+    uint8 public constant REJECTED = ACCEPTED + 1;
 
     /// @notice Status code representing that a payment or transaction has been cancelled.
     uint8 public constant CANCELLED = REJECTED + 1;
@@ -368,7 +368,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
     /// @inheritdoc ISimplePaymentProcessor
     function setInvoiceReleaseTime(uint216 invoiceId, uint32 holdPeriod) external {
-        if (msg.sender != address(ppStorage)) revert NotAuthorized();
+        if (msg.sender != _owner()) revert NotAuthorized();
         Invoice memory invoice = invoiceData[invoiceId];
 
         if (invoice.status < ACCEPTED) {

@@ -262,11 +262,9 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_dynamic_hold_release_invoice() public {
         uint32 adminHoldPeriod = 25 days;
 
-        bytes memory data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, 0, adminHoldPeriod);
-
         vm.prank(admin);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceHasNotBeenAccepted.selector);
-        // ppStorage.execute(address(simplePP), data);
+        simplePP.setInvoiceReleaseTime(0, adminHoldPeriod);
 
         // CREATE
         uint256 invoicePrice = 100 ether;
@@ -283,13 +281,11 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.acceptPayment(invoiceId);
 
-        data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, invoiceId, adminHoldPeriod);
-
         vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
         simplePP.setInvoiceReleaseTime(invoiceId, adminHoldPeriod);
 
         vm.prank(admin);
-        // ppStorage.execute(address(simplePP), data);
+        simplePP.setInvoiceReleaseTime(invoiceId, adminHoldPeriod);
 
         vm.warp(block.timestamp + adminHoldPeriod);
         vm.prank(sellerOne);
@@ -320,11 +316,9 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         }
 
         vm.startPrank(admin);
-        bytes memory data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, invoiceIds[2], 12 hours);
-        // ppStorage.execute(address(simplePP), data);
+        simplePP.setInvoiceReleaseTime(invoiceIds[2], 12 hours);
 
-        data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, invoiceIds[9], 100 days);
-        // ppStorage.execute(address(simplePP), data);
+        simplePP.setInvoiceReleaseTime(invoiceIds[9], 1000 hours);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 5 days);
@@ -348,7 +342,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         for (uint256 i = 0; i < numberOfInvoice; i++) {
             console.log("order:", invoiceIds[i], simplePP.getInvoiceData(invoiceIds[i]).status, i);
         }
-        assertEq(simplePP.getInvoiceData(invoiceIds[9]).status, 2);
+        assertEq(simplePP.getInvoiceData(invoiceIds[9]).status, simplePP.ACCEPTED());
     }
 
     function test_automatedRefund() public {
