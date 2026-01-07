@@ -19,16 +19,16 @@ contract Notes is INotes {
     IPaymentProcessorStorage public immutable ppStorage;
 
     /// @notice Stores notes per order.
-    /// @dev orderId => noteId => Note data
-    mapping(uint216 orderId => mapping(uint256 noteId => Note note)) private notes;
+    /// @dev invoiceId => noteId => Note data
+    mapping(uint216 invoiceId => mapping(uint256 noteId => Note note)) private notes;
 
     /// @notice Tracks the total number of notes created for each order.
     /// @dev Used to assign incremental noteIds per order
-    mapping(uint216 orderId => uint256 totalNotes) private noteCount;
+    mapping(uint216 invoiceId => uint256 totalNotes) private noteCount;
 
     /// @notice Tracks whether a user has opened a specific note.
-    /// @dev orderId => noteId => user => opened status
-    mapping(uint216 orderId => mapping(uint256 noteId => mapping(address user => bool isOpened))) private opened;
+    /// @dev invoiceId => noteId => user => opened status
+    mapping(uint216 invoiceId => mapping(uint256 noteId => mapping(address user => bool isOpened))) private opened;
 
     /// @notice Tracks which addresses are allowed to create notes.
     /// @dev Address => ALLOWED/NOT_ALLOWED flag.
@@ -52,7 +52,7 @@ contract Notes is INotes {
     }
 
     /// @inheritdoc INotes
-    function createNote(uint216 orderId, address author, bytes calldata encryptedContent, bool share)
+    function createNote(uint216 invoiceId, address author, bytes calldata encryptedContent, bool share)
         external
         override
         isAuthorized
@@ -60,66 +60,66 @@ contract Notes is INotes {
     {
         if (encryptedContent.length == 0) revert EmptyContent();
 
-        uint256 noteId = noteCount[orderId];
+        uint256 noteId = noteCount[invoiceId];
 
-        notes[orderId][noteId] = Note({ author: author, share: share, content: encryptedContent, exists: true });
+        notes[invoiceId][noteId] = Note({ author: author, share: share, content: encryptedContent, exists: true });
 
-        noteCount[orderId] = noteId + 1;
+        noteCount[invoiceId] = noteId + 1;
 
         if (noteId == 0) {
-            _setOpened(orderId, noteId, true);
+            _setOpened(invoiceId, noteId, true);
         }
 
-        emit NoteCreated(orderId, noteId, author, share, encryptedContent);
+        emit NoteCreated(invoiceId, noteId, author, share, encryptedContent);
 
         return noteId;
     }
 
     /// @inheritdoc INotes
-    function setOpened(uint216 orderId, uint256 noteId, bool open) external override {
-        Note memory note = notes[orderId][noteId];
+    function setOpened(uint216 invoiceId, uint256 noteId, bool open) external override {
+        Note memory note = notes[invoiceId][noteId];
         if (!note.exists) revert NoteNotFound();
 
         if (!note.share) revert Unauthorized();
 
-        _setOpened(orderId, noteId, open);
+        _setOpened(invoiceId, noteId, open);
     }
 
     /**
      * @notice Updates the opened state for a note.
-     * @param orderId Order identifier.
+     * @param invoiceId Order identifier.
      * @param noteId Note identifier.
      * @param open New opened state for the caller.
      */
-    function _setOpened(uint216 orderId, uint256 noteId, bool open) internal {
-        opened[orderId][noteId][msg.sender] = open;
+    function _setOpened(uint216 invoiceId, uint256 noteId, bool open) internal {
+        opened[invoiceId][noteId][msg.sender] = open;
 
-        emit NoteStateChanged(orderId, noteId, msg.sender, open);
+        emit NoteStateChanged(invoiceId, noteId, msg.sender, open);
     }
 
     /// @inheritdoc INotes
-    function getNoteCount(uint216 orderId) external view override returns (uint256) {
-        return noteCount[orderId];
+    function getNoteCount(uint216 invoiceId) external view override returns (uint256) {
+        return noteCount[invoiceId];
     }
 
     /// @inheritdoc INotes
-    function isOpened(uint216 orderId, uint256 noteId, address user) external view override returns (bool) {
-        return opened[orderId][noteId][user];
+    function isOpened(uint216 invoiceId, uint256 noteId, address user) external view override returns (bool) {
+        return opened[invoiceId][noteId][user];
     }
 
     /// @inheritdoc INotes
-    function getNote(uint216 orderId, uint256 noteId)
+    function getNote(uint216 invoiceId, uint256 noteId)
         external
         view
         override
         returns (address, bool, bytes memory, bool)
     {
-        Note memory note = notes[orderId][noteId];
+        Note memory note = notes[invoiceId][noteId];
         if (!note.exists) revert NoteNotFound();
 
         if (msg.sender != note.author && !note.share) revert Unauthorized();
 
-        return (note.author, note.share, note.content, opened[orderId][noteId][msg.sender]);
+        return (note.author, note.share, note.content, opened[invoiceId][noteId][msg.sender]);
     }
 
     /**

@@ -8,25 +8,25 @@ contract NotesTest is NotesSetUp {
     // function setUp() public { }
 
     function test_createNote() public {
-        uint216 orderId = 1;
+        uint216 invoiceId = 1;
         vm.expectRevert(INotes.EmptyContent.selector);
-        notes.createNote(orderId, address(this), "", true);
+        notes.createNote(invoiceId, address(this), "", true);
 
-        uint256 noteId = notes.createNote(orderId, address(this), "hello everyone", true);
+        uint256 noteId = notes.createNote(invoiceId, address(this), "hello everyone", true);
 
-        (address author, bool share, bytes memory content, bool openedStatus) = notes.getNote(orderId, noteId);
+        (address author, bool share, bytes memory content, bool openedStatus) = notes.getNote(invoiceId, noteId);
 
-        assertEq(notes.getNoteCount(orderId), 1);
+        assertEq(notes.getNoteCount(invoiceId), 1);
         assertEq(author, address(this));
         assertEq(share, true);
         assertEq(content, bytes("hello everyone"));
         assertEq(openedStatus, true);
 
-        noteId = notes.createNote(orderId, address(this), "how is it going?", true);
+        noteId = notes.createNote(invoiceId, address(this), "how is it going?", true);
 
-        (author, share, content, openedStatus) = notes.getNote(orderId, noteId);
+        (author, share, content, openedStatus) = notes.getNote(invoiceId, noteId);
 
-        assertEq(notes.getNoteCount(orderId), 2);
+        assertEq(notes.getNoteCount(invoiceId), 2);
         assertEq(author, address(this));
         assertEq(share, true);
         assertEq(content, bytes("how is it going?"));
@@ -34,19 +34,19 @@ contract NotesTest is NotesSetUp {
     }
 
     function test_setOpened() public {
-        uint216 orderId = 1;
+        uint216 invoiceId = 1;
 
         vm.expectRevert(INotes.NoteNotFound.selector);
-        notes.setOpened(orderId, 0, true);
+        notes.setOpened(invoiceId, 0, true);
 
-        uint256 noteId = notes.createNote(orderId, address(this), "hello everyone", true);
+        uint256 noteId = notes.createNote(invoiceId, address(this), "hello everyone", true);
 
-        notes.setOpened(orderId, noteId, true);
+        notes.setOpened(invoiceId, noteId, true);
 
-        (address author, bool share, bytes memory content, bool openedStatus) = notes.getNote(orderId, noteId);
+        (address author, bool share, bytes memory content, bool openedStatus) = notes.getNote(invoiceId, noteId);
 
-        assertEq(notes.getNoteCount(orderId), 1);
-        assertEq(notes.isOpened(orderId, noteId, address(this)), true);
+        assertEq(notes.getNoteCount(invoiceId), 1);
+        assertEq(notes.isOpened(invoiceId, noteId, address(this)), true);
         assertEq(author, address(this));
         assertEq(share, true);
         assertEq(content, bytes("hello everyone"));

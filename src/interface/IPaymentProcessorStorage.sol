@@ -33,10 +33,10 @@ interface IPaymentProcessorStorage {
     }
 
     /**
-     * @notice Updates the invoice ID counter.
-     * @dev Should be implemented to increment or modify the invoice ID tracker as needed.
+     * @notice Updates the invoice nonce counter.
+     * @dev Should be implemented to increment or modify the invoice nonce tracker as needed.
      */
-    function updateInvoiceId(uint216 by) external returns (uint216);
+    function updateInvoiceNonce(uint216 by) external returns (uint216);
 
     /**
      * @notice Sets or revokes authorization for a specific address.
@@ -83,10 +83,10 @@ interface IPaymentProcessorStorage {
     function setGasThresold(uint256 newGasThresold) external;
 
     /**
-     * @notice Returns the ID that will be assigned to the next invoice.
-     * @return The next invoice ID.
+     * @notice Returns the nonce that will be assigned to the next invoice.
+     * @return The next invoice nonce.
      */
-    function getNextInvoiceId() external view returns (uint216);
+    function getNextInvoiceNonce() external view returns (uint216);
 
     /**
      * @notice Returns the total number of unique invoices created.

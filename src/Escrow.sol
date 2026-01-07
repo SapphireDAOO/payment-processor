@@ -43,17 +43,17 @@ contract Escrow is IEscrow {
      * @notice Initializes the escrow contract with invoice details and deposits the funds.
      * @dev This constructor sets the invoice ID, creator, payer, and payment processor addresses, and records the sent
      * Ether as the balance.
-     * @param orderId The unique identifier of the invoice associated with this escrow.
+     * @param invoiceId The unique identifier of the invoice associated with this escrow.
      * @param creator The address of the invoice creator.
      * @param payer The address of the payer for the invoice.
      * @param paymentProcessorAddress The address of the payment processor contract managing the invoice.
      */
-    constructor(uint216 orderId, address creator, address payer, address paymentProcessorAddress) payable {
-        INVOICE = orderId;
+    constructor(uint216 invoiceId, address creator, address payer, address paymentProcessorAddress) payable {
+        INVOICE = invoiceId;
         SELLER = creator;
         BUYER = payer;
         PAYMENT_PROCESSOR = paymentProcessorAddress;
-        emit FundsDeposited(orderId, msg.value);
+        emit FundsDeposited(invoiceId, msg.value);
     }
 
     /// @inheritdoc IEscrow
