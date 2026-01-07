@@ -10,15 +10,15 @@ pragma solidity 0.8.28;
 interface AutomationCompatibleInterface {
     /**
      * @notice Checks if upkeep is needed.
-     * @param checkData Optional input data passed from the Automation registry.
-     * @return upkeepNeeded Boolean indicating whether `performUpkeep` should be called.
-     * @return performData Data to pass to `performUpkeep` if upkeep is needed.
+     * @param _checkData Optional input data passed from the Automation registry.
+     * @return upkeepNeeded Data to pass to `performUpkeep` if upkeep is needed.
+     * @return performData Boolean indicating whether `performUpkeep` should be called.
      */
-    function checkUpkeep(bytes calldata checkData) external view returns (bool upkeepNeeded, bytes memory performData);
+    function checkUpkeep(bytes calldata _checkData) external view returns (bool upkeepNeeded, bytes memory performData);
 
     /**
      * @notice Performs the actual upkeep work, such as executing a function or releasing funds.
-     * @param performData Data returned from `checkUpkeep` to customize the upkeep execution.
+     * @param _performData Data returned from `checkUpkeep` to customize the upkeep execution.
      */
-    function performUpkeep(bytes calldata performData) external;
+    function performUpkeep(bytes calldata _performData) external;
 }

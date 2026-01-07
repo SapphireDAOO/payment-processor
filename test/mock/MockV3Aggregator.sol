@@ -44,6 +44,7 @@ contract MockV3Aggregator {
         getStartedAt[latestRound] = _startedAt;
     }
 
+    /// @notice Returns round data for the provided round ID.
     function getRoundData(uint80 _roundId)
         external
         view
@@ -52,6 +53,7 @@ contract MockV3Aggregator {
         return (_roundId, getAnswer[_roundId], getStartedAt[_roundId], getTimestamp[_roundId], _roundId);
     }
 
+    /// @notice Returns round data for the latest stored round.
     function latestRoundData()
         external
         view
@@ -68,7 +70,8 @@ contract MockV3Aggregator {
         );
     }
 
-    function description() external pure returns (string memory) {
+    /// @notice Returns a static description for the mock.
+    function description() external pure returns (string memory descriptionText) {
         return "v0.6/test/mock/MockV3Aggregator.sol";
     }
 }

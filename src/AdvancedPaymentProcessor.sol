@@ -111,32 +111,40 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /**
      * @notice Initializes the AdvancedPaymentProcessor contract with core configuration.
-     * @param paymentProcessorStorageAddress The address of the shared payment processor storage contract.
+     * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      */
-    constructor(address paymentProcessorStorageAddress) {
-        ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
+    constructor(address _paymentProcessorStorageAddress) {
+        ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
         nextMetaInvoiceNonce = 1;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function createSingleInvoice(InvoiceCreationParam memory param) external onlyMarketplace returns (uint216) {
-        return _createInvoice(ppStorage.updateInvoiceNonce(1), 0, param);
+    function createSingleInvoice(InvoiceCreationParam memory _param)
+        external
+        onlyMarketplace
+        returns (uint216 invoiceId)
+    {
+        return _createInvoice(ppStorage.updateInvoiceNonce(1), 0, _param);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function createMetaInvoice(InvoiceCreationParam[] memory param) external onlyMarketplace returns (uint216) {
+    function createMetaInvoice(InvoiceCreationParam[] memory _param)
+        external
+        onlyMarketplace
+        returns (uint216 metaInvoiceId)
+    {
         uint256 totalPrice;
         uint216 firstInvoiceNonce = ppStorage.getNextInvoiceNonce();
-        uint256 length = param.length;
+        uint256 length = _param.length;
         uint256 lastInvoiceNonce = length + firstInvoiceNonce - 1;
 
-        uint216 metaInvoiceId = _computeMetaInvoiceId(firstInvoiceNonce, lastInvoiceNonce, nextMetaInvoiceNonce);
+        metaInvoiceId = _computeMetaInvoiceId(firstInvoiceNonce, lastInvoiceNonce, nextMetaInvoiceNonce);
         if (metaInvoice[metaInvoiceId].price != 0) revert MetaInvoiceAlreadyExists();
 
         for (uint216 i = 0; i < length; i++) {
-            totalPrice += param[i].price;
+            totalPrice += _param[i].price;
             metaInvoice[metaInvoiceId].subInvoiceIds
-                .push(_createInvoice(firstInvoiceNonce + i, metaInvoiceId, param[i]));
+                .push(_createInvoice(firstInvoiceNonce + i, metaInvoiceId, _param[i]));
         }
 
         metaInvoice[metaInvoiceId].price = totalPrice;
@@ -148,35 +156,41 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         return metaInvoiceId;
     }
 
-    function pay(uint216 invoiceId, address paymentToken, bool single) external payable {
-        if (single) {
-            this.paySingleInvoice(invoiceId, paymentToken);
+    /**
+     * @notice Pays a single invoice or a meta invoice depending on the flag.
+     * @param _invoiceId The invoice or meta-invoice ID to pay.
+     * @param _paymentToken The payment token address (use address(0) for native token).
+     * @param _single True to pay a single invoice; false to pay a meta invoice.
+     */
+    function pay(uint216 _invoiceId, address _paymentToken, bool _single) external payable {
+        if (_single) {
+            this.paySingleInvoice(_invoiceId, _paymentToken);
         } else {
-            this.payMetaInvoice(invoiceId, paymentToken);
+            this.payMetaInvoice(_invoiceId, _paymentToken);
         }
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function paySingleInvoice(uint216 invoiceId, address paymentToken) external payable {
-        if (address(priceFeed[paymentToken]) == address(0)) {
+    function paySingleInvoice(uint216 _invoiceId, address _paymentToken) external payable {
+        if (address(priceFeed[_paymentToken]) == address(0)) {
             revert InvalidPaymentToken();
         }
 
-        Invoice memory inv = invoice[invoiceId];
-        _invoicePayment(inv, invoiceId, paymentToken, msg.value);
-        invoice[invoiceId] = inv;
+        Invoice memory inv = invoice[_invoiceId];
+        _invoicePayment(inv, _invoiceId, _paymentToken, msg.value);
+        invoice[_invoiceId] = inv;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function payMetaInvoice(uint216 invoiceId, address paymentToken) external payable {
-        if (address(priceFeed[paymentToken]) == address(0)) {
+    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external payable {
+        if (address(priceFeed[_paymentToken]) == address(0)) {
             revert InvalidPaymentToken();
         }
-        MetaInvoice memory metaInv = metaInvoice[invoiceId];
+        MetaInvoice memory metaInv = metaInvoice[_invoiceId];
 
         if (metaInv.price == 0) revert InvoiceDoesNotExist();
 
-        uint216[] memory subInvoiceIds = metaInvoice[invoiceId].subInvoiceIds;
+        uint216[] memory subInvoiceIds = metaInvoice[_invoiceId].subInvoiceIds;
 
         bool done;
 
@@ -185,10 +199,10 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
             Invoice memory inv = invoice[subInvoiceId];
 
             if (inv.state != CREATED) continue;
-            uint256 invPrice = getTokenValueFromUsd(paymentToken, inv.price);
+            uint256 invPrice = getTokenValueFromUsd(_paymentToken, inv.price);
 
-            uint256 value = paymentToken == address(0) ? invPrice : 0;
-            _invoicePayment(inv, subInvoiceId, paymentToken, value);
+            uint256 value = _paymentToken == address(0) ? invPrice : 0;
+            _invoicePayment(inv, subInvoiceId, _paymentToken, value);
 
             invoice[subInvoiceId] = inv;
             if (i == subInvoiceIds.length - 1) done = true;
@@ -198,85 +212,86 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function createDispute(uint216 invoiceId) external onlyMarketplace {
-        Invoice memory inv = invoice[invoiceId];
+    function createDispute(uint216 _invoiceId) external onlyMarketplace {
+        Invoice memory inv = invoice[_invoiceId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
         inv.state = DISPUTED;
-        invoice[invoiceId] = inv;
-        heap.removeAt(index[invoiceId] - 1, index);
-        emit DisputeCreated(invoiceId);
+        invoice[_invoiceId] = inv;
+        heap.removeAt(index[_invoiceId] - 1, index);
+        emit DisputeCreated(_invoiceId);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function handleDispute(uint216 invoiceId, uint8 resolution, uint256 sellerShare) external onlyMarketplace {
-        Invoice memory inv = invoice[invoiceId];
+    function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external onlyMarketplace {
+        Invoice memory inv = invoice[_invoiceId];
 
         if (inv.state != DISPUTED) revert InvalidInvoiceState();
-        if (sellerShare > BASIS_POINTS) revert InvalidSellersPayoutShare();
-        if (resolution != DISPUTE_DISMISSED && resolution != DISPUTE_SETTLED) {
+        if (_sellerShare > BASIS_POINTS) revert InvalidSellersPayoutShare();
+        if (_resolution != DISPUTE_DISMISSED && _resolution != DISPUTE_SETTLED) {
             revert InvalidDisputeResolution();
         }
 
-        inv.state = resolution;
-        invoice[invoiceId] = inv;
+        inv.state = _resolution;
+        invoice[_invoiceId] = inv;
 
-        if (resolution == DISPUTE_DISMISSED) {
-            heap.insert(invoiceId, inv.releaseAt, index);
-            emit DisputeDismissed(invoiceId);
+        if (_resolution == DISPUTE_DISMISSED) {
+            heap.insert(_invoiceId, inv.releaseAt, index);
+            emit DisputeDismissed(_invoiceId);
         }
 
-        if (resolution == DISPUTE_SETTLED) {
-            (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(inv, sellerShare);
-            emit DisputeSettled(invoiceId, sellerReceivingValue, buyerReceivingValue);
+        if (_resolution == DISPUTE_SETTLED) {
+            (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(inv, _sellerShare);
+            emit DisputeSettled(_invoiceId, sellerReceivingValue, buyerReceivingValue);
         }
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function release(uint216 invoiceId) external onlyMarketplace {
-        if (_release(invoiceId) != TaskQueueLib.SUCCESSFUL) revert InvalidInvoiceState();
+    function release(uint216 _invoiceId) external onlyMarketplace {
+        if (_release(_invoiceId) != TaskQueueLib.SUCCESSFUL) revert InvalidInvoiceState();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function refund(uint216 invoiceId, uint256 refundShare) external onlyMarketplace {
-        Invoice memory inv = invoice[invoiceId];
+    function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace {
+        Invoice memory inv = invoice[_invoiceId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
-        uint256 amount = _applyBasisPoints(inv.balance, refundShare);
+        uint256 amount = _applyBasisPoints(inv.balance, _refundShare);
         if (amount > inv.balance) revert InsufficientBalance();
 
-        if (refundShare == BASIS_POINTS) {
-            heap.removeAt(index[invoiceId] - 1, index);
+        if (_refundShare == BASIS_POINTS) {
+            heap.removeAt(index[_invoiceId] - 1, index);
         }
 
         inv.balance -= amount;
-        invoice[invoiceId] = inv;
+        invoice[_invoiceId] = inv;
 
         IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, amount);
-        emit Refunded(invoiceId, amount);
+        emit Refunded(_invoiceId, amount);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function cancelInvoice(uint216 invoiceId) public onlyMarketplace {
-        if (invoice[invoiceId].state != CREATED) revert InvalidInvoiceState();
-        invoice[invoiceId].state = CANCELED;
-        emit InvoiceCanceled(invoiceId);
+    function cancelInvoice(uint216 _invoiceId) public onlyMarketplace {
+        if (invoice[_invoiceId].state != CREATED) revert InvalidInvoiceState();
+        invoice[_invoiceId].state = CANCELED;
+        emit InvoiceCanceled(_invoiceId);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function resolveDispute(uint216 invoiceId) external onlyMarketplace {
-        Invoice memory inv = invoice[invoiceId];
+    function resolveDispute(uint216 _invoiceId) external onlyMarketplace {
+        Invoice memory inv = invoice[_invoiceId];
         if (inv.state != DISPUTED) revert InvalidInvoiceState();
         inv.state = DISPUTE_RESOLVED;
-        heap.insert(invoiceId, inv.releaseAt, index);
+        heap.insert(_invoiceId, inv.releaseAt, index);
 
-        invoice[invoiceId] = inv;
-        emit DisputeResolved(invoiceId);
+        invoice[_invoiceId] = inv;
+        emit DisputeResolved(_invoiceId);
     }
 
     /// @inheritdoc AutomationCompatibleInterface
-    function checkUpkeep(bytes calldata) external view returns (bool, bytes memory) {
-        return (heap.due(), bytes(""));
+    function checkUpkeep(bytes calldata) external view returns (bool upkeepNeeded, bytes memory performData) {
+        upkeepNeeded = heap.due();
+        performData = bytes("");
     }
 
     /// @inheritdoc AutomationCompatibleInterface
@@ -290,41 +305,41 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setPriceFeed(address token, address aggregator) external {
+    function setPriceFeed(address _token, address _aggregator) external {
         if (msg.sender != _owner()) {
             revert NotAuthorized();
         }
-        priceFeed[token] = aggregator;
+        priceFeed[_token] = _aggregator;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setInvoiceReleaseTime(uint216 invoiceId, uint256 holdPeriod) external {
+    function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external {
         if (msg.sender != _owner()) revert NotAuthorized();
-        Invoice memory inv = invoice[invoiceId];
+        Invoice memory inv = invoice[_invoiceId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
-        inv.releaseAt = (block.timestamp + holdPeriod).toUint40();
-        invoice[invoiceId] = inv;
+        inv.releaseAt = (block.timestamp + _holdPeriod).toUint40();
+        invoice[_invoiceId] = inv;
 
-        heap.reschedule(invoiceId, inv.releaseAt, index);
+        heap.reschedule(_invoiceId, inv.releaseAt, index);
 
-        emit UpdateReleaseTime(invoiceId, holdPeriod);
+        emit UpdateReleaseTime(_invoiceId, _holdPeriod);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setForwarderAddress(address forwarderAddress) external {
+    function setForwarderAddress(address _forwarderAddress) external {
         if (msg.sender != _owner()) revert NotAuthorized();
-        forwarder = forwarderAddress;
+        forwarder = _forwarderAddress;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getForwarder() external view returns (address) {
+    function getForwarder() external view returns (address forwarderAddress) {
         return forwarder;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getTokenValueFromUsd(address paymentToken, uint256 usdAmount) public view returns (uint256) {
-        address aggregator = priceFeed[paymentToken];
+    function getTokenValueFromUsd(address _paymentToken, uint256 _usdAmount) public view returns (uint256 tokenValue) {
+        address aggregator = priceFeed[_paymentToken];
         if (aggregator == address(0)) revert UnsupportedToken();
         (, int256 answer,, uint256 updatedAt,) = AggregatorV3Interface(aggregator).latestRoundData();
 
@@ -333,48 +348,49 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
         uint256 usdPerToken = answer.toUint256(); // 8 decimals from Chainlink
 
-        uint8 tokenDecimals = paymentToken == address(0) ? DEFAULT_DECIMAL : IERC20(paymentToken).decimals();
+        uint8 tokenDecimals = _paymentToken == address(0) ? DEFAULT_DECIMAL : IERC20(_paymentToken).decimals();
 
-        return usdAmount.mulDiv(10 ** tokenDecimals, usdPerToken);
+        tokenValue = _usdAmount.mulDiv(10 ** tokenDecimals, usdPerToken);
     }
 
     /**
      * @dev Checks if an invoice state is eligible for release.
+     * @return isReleasable True if the invoice can be released.
      */
-    function _isReleasable(Invoice memory inv) internal view returns (bool) {
-        return (inv.state == PAID || inv.state == DISPUTE_RESOLVED || inv.state == DISPUTE_DISMISSED)
-            && block.timestamp >= inv.releaseAt;
+    function _isReleasable(Invoice memory _inv) internal view returns (bool isReleasable) {
+        isReleasable = (_inv.state == PAID || _inv.state == DISPUTE_RESOLVED || _inv.state == DISPUTE_DISMISSED)
+            && block.timestamp >= _inv.releaseAt;
     }
 
     /**
      * @notice Attempts to release the payment for a given invoice.
      * @dev Performs validation checks before releasing. If successful, updates invoice state,
      *      removes it from the heap, processes seller payout, and emits a PaymentReleased event.
-     * @param invoiceId The ID of the invoice to release.
-     * @return result The release status code (SUCCESSFUL, ERROR, or NOT_ELIGIBLE_FOR_RELEASE).
+     * @param _invoiceId The ID of the invoice to release.
+     * @return status The release status code (SUCCESSFUL, ERROR, or NOT_ELIGIBLE_FOR_RELEASE).
      */
-    function _release(uint216 invoiceId) internal returns (uint256) {
-        Invoice memory inv = invoice[invoiceId];
+    function _release(uint216 _invoiceId) internal returns (uint256 status) {
+        Invoice memory inv = invoice[_invoiceId];
         if (!_isReleasable(inv)) return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
 
-        uint256 pos = index[invoiceId];
+        uint256 pos = index[_invoiceId];
         if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
 
-        invoice[invoiceId].state = RELEASED;
-        invoice[invoiceId].balance = 0;
+        invoice[_invoiceId].state = RELEASED;
+        invoice[_invoiceId].balance = 0;
 
         heap.removeAt(pos - 1, index);
         uint256 sellerNetAmount = _processSellerPayout(inv, inv.balance);
-        emit PaymentReleased(invoiceId, sellerNetAmount);
+        emit PaymentReleased(_invoiceId, sellerNetAmount);
         return TaskQueueLib.SUCCESSFUL;
     }
 
     /**
      * @notice Handles payment for an invoice, performs validation, and initializes escrow.
-     * @param inv The invoice to be paid.
-     * @param invoiceId The key of the invoice being paid.
-     * @param paymentToken The address of the payment token (use address(0) for the native token).
-     *  @param value The amount of native token sent with the transaction.
+     * @param _inv The invoice to be paid.
+     * @param _invoiceId The key of the invoice being paid.
+     * @param _paymentToken The address of the payment token (use address(0) for the native token).
+     *  @param _value The amount of native token sent with the transaction.
      *
      * @dev
      * - Converts the USD price to payment token amount using Chainlink oracles.
@@ -382,67 +398,68 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
      * - Creates an escrow contract and updates the invoice with payment info.
      * - Transfers tokens to escrow if the payment is in ERC20.
      */
-    function _invoicePayment(Invoice memory inv, uint216 invoiceId, address paymentToken, uint256 value) internal {
-        if (msg.sender == inv.seller) revert BuyerCannotBeSeller();
-        if (inv.state != CREATED) revert InvalidInvoiceState();
+    function _invoicePayment(Invoice memory _inv, uint216 _invoiceId, address _paymentToken, uint256 _value) internal {
+        if (msg.sender == _inv.seller) revert BuyerCannotBeSeller();
+        if (_inv.state != CREATED) revert InvalidInvoiceState();
 
-        uint256 price = getTokenValueFromUsd(paymentToken, inv.price);
-        bool isNative = paymentToken == address(0);
+        uint256 price = getTokenValueFromUsd(_paymentToken, _inv.price);
+        bool isNative = _paymentToken == address(0);
 
-        if (isNative && value != price) revert InvalidNativePayment();
+        if (isNative && _value != price) revert InvalidNativePayment();
 
         address escrowAddress = _create(
             EscrowCreationParams({
-                seller: inv.seller,
+                seller: _inv.seller,
                 buyer: msg.sender,
-                invoiceId: invoiceId,
-                value: isNative ? value : 0,
-                paymentToken: paymentToken
+                invoiceId: _invoiceId,
+                value: isNative ? _value : 0,
+                paymentToken: _paymentToken
             })
         );
 
-        inv.buyer = msg.sender;
-        inv.state = PAID;
-        inv.escrow = escrowAddress;
-        inv.paidAt = (block.timestamp).toUint40();
-        inv.balance = price;
-        inv.amountPaid = price;
+        _inv.buyer = msg.sender;
+        _inv.state = PAID;
+        _inv.escrow = escrowAddress;
+        _inv.paidAt = (block.timestamp).toUint40();
+        _inv.balance = price;
+        _inv.amountPaid = price;
 
-        if (inv.releaseAt == 0) {
-            inv.releaseAt = (block.timestamp + ppStorage.getDefaultHoldPeriod()).toUint40();
-            heap.insert(invoiceId, inv.releaseAt, index);
+        if (_inv.releaseAt == 0) {
+            _inv.releaseAt = (block.timestamp + ppStorage.getDefaultHoldPeriod()).toUint40();
+            heap.insert(_invoiceId, _inv.releaseAt, index);
         }
 
         if (!isNative) {
-            inv.paymentToken = paymentToken;
-            paymentToken.safeTransferFrom(msg.sender, escrowAddress, price);
+            _inv.paymentToken = _paymentToken;
+            _paymentToken.safeTransferFrom(msg.sender, escrowAddress, price);
         }
 
-        emit InvoicePaid(invoiceId, paymentToken, escrowAddress, price);
+        emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, price);
     }
 
     /**
      * @notice Creates a new invoice and stores it in contract state.
-     * @param nonce The unique ID to assign to the new invoice.
-     * @param param The parameters required to create the invoice.
+     * @param _nonce The unique ID to assign to the new invoice.
+     * @param _metaInvoiceId The associated meta-invoice ID, or 0 for standalone invoices.
+     * @param _param The parameters required to create the invoice.
      * @return invoiceId The keccak256 hash representing the invoice ID.
      */
-    function _createInvoice(uint216 nonce, uint216 metaInvoiceId, InvoiceCreationParam memory param)
+    function _createInvoice(uint216 _nonce, uint216 _metaInvoiceId, InvoiceCreationParam memory _param)
         internal
-        returns (uint216)
+        returns (uint216 invoiceId)
     {
-        if (param.price == 0) revert PriceCannotBeZero();
+        if (_param.price == 0) revert PriceCannotBeZero();
         // make the minimum price dynamic
-        if (param.price < 1e8) revert PriceIsTooLow();
+        if (_param.price < 1e8) revert PriceIsTooLow();
         Invoice memory inv;
-        inv.seller = param.seller;
-        inv.price = param.price;
+        inv.seller = _param.seller;
+        inv.price = _param.price;
         inv.createdAt = (block.timestamp).toUint40();
-        inv.metaInvoiceId = metaInvoiceId;
+        inv.metaInvoiceId = _metaInvoiceId;
         inv.state = CREATED;
-        inv.invoiceNonce = nonce;
+        inv.invoiceNonce = _nonce;
 
-        uint216 invoiceId = (uint256(keccak256(abi.encode(param.invoiceId))) & ((1 << 216) - 1)).toUint216();
+        invoiceId = (uint256(keccak256(abi.encode(_param.invoiceId))) & ((1 << 216) - 1)).toUint216();
 
         if (invoice[invoiceId].createdAt != 0) revert InvoiceAlreadyExists();
 
@@ -454,48 +471,53 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /**
      * @notice Calculates a portion of an amount using basis points.
-     * @param amount The base amount to apply the percentage to.
-     * @param basisPoints The percentage value in basis points (1 BPS = 0.01%).
-     * @return The resulting value after applying basis points.
+     * @param _amount The base amount to apply the percentage to.
+     * @param _basisPoints The percentage value in basis points (1 BPS = 0.01%).
+     * @return value The resulting value after applying basis points.
      */
-    function _applyBasisPoints(uint256 amount, uint256 basisPoints) internal pure returns (uint256) {
-        return (amount * basisPoints) / BASIS_POINTS;
+    function _applyBasisPoints(uint256 _amount, uint256 _basisPoints) internal pure returns (uint256 value) {
+        value = (_amount * _basisPoints) / BASIS_POINTS;
     }
 
     /**
      * @notice Distributes the remaining invoice balance between the seller and the buyer.
      * @dev Transfers the buyer's refund (if any) and the seller's payout based on the given share.
      *      The refund is only processed if the seller is not entitled to the full balance.
-     * @param inv The invoice containing payment and escrow details.
-     * @param sellerShare The portion of the invoice balance (in basis points) to be sent to the seller.
+     * @param _inv The invoice containing payment and escrow details.
+     * @param _sellerShare The portion of the invoice balance (in basis points) to be sent to the seller.
      * @return sellerReceivingValue The amount sent to the seller.
      * @return buyerReceivingValue The amount refunded to the buyer (zero if sellerShare == 10000).
      */
-    function _distributeFunds(Invoice memory inv, uint256 sellerShare) internal returns (uint256, uint256) {
-        uint256 sellerReceivingValue = _applyBasisPoints(inv.balance, sellerShare);
-        uint256 buyerReceivingValue;
-        if (sellerShare != BASIS_POINTS) {
-            buyerReceivingValue = _applyBasisPoints(inv.balance, BASIS_POINTS - sellerShare);
-            IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, buyerReceivingValue);
+    function _distributeFunds(Invoice memory _inv, uint256 _sellerShare)
+        internal
+        returns (uint256 sellerReceivingValue, uint256 buyerReceivingValue)
+    {
+        sellerReceivingValue = _applyBasisPoints(_inv.balance, _sellerShare);
+        if (_sellerShare != BASIS_POINTS) {
+            buyerReceivingValue = _applyBasisPoints(_inv.balance, BASIS_POINTS - _sellerShare);
+            IEscrow(_inv.escrow).withdraw(_inv.paymentToken, _inv.buyer, buyerReceivingValue);
         }
 
-        _processSellerPayout(inv, sellerReceivingValue);
+        _processSellerPayout(_inv, sellerReceivingValue);
         return (sellerReceivingValue, buyerReceivingValue);
     }
 
     /**
      * @notice Distributes the seller's payout from the escrow, applying platform fees.
-     * @param inv The invoice data containing escrow and recipient info.
-     * @param sellerReceivingValue The gross amount owed to the seller before fees.
-     * @return The amount the seller receives after fees are deducted.
+     * @param _inv The invoice data containing escrow and recipient info.
+     * @param _sellerReceivingValue The gross amount owed to the seller before fees.
+     * @return sellerNetAmount The amount the seller receives after fees are deducted.
      */
-    function _processSellerPayout(Invoice memory inv, uint256 sellerReceivingValue) internal returns (uint256) {
-        uint256 fee = _applyBasisPoints(sellerReceivingValue, ppStorage.getFeeRate());
-        uint256 amount = sellerReceivingValue - fee;
-        IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.seller, amount);
+    function _processSellerPayout(Invoice memory _inv, uint256 _sellerReceivingValue)
+        internal
+        returns (uint256 sellerNetAmount)
+    {
+        uint256 fee = _applyBasisPoints(_sellerReceivingValue, ppStorage.getFeeRate());
+        sellerNetAmount = _sellerReceivingValue - fee;
+        IEscrow(_inv.escrow).withdraw(_inv.paymentToken, _inv.seller, sellerNetAmount);
 
-        IEscrow(inv.escrow).withdraw(inv.paymentToken, ppStorage.getFeeReceiver(), fee);
-        return amount;
+        IEscrow(_inv.escrow).withdraw(_inv.paymentToken, ppStorage.getFeeReceiver(), fee);
+        return sellerNetAmount;
     }
 
     /**
@@ -503,22 +525,27 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
      * @dev The hash is based on the contract address, the sub-invoice ID range [lower, upper], and a salt
      *      (e.g., a sequence number or counter). This prevents collisions when multiple meta-invoices share
      *      the same buyer and invoice range.
-     * @param lower The starting sub-invoice ID in the group.
-     * @param upper The ending sub-invoice ID in the group.
-     * @param salt A user-provided or system-generated value (e.g., nextMetaInvoiceNonce) to ensure uniqueness.
-     * @return A keccak256 hash representing the deterministic meta-invoice order ID.
+     * @param _lower The starting sub-invoice ID in the group.
+     * @param _upper The ending sub-invoice ID in the group.
+     * @param _salt A user-provided or system-generated value (e.g., nextMetaInvoiceNonce) to ensure uniqueness.
+     * @return metaInvoiceId A keccak256 hash representing the deterministic meta-invoice order ID.
      */
-    function _computeMetaInvoiceId(uint256 lower, uint256 upper, uint256 salt) internal view returns (uint216) {
-        return (uint256(keccak256(abi.encode(lower, upper, salt, address(this)))) & ((1 << 216) - 1)).toUint216();
+    function _computeMetaInvoiceId(uint256 _lower, uint256 _upper, uint256 _salt)
+        internal
+        view
+        returns (uint216 metaInvoiceId)
+    {
+        metaInvoiceId =
+            (uint256(keccak256(abi.encode(_lower, _upper, _salt, address(this)))) & ((1 << 216) - 1)).toUint216();
     }
 
     /**
      * @notice Returns the owner of the PaymentProcessorStorage contract.
      * @dev This helper reads the owner directly from the linked PaymentProcessorStorage instance.
-     * @return owner The address that currently owns the PaymentProcessorStorage contract.
+     * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
      */
-    function _owner() internal view returns (address) {
-        return PaymentProcessorStorage(address(ppStorage)).owner();
+    function _owner() internal view returns (address ownerAddress) {
+        ownerAddress = PaymentProcessorStorage(address(ppStorage)).owner();
     }
 
     /**
@@ -531,37 +558,37 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getInvoice(uint216 invoiceId) external view returns (Invoice memory) {
-        return invoice[invoiceId];
+    function getInvoice(uint216 _invoiceId) external view returns (Invoice memory invoiceData) {
+        return invoice[_invoiceId];
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getMetaInvoice(uint216 metaInvoiceId) public view returns (MetaInvoice memory) {
-        return metaInvoice[metaInvoiceId];
+    function getMetaInvoice(uint216 _metaInvoiceId) public view returns (MetaInvoice memory metaInvoiceData) {
+        return metaInvoice[_metaInvoiceId];
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function totalUniqueInvoiceCreated() external view returns (uint216) {
+    function totalUniqueInvoiceCreated() external view returns (uint216 totalInvoices) {
         return ppStorage.totalInvoiceCreated();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function totalMetaInvoiceCreated() external view returns (uint216) {
+    function totalMetaInvoiceCreated() external view returns (uint216 totalMetaInvoices) {
         return nextMetaInvoiceNonce - 1;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getNextInvoiceNonce() external view returns (uint216) {
+    function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonce) {
         return ppStorage.getNextInvoiceNonce();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getNextMetaInvoiceNonce() external view returns (uint216) {
+    function getNextMetaInvoiceNonce() external view returns (uint216 nextMetaInvoiceId) {
         return nextMetaInvoiceNonce;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function getItems() external view returns (uint216[] memory) {
+    function getItems() external view returns (uint216[] memory items) {
         return heap.getItems();
     }
 }

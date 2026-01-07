@@ -11,7 +11,7 @@ interface AggregatorV3Interface {
     /**
      * @notice Returns data for the latest round of the aggregator.
      * @return roundId The unique identifier for the round.
-     * @return answer The latest price or value reported by the oracle.
+     * @return answer The timestamp when the answer was last updated.
      * @return startedAt The timestamp when the round started.
      * @return updatedAt The timestamp when the answer was last updated.
      * @return answeredInRound The round ID in which the answer was computed.

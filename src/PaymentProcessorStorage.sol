@@ -39,49 +39,49 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /**
      * @notice Initializes the contract with the given configuration.
      * @dev Sets the contract owner, stores the initial configuration parameters, and initializes the invoice nonce counter.
-     * @param configuration The initial configuration parameters including owner, gas threshold, and hold period.
+     * @param _configuration The initial configuration parameters including owner, gas threshold, and hold period.
      */
-    constructor(Configuration memory configuration) {
-        _initializeOwner(configuration.owner);
-        config = configuration;
+    constructor(Configuration memory _configuration) {
+        _initializeOwner(_configuration.owner);
+        config = _configuration;
         nextInvoiceNonce = 1;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function updateInvoiceNonce(uint216 by) external onlyAuthorized returns (uint216) {
-        nextInvoiceNonce += by;
+    function updateInvoiceNonce(uint216 _by) external onlyAuthorized returns (uint216 totalInvoices) {
+        nextInvoiceNonce += _by;
         return totalInvoiceCreated();
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setFeeReceiver(address feeReceiverAddress) external onlyOwner {
-        config.feeReceiver = feeReceiverAddress;
+    function setFeeReceiver(address _feeReceiverAddress) external onlyOwner {
+        config.feeReceiver = _feeReceiverAddress;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setAuthorizedAddress(address authorizedAddress, bool authorized) external onlyOwner {
-        isAuthorized[authorizedAddress] = authorized;
+    function setAuthorizedAddress(address _authorizedAddress, bool _authorized) external onlyOwner {
+        isAuthorized[_authorizedAddress] = _authorized;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setFeeRate(uint256 newFeeRate) external onlyOwner {
-        config.feeRate = newFeeRate;
+    function setFeeRate(uint256 _newFeeRate) external onlyOwner {
+        config.feeRate = _newFeeRate;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setGasThresold(uint256 newGasThresold) external onlyOwner {
-        config.gasThresold = newGasThresold;
+    function setGasThresold(uint256 _newGasThresold) external onlyOwner {
+        config.gasThresold = _newGasThresold;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setDefaultHoldPeriod(uint256 newDefaultHoldPeriod) public onlyOwner {
-        if (newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
-        config.defaultHoldPeriod = newDefaultHoldPeriod;
+    function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) public onlyOwner {
+        if (_newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
+        config.defaultHoldPeriod = _newDefaultHoldPeriod;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setMarketplaceAddress(address marketplaceAddress) external onlyOwner {
-        config.marketplace = marketplaceAddress;
+    function setMarketplaceAddress(address _marketplaceAddress) external onlyOwner {
+        config.marketplace = _marketplaceAddress;
     }
 
     /**
@@ -95,37 +95,37 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getNextInvoiceNonce() external view returns (uint216) {
+    function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceValue) {
         return nextInvoiceNonce;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function totalInvoiceCreated() public view returns (uint216) {
+    function totalInvoiceCreated() public view returns (uint216 totalInvoices) {
         return nextInvoiceNonce - 1;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getFeeRate() external view returns (uint256) {
+    function getFeeRate() external view returns (uint256 feeRate) {
         return config.feeRate;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getFeeReceiver() external view returns (address) {
+    function getFeeReceiver() external view returns (address feeReceiver) {
         return config.feeReceiver;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getMarketplace() external view returns (address) {
+    function getMarketplace() external view returns (address marketplace) {
         return config.marketplace;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getDefaultHoldPeriod() external view returns (uint256) {
+    function getDefaultHoldPeriod() external view returns (uint256 defaultHoldPeriod) {
         return config.defaultHoldPeriod;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getGasThreshold() external view returns (uint256) {
+    function getGasThreshold() external view returns (uint256 gasThreshold) {
         return config.gasThresold;
     }
 }

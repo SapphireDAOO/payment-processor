@@ -43,6 +43,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
     address constant USDC_BUYER = 0x166716C2838e182d64886135a96f1AABCA9A9756;
     address constant NATIVE_TOKEN_BUYER = 0x5e86A14B06a4001cA83688cc06568A0c07425f63;
 
+    /// @notice Initializes the base setup and deploys the advanced processor.
     function setUp() public virtual {
         (address storageAddress, address notesAddress) = initialize();
 
@@ -51,13 +52,21 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
         Notes(notesAddress).setAuthorized(ca, true);
     }
 
-    function _advancedPaymentProcessorSetUp(address storageAddress) internal returns (AdvancedPaymentProcessor) {
+    /**
+     * @notice Deploys and configures the AdvancedPaymentProcessor for tests.
+     * @param _storageAddress The PaymentProcessorStorage address.
+     * @return advancedPaymentProcessor The deployed processor instance.
+     */
+    function _advancedPaymentProcessorSetUp(address _storageAddress)
+        internal
+        returns (AdvancedPaymentProcessor advancedPaymentProcessor)
+    {
         Addr memory addr = _setUp();
 
         vm.startPrank(admin);
-        advancedPP = new AdvancedPaymentProcessor(storageAddress);
+        advancedPP = new AdvancedPaymentProcessor(_storageAddress);
 
-        PaymentProcessorStorage(storageAddress).setAuthorizedAddress(address(advancedPP), true);
+        PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(advancedPP), true);
 
         advancedPP.setPriceFeed(address(addr.usdc), address(addr.usdcPriceFeed));
         advancedPP.setPriceFeed(address(addr.wbtc), address(addr.wbtcPriceFeed));
@@ -67,16 +76,20 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
         _mintAndApproveTokens(address(advancedPP));
 
         if (block.chainid == MAINNET_CHAIN_ID) {
-            vm.makePersistent(address(advancedPP), storageAddress);
+            vm.makePersistent(address(advancedPP), _storageAddress);
         }
 
         vm.prank(admin);
         advancedPP.setForwarderAddress(FORWARDER);
 
-        return advancedPP;
+        advancedPaymentProcessor = advancedPP;
     }
 
-    function _setUp() internal returns (Addr memory) {
+    /**
+     * @notice Initializes price feeds and tokens for the current chain.
+     * @return addresses The deployed or configured addresses for feeds and tokens.
+     */
+    function _setUp() internal returns (Addr memory addresses) {
         if (block.chainid == LOCAL_CHAIN_ID) {
             MockV3Aggregator mockUsdcPriceFeed = new MockV3Aggregator(8, INITIAL_USDC_PRICE);
             MockV3Aggregator mockWbtcPriceFeed = new MockV3Aggregator(8, INITIAL_WBTC_PRICE);
@@ -85,29 +98,35 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
             mockUsdc = new MockUsdc("Mock Usdc", "mUsdc");
             mockWBtc = new MockWbtc("Mock WBtc", "mWBtc");
 
-            return Addr({
+            addresses = Addr({
                 usdcPriceFeed: address(mockUsdcPriceFeed),
                 wbtcPriceFeed: address(mockWbtcPriceFeed),
                 nativeTokenPriceFeed: address(mockNativePriceFeed),
                 usdc: address(mockUsdc),
                 wbtc: address(mockWBtc)
             });
+            return addresses;
         }
 
         if (block.chainid == MAINNET_CHAIN_ID) {
-            return Addr({
+            addresses = Addr({
                 usdcPriceFeed: USDC_USD_PRICE_FEED,
                 wbtcPriceFeed: WBTC_USD_PRICE_FEED,
                 nativeTokenPriceFeed: POL_USD_PRICE_FEED,
                 usdc: USDC,
                 wbtc: WBTC
             });
+            return addresses;
         }
 
         revert();
     }
 
-    function _mintAndApproveTokens(address spender) internal {
+    /**
+     * @notice Mints and approves mock tokens when running on a local chain.
+     * @param _spender The address to grant maximum token approvals to.
+     */
+    function _mintAndApproveTokens(address _spender) internal {
         if (block.chainid == LOCAL_CHAIN_ID) {
             mockUsdc.mint(buyerOne, INITIAL_BALANCE);
             mockUsdc.mint(buyerTwo, INITIAL_BALANCE);
@@ -116,22 +135,22 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
             mockWBtc.mint(buyerTwo, INITIAL_BALANCE);
 
             vm.startPrank(buyerOne);
-            IERC20(mockUsdc).approve(spender, type(uint256).max);
-            IERC20(mockWBtc).approve(spender, type(uint256).max);
+            IERC20(mockUsdc).approve(_spender, type(uint256).max);
+            IERC20(mockWBtc).approve(_spender, type(uint256).max);
             vm.stopPrank();
 
             vm.startPrank(buyerTwo);
-            IERC20(mockUsdc).approve(spender, type(uint256).max);
-            IERC20(mockWBtc).approve(spender, type(uint256).max);
+            IERC20(mockUsdc).approve(_spender, type(uint256).max);
+            IERC20(mockWBtc).approve(_spender, type(uint256).max);
             vm.stopPrank();
         }
 
         if (block.chainid == MAINNET_CHAIN_ID) {
             vm.prank(WTBC_BUYER);
-            IERC20(WBTC).approve(spender, type(uint256).max);
+            IERC20(WBTC).approve(_spender, type(uint256).max);
 
             vm.prank(USDC_BUYER);
-            IERC20(USDC).approve(spender, type(uint256).max);
+            IERC20(USDC).approve(_spender, type(uint256).max);
         }
     }
 }

@@ -43,25 +43,25 @@ contract Escrow is IEscrow {
      * @notice Initializes the escrow contract with invoice details and deposits the funds.
      * @dev This constructor sets the invoice ID, creator, payer, and payment processor addresses, and records the sent
      * Ether as the balance.
-     * @param invoiceId The unique identifier of the invoice associated with this escrow.
-     * @param creator The address of the invoice creator.
-     * @param payer The address of the payer for the invoice.
-     * @param paymentProcessorAddress The address of the payment processor contract managing the invoice.
+     * @param _invoiceId The unique identifier of the invoice associated with this escrow.
+     * @param _creator The address of the invoice creator.
+     * @param _payer The address of the payer for the invoice.
+     * @param _paymentProcessorAddress The address of the payment processor contract managing the invoice.
      */
-    constructor(uint216 invoiceId, address creator, address payer, address paymentProcessorAddress) payable {
-        INVOICE = invoiceId;
-        SELLER = creator;
-        BUYER = payer;
-        PAYMENT_PROCESSOR = paymentProcessorAddress;
-        emit FundsDeposited(invoiceId, msg.value);
+    constructor(uint216 _invoiceId, address _creator, address _payer, address _paymentProcessorAddress) payable {
+        INVOICE = _invoiceId;
+        SELLER = _creator;
+        BUYER = _payer;
+        PAYMENT_PROCESSOR = _paymentProcessorAddress;
+        emit FundsDeposited(_invoiceId, msg.value);
     }
 
     /// @inheritdoc IEscrow
-    function withdraw(address token, address receiver, uint256 amount) external onlyPaymentProcessor {
-        if (token == address(0)) {
-            receiver.safeTransferETH(amount);
+    function withdraw(address _token, address _receiver, uint256 _amount) external onlyPaymentProcessor {
+        if (_token == address(0)) {
+            _receiver.safeTransferETH(_amount);
         } else {
-            token.safeTransfer(receiver, amount);
+            _token.safeTransfer(_receiver, _amount);
         }
     }
 

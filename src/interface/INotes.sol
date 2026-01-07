@@ -14,6 +14,10 @@ interface INotes {
     error NoteNotFound();
 
     /// @notice Stored note data.
+    /// @param author The note author.
+    /// @param share Whether the note is shared with non-authors.
+    /// @param content The encrypted note content.
+    /// @param exists Whether the note exists.
     struct Note {
         address author;
         bool share;
@@ -23,58 +27,62 @@ interface INotes {
 
     /// @notice Emitted when a note is created.
     event NoteCreated(
-        uint216 indexed invoiceId, uint256 indexed noteId, address indexed author, bool share, bytes encryptedContent
+        uint216 indexed _invoiceId,
+        uint256 indexed _noteId,
+        address indexed _author,
+        bool _share,
+        bytes _encryptedContent
     );
 
     /// @notice Emitted when a user updates their opened state for a note.
-    event NoteStateChanged(uint216 indexed invoiceId, uint256 indexed noteId, address indexed user, bool opened);
+    event NoteStateChanged(uint216 indexed _invoiceId, uint256 indexed _noteId, address indexed _user, bool _opened);
 
     /**
      * @notice Create a note under an order.
-     * @param invoiceId Order identifier.
-     * @param encryptedContent Encrypted note payload.
-     * @param author Note author.
-     * @param share Whether the note is shared with non-authors.
+     * @param _invoiceId Order identifier.
+     * @param _author Note author.
+     * @param _encryptedContent Encrypted note payload.
+     * @param _share Whether the note is shared with non-authors.
      * @return noteId Newly created note id.
      */
-    function createNote(uint216 invoiceId, address author, bytes calldata encryptedContent, bool share)
+    function createNote(uint216 _invoiceId, address _author, bytes calldata _encryptedContent, bool _share)
         external
         returns (uint256 noteId);
 
     /**
-     *  @notice Mark a note as opened or unopened for the caller.
-     *  @param invoiceId Order identifier.
-     *  @param noteId Note identifier.
-     *  @param open New opened state for the caller.
+     * @notice Mark a note as opened or unopened for the caller.
+     * @param _invoiceId Order identifier.
+     * @param _noteId Note identifier.
+     * @param _open New opened state for the caller.
      */
-    function setOpened(uint216 invoiceId, uint256 noteId, bool open) external;
+    function setOpened(uint216 _invoiceId, uint256 _noteId, bool _open) external;
 
     /**
      * @notice Get the total number of notes for an order.
-     * @param invoiceId Order identifier.
-     * @return total Total number of notes created for the order.
+     * @param _invoiceId Order identifier.
+     * @return totalNotes Total number of notes created for the order.
      */
-    function getNoteCount(uint216 invoiceId) external view returns (uint256 total);
+    function getNoteCount(uint216 _invoiceId) external view returns (uint256 totalNotes);
 
     /**
      * @notice Check if a note is opened for a specific user.
-     * @param invoiceId Order identifier.
-     * @param noteId Note identifier.
-     * @param user Address to check.
+     * @param _invoiceId Order identifier.
+     * @param _noteId Note identifier.
+     * @param _user Address to check.
      * @return isOpen True if the note is opened for the user.
      */
-    function isOpened(uint216 invoiceId, uint256 noteId, address user) external view returns (bool isOpen);
+    function isOpened(uint216 _invoiceId, uint256 _noteId, address _user) external view returns (bool isOpen);
 
     /**
      * @notice Get a single note if visible to the caller.
-     * @param invoiceId Order identifier.
-     * @param noteId Note identifier.
+     * @param _invoiceId Order identifier.
+     * @param _noteId Note identifier.
      * @return author Note author.
      * @return share Whether the note is shared.
      * @return content Encrypted note content.
      * @return openedStatus Whether the caller has opened the note.
      */
-    function getNote(uint216 invoiceId, uint256 noteId)
+    function getNote(uint216 _invoiceId, uint256 _noteId)
         external
         view
         returns (address author, bool share, bytes memory content, bool openedStatus);

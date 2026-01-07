@@ -11,25 +11,32 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
 
     address constant FORWARDER_TWO = address(0xb0);
 
+    /// @notice Initializes the base setup and deploys the simple payment processor.
     function setUp() public virtual {
         (address storageAddress, address notesAddress) = initialize();
         _simplePaymentProcessorSetUp(storageAddress, notesAddress);
     }
 
-    function _simplePaymentProcessorSetUp(address storageAddress, address notesAddress)
+    /**
+     * @notice Deploys and configures the SimplePaymentProcessor for tests.
+     * @param _storageAddress The PaymentProcessorStorage address.
+     * @param _notesAddress The Notes contract address.
+     * @return simplePaymentProcessor The deployed processor instance.
+     */
+    function _simplePaymentProcessorSetUp(address _storageAddress, address _notesAddress)
         internal
         virtual
-        returns (SimplePaymentProcessor)
+        returns (SimplePaymentProcessor simplePaymentProcessor)
     {
         vm.startPrank(admin);
-        simplePP = new SimplePaymentProcessor(storageAddress, MINIMUM_INVOICE_VALUE, notesAddress);
+        simplePP = new SimplePaymentProcessor(_storageAddress, MINIMUM_INVOICE_VALUE, _notesAddress);
 
-        PaymentProcessorStorage(storageAddress).setAuthorizedAddress(address(simplePP), true);
+        PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(simplePP), true);
         vm.stopPrank();
 
-        vm.prank(storageAddress);
+        vm.prank(_storageAddress);
         simplePP.setForwarderAddress(FORWARDER_TWO);
 
-        return simplePP;
+        simplePaymentProcessor = simplePP;
     }
 }
