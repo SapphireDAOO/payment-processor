@@ -116,7 +116,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         invoice.createdAt = (block.timestamp).toUint32();
         invoice.price = invoicePrice;
         invoice.status = CREATED;
-        invoice.invoiceNonce = ppStorage.updateInvoiceId(1);
+        invoice.invoiceNonce = ppStorage.updateInvoiceNonce(1);
         invoice.invalidateAt = (block.timestamp + validPeriod).toUint40();
 
         uint216 invoiceId = _computeInvoiceId(msg.sender, invoice.invoiceNonce);
@@ -419,8 +419,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getNextInvoiceId() external view returns (uint216) {
-        return ppStorage.getNextInvoiceId();
+    function getNextInvoiceNonce() external view returns (uint216) {
+        return ppStorage.getNextInvoiceNonce();
     }
 
     /// @inheritdoc ISimplePaymentProcessor

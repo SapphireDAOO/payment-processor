@@ -205,10 +205,10 @@ interface ISimplePaymentProcessor {
     function refundBuyer(uint216 invoiceId) external;
 
     /**
-     * @notice Gets the current invoice ID counter.
-     * @return The current invoice ID.
+     * @notice Gets the current invoice nonce counter.
+     * @return The current invoice nonce.
      */
-    function getNextInvoiceId() external view returns (uint216);
+    function getNextInvoiceNonce() external view returns (uint216);
 
     /**
      * @notice Retrieves detailed data for a specific invoice.

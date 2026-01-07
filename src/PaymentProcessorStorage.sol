@@ -11,10 +11,10 @@ import { Ownable } from "solady/auth/Ownable.sol";
  */
 contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /**
-     * @notice The next available unique invoice ID.
-     * @dev Used to track and increment standalone or sub-invoice identifiers.
+     * @notice The next available unique invoice nonce.
+     * @dev Used to track and increment standalone or sub-invoice nonces.
      */
-    uint216 private nextInvoiceId;
+    uint216 private nextInvoiceNonce;
 
     /**
      * @notice Tracks whether an address is authorized to perform restricted actions.
@@ -38,18 +38,18 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
 
     /**
      * @notice Initializes the contract with the given configuration.
-     * @dev Sets the contract owner, stores the initial configuration parameters, and initializes the invoice ID counter.
+     * @dev Sets the contract owner, stores the initial configuration parameters, and initializes the invoice nonce counter.
      * @param configuration The initial configuration parameters including owner, gas threshold, and hold period.
      */
     constructor(Configuration memory configuration) {
         _initializeOwner(configuration.owner);
         config = configuration;
-        nextInvoiceId = 1;
+        nextInvoiceNonce = 1;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function updateInvoiceId(uint216 by) external onlyAuthorized returns (uint216) {
-        nextInvoiceId += by;
+    function updateInvoiceNonce(uint216 by) external onlyAuthorized returns (uint216) {
+        nextInvoiceNonce += by;
         return totalInvoiceCreated();
     }
 
@@ -95,13 +95,13 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getNextInvoiceId() external view returns (uint216) {
-        return nextInvoiceId;
+    function getNextInvoiceNonce() external view returns (uint216) {
+        return nextInvoiceNonce;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
     function totalInvoiceCreated() public view returns (uint216) {
-        return nextInvoiceId - 1;
+        return nextInvoiceNonce - 1;
     }
 
     /// @inheritdoc IPaymentProcessorStorage

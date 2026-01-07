@@ -36,15 +36,15 @@ interface IEscrowFactory {
      *      ensuring uniqueness across both standard and meta-invoice deployments.
      * @param seller The address of the invoice seller.
      * @param buyer The address of the invoice buyer.
-     * @param orderId A hash representing the invoice content or metadata.
+     * @param invoiceId A hash representing the invoice content or metadata.
      * @return  A `bytes32` salt value uniquely derived from the input parameters.
      */
-    function computeSalt(address seller, address buyer, uint216 orderId) external pure returns (bytes32);
+    function computeSalt(address seller, address buyer, uint216 invoiceId) external pure returns (bytes32);
 
     /**
      * @notice Emitted when a new escrow contract is created.
-     * @param orderId The unique ID of the invoice associated with the escrow.
+     * @param invoiceId The unique ID of the invoice associated with the escrow.
      * @param escrow The address of the newly created escrow contract.
      */
-    event EscrowCreated(uint216 indexed orderId, address indexed escrow);
+    event EscrowCreated(uint216 indexed invoiceId, address indexed escrow);
 }
