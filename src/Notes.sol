@@ -45,100 +45,103 @@ contract Notes is INotes {
 
     /**
      * @notice Initializes the Notes contract with a payment processor storage reference.
-     * @param paymentProcessorStorageAddress The address of the storage contract.
+     * @param _paymentProcessorStorageAddress The address of the storage contract.
      */
-    constructor(address paymentProcessorStorageAddress) {
-        ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
+    constructor(address _paymentProcessorStorageAddress) {
+        ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
     }
 
     /// @inheritdoc INotes
-    function createNote(uint216 invoiceId, address author, bytes calldata encryptedContent, bool share)
+    function createNote(uint216 _invoiceId, address _author, bytes calldata _encryptedContent, bool _share)
         external
         override
         isAuthorized
-        returns (uint256)
+        returns (uint256 noteId)
     {
-        if (encryptedContent.length == 0) revert EmptyContent();
+        if (_encryptedContent.length == 0) revert EmptyContent();
 
-        uint256 noteId = noteCount[invoiceId];
+        noteId = noteCount[_invoiceId];
 
-        notes[invoiceId][noteId] = Note({ author: author, share: share, content: encryptedContent, exists: true });
+        notes[_invoiceId][noteId] = Note({ author: _author, share: _share, content: _encryptedContent, exists: true });
 
-        noteCount[invoiceId] = noteId + 1;
+        noteCount[_invoiceId] = noteId + 1;
 
         if (noteId == 0) {
-            _setOpened(invoiceId, noteId, true);
+            _setOpened(_invoiceId, noteId, true);
         }
 
-        emit NoteCreated(invoiceId, noteId, author, share, encryptedContent);
+        emit NoteCreated(_invoiceId, noteId, _author, _share, _encryptedContent);
 
         return noteId;
     }
 
     /// @inheritdoc INotes
-    function setOpened(uint216 invoiceId, uint256 noteId, bool open) external override {
-        Note memory note = notes[invoiceId][noteId];
+    function setOpened(uint216 _invoiceId, uint256 _noteId, bool _open) external override {
+        Note memory note = notes[_invoiceId][_noteId];
         if (!note.exists) revert NoteNotFound();
 
         if (!note.share) revert Unauthorized();
 
-        _setOpened(invoiceId, noteId, open);
+        _setOpened(_invoiceId, _noteId, _open);
     }
 
     /**
      * @notice Updates the opened state for a note.
-     * @param invoiceId Order identifier.
-     * @param noteId Note identifier.
-     * @param open New opened state for the caller.
+     * @param _invoiceId Order identifier.
+     * @param _noteId Note identifier.
+     * @param _open New opened state for the caller.
      */
-    function _setOpened(uint216 invoiceId, uint256 noteId, bool open) internal {
-        opened[invoiceId][noteId][msg.sender] = open;
+    function _setOpened(uint216 _invoiceId, uint256 _noteId, bool _open) internal {
+        opened[_invoiceId][_noteId][msg.sender] = _open;
 
-        emit NoteStateChanged(invoiceId, noteId, msg.sender, open);
+        emit NoteStateChanged(_invoiceId, _noteId, msg.sender, _open);
     }
 
     /// @inheritdoc INotes
-    function getNoteCount(uint216 invoiceId) external view override returns (uint256) {
-        return noteCount[invoiceId];
+    function getNoteCount(uint216 _invoiceId) external view override returns (uint256 totalNotes) {
+        return noteCount[_invoiceId];
     }
 
     /// @inheritdoc INotes
-    function isOpened(uint216 invoiceId, uint256 noteId, address user) external view override returns (bool) {
-        return opened[invoiceId][noteId][user];
+    function isOpened(uint216 _invoiceId, uint256 _noteId, address _user) external view override returns (bool isOpen) {
+        return opened[_invoiceId][_noteId][_user];
     }
 
     /// @inheritdoc INotes
-    function getNote(uint216 invoiceId, uint256 noteId)
+    function getNote(uint216 _invoiceId, uint256 _noteId)
         external
         view
         override
-        returns (address, bool, bytes memory, bool)
+        returns (address author, bool share, bytes memory content, bool openedStatus)
     {
-        Note memory note = notes[invoiceId][noteId];
+        Note memory note = notes[_invoiceId][_noteId];
         if (!note.exists) revert NoteNotFound();
 
         if (msg.sender != note.author && !note.share) revert Unauthorized();
 
-        return (note.author, note.share, note.content, opened[invoiceId][noteId][msg.sender]);
+        author = note.author;
+        share = note.share;
+        content = note.content;
+        openedStatus = opened[_invoiceId][_noteId][msg.sender];
     }
 
     /**
      * @notice Updates the authorization status for a user.
-     * @param user The address to update.
-     * @param enabled Whether the user should be authorized.
+     * @param _user The address to update.
+     * @param _enabled Whether the user should be authorized.
      */
-    function setAuthorized(address user, bool enabled) external {
+    function setAuthorized(address _user, bool _enabled) external {
         if (msg.sender != _owner()) revert Unauthorized();
-        auth[user] = enabled ? ALLOWED : NOT_ALLOWED;
+        auth[_user] = _enabled ? ALLOWED : NOT_ALLOWED;
     }
 
     /**
      * @notice Returns the owner of the PaymentProcessorStorage contract.
      * @dev This helper reads the owner directly from the linked PaymentProcessorStorage instance.
-     * @return owner The address that currently owns the PaymentProcessorStorage contract.
+     * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
      */
-    function _owner() internal view returns (address) {
-        return PaymentProcessorStorage(address(ppStorage)).owner();
+    function _owner() internal view returns (address ownerAddress) {
+        ownerAddress = PaymentProcessorStorage(address(ppStorage)).owner();
     }
 
     /**

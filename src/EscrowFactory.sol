@@ -13,13 +13,13 @@ import { IEscrowFactory } from "./interface/IEscrowFactory.sol";
  */
 abstract contract EscrowFactory is IEscrowFactory {
     /// @inheritdoc IEscrowFactory
-    function computeSalt(address seller, address buyer, uint216 invoiceId) public pure returns (bytes32) {
-        return keccak256(abi.encode(seller, buyer, invoiceId));
+    function computeSalt(address _seller, address _buyer, uint216 _invoiceId) public pure returns (bytes32 salt) {
+        return keccak256(abi.encode(_seller, _buyer, _invoiceId));
     }
 
     /// @inheritdoc IEscrowFactory
-    function getPredictedAddress(bytes32 salt) public view returns (address) {
-        return CREATE3.predictDeterministicAddress(salt);
+    function getPredictedAddress(bytes32 _salt) public view returns (address predictedAddress) {
+        return CREATE3.predictDeterministicAddress(_salt);
     }
 
     /**
@@ -27,7 +27,7 @@ abstract contract EscrowFactory is IEscrowFactory {
      * @dev Uses a unique salt derived from the seller, buyer, and invoice ID to ensure predictable address generation.
      *      If the payment is in ERC20, no native ETH is sent during deployment. Constructor arguments include the invoice ID,
      *      seller, buyer, and payment processor (this contract).
-     * @param params Struct containing:
+     * @param _params Struct containing:
      *  - seller: The address of the seller or invoice creator.
      *  - buyer: The address of the payer (msg.sender).
      *  - invoiceId: The unique identifier of the invoice.
@@ -35,19 +35,19 @@ abstract contract EscrowFactory is IEscrowFactory {
      *  - paymentToken: The token address used for payment; address(0) indicates native ETH.
      * @return escrow The address of the newly deployed Escrow contract.
      */
-    function _create(EscrowCreationParams memory params) internal returns (address) {
-        bytes memory constructorArg = abi.encode(params.invoiceId, params.seller, params.buyer, address(this));
-        bytes32 salt = computeSalt(params.seller, params.buyer, params.invoiceId);
+    function _create(EscrowCreationParams memory _params) internal returns (address escrow) {
+        bytes memory constructorArg = abi.encode(_params.invoiceId, _params.seller, _params.buyer, address(this));
+        bytes32 salt = computeSalt(_params.seller, _params.buyer, _params.invoiceId);
 
-        if (params.paymentToken != address(0)) {
-            params.value = 0;
+        if (_params.paymentToken != address(0)) {
+            _params.value = 0;
         }
 
-        address escrow = CREATE3.deployDeterministic(
-            params.value, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt
+        escrow = CREATE3.deployDeterministic(
+            _params.value, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt
         );
 
-        emit EscrowCreated(params.invoiceId, escrow);
+        emit EscrowCreated(_params.invoiceId, escrow);
         return escrow;
     }
 }

@@ -22,7 +22,12 @@ abstract contract BaseSetUp is Test {
     uint256 constant DEFAULT_HOLD_PERIOD = 1 days;
     uint256 constant DEFAULT_GAS_THRESOLD = 100_000;
 
-    function initialize() public virtual returns (address, address) {
+    /**
+     * @notice Initializes shared storage and notes contracts for tests.
+     * @return storageAddress The deployed PaymentProcessorStorage address.
+     * @return notesAddress The deployed Notes address.
+     */
+    function initialize() public virtual returns (address storageAddress, address notesAddress) {
         vm.deal(buyerOne, INITIAL_BALANCE);
         vm.deal(sellerOne, INITIAL_BALANCE);
 
@@ -42,6 +47,7 @@ abstract contract BaseSetUp is Test {
         ppStorage = new PaymentProcessorStorage(config);
         notes = new Notes(address(ppStorage));
 
-        return (address(ppStorage), address(notes));
+        storageAddress = address(ppStorage);
+        notesAddress = address(notes);
     }
 }

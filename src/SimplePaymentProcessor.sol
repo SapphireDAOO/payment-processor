@@ -96,36 +96,39 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /**
      * @notice Initializes the payment processor with owner, fee settings, and default hold period.
      * @dev Sets the fee receiver address, the fee rate (in basis points), and the default escrow hold time.
-     * @param paymentProcessorStorageAddress The address of the shared payment processor storage contract.
-     * @param minimumInvoicePrice The new minimum default invoice value to set (in wei).
-     * @param notesAddress Address of the notes contract used for invoice notes.
+     * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
+     * @param _minimumInvoicePrice The new minimum default invoice value to set (in wei).
+     * @param _notesAddress Address of the notes contract used for invoice notes.
      */
-    constructor(address paymentProcessorStorageAddress, uint256 minimumInvoicePrice, address notesAddress) {
-        ppStorage = IPaymentProcessorStorage(paymentProcessorStorageAddress);
-        notes = INotes(notesAddress);
+    constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePrice, address _notesAddress) {
+        ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
+        notes = INotes(_notesAddress);
         validPeriod = DEFAULT_PAYMENT_VALIDITY_PERIOD;
         decisionWindow = DEFAULT_SELLER_DECISION_WINDOW;
-        setMinimumInvoiceValue(minimumInvoicePrice);
+        setMinimumInvoiceValue(_minimumInvoicePrice);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function createInvoice(uint256 invoicePrice, bytes memory storageRef, bool share) external returns (uint216) {
-        if (invoicePrice < minimumInvoiceValue) revert ValueIsTooLow();
+    function createInvoice(uint256 _invoicePrice, bytes memory _storageRef, bool _share)
+        external
+        returns (uint216 invoiceId)
+    {
+        if (_invoicePrice < minimumInvoiceValue) revert ValueIsTooLow();
         Invoice memory invoice;
         invoice.seller = msg.sender;
         invoice.createdAt = (block.timestamp).toUint32();
-        invoice.price = invoicePrice;
+        invoice.price = _invoicePrice;
         invoice.status = CREATED;
         invoice.invoiceNonce = ppStorage.updateInvoiceNonce(1);
         invoice.invalidateAt = (block.timestamp + validPeriod).toUint40();
 
-        uint216 invoiceId = _computeInvoiceId(msg.sender, invoice.invoiceNonce);
+        invoiceId = _computeInvoiceId(msg.sender, invoice.invoiceNonce);
 
         if (invoiceData[invoiceId].status != 0) revert InvoiceAlreadyExists();
 
         invoiceData[invoiceId] = invoice;
 
-        if (storageRef.length != 0) notes.createNote(invoiceId, msg.sender, storageRef, share);
+        if (_storageRef.length != 0) notes.createNote(invoiceId, msg.sender, _storageRef, _share);
 
         emit InvoiceCreated(invoiceId, invoice.invalidateAt, invoice);
 
@@ -133,8 +136,12 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function pay(uint216 invoiceId, bytes memory storageRef, bool share) external payable returns (address) {
-        Invoice memory invoice = invoiceData[invoiceId];
+    function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
+        external
+        payable
+        returns (address escrowAddress)
+    {
+        Invoice memory invoice = invoiceData[_invoiceId];
 
         if (invoice.status != CREATED) {
             revert InvalidInvoiceState(invoice.status);
@@ -152,74 +159,74 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             revert InvoiceIsNoLongerValid();
         }
 
-        address escrow = address(new Escrow{ value: msg.value }(invoiceId, invoice.seller, msg.sender, address(this)));
+        escrowAddress = address(new Escrow{ value: msg.value }(_invoiceId, invoice.seller, msg.sender, address(this)));
         uint40 expiresAt = (block.timestamp + decisionWindow).toUint40();
 
-        invoice.escrow = escrow;
+        invoice.escrow = escrowAddress;
         invoice.buyer = msg.sender;
         invoice.status = PAID;
         invoice.balance = msg.value;
         invoice.paidAt = (block.timestamp).toUint32();
         invoice.expiresAt = expiresAt;
-        invoiceData[invoiceId] = invoice;
+        invoiceData[_invoiceId] = invoice;
 
-        heap.insert(invoiceId, expiresAt, index);
-        if (storageRef.length != 0) notes.createNote(invoiceId, msg.sender, storageRef, share);
+        heap.insert(_invoiceId, expiresAt, index);
+        if (_storageRef.length != 0) notes.createNote(_invoiceId, msg.sender, _storageRef, _share);
 
-        emit InvoicePaid(invoiceId, msg.sender, msg.value, expiresAt);
-        return escrow;
+        emit InvoicePaid(_invoiceId, msg.sender, msg.value, expiresAt);
+        return escrowAddress;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function acceptPayment(uint216 invoiceId) external {
-        Invoice memory invoice = invoiceData[invoiceId];
+    function acceptPayment(uint216 _invoiceId) external {
+        Invoice memory invoice = invoiceData[_invoiceId];
         _validateInvoiceStateForPaymentDecision(invoice);
         invoice.status = ACCEPTED;
 
         if (invoice.releaseAt == 0) {
             invoice.releaseAt = (ppStorage.getDefaultHoldPeriod() + block.timestamp).toUint40();
-            heap.reschedule(invoiceId, uint40(invoice.releaseAt), index);
+            heap.reschedule(_invoiceId, uint40(invoice.releaseAt), index);
         }
 
         uint256 feeValue = calculateFee(invoice.price);
         invoice.balance -= feeValue;
 
-        invoiceData[invoiceId] = invoice;
+        invoiceData[_invoiceId] = invoice;
 
         IEscrow(invoice.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), feeValue);
 
-        emit InvoiceAccepted(invoiceId);
+        emit InvoiceAccepted(_invoiceId);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function rejectPayment(uint216 invoiceId) public {
-        Invoice memory invoice = invoiceData[invoiceId];
+    function rejectPayment(uint216 _invoiceId) public {
+        Invoice memory invoice = invoiceData[_invoiceId];
         _validateInvoiceStateForPaymentDecision(invoice);
 
-        invoiceData[invoiceId].status = REJECTED;
-        heap.removeAt(index[invoiceId] - 1, index);
+        invoiceData[_invoiceId].status = REJECTED;
+        heap.removeAt(index[_invoiceId] - 1, index);
 
         IEscrow(invoice.escrow).withdraw(address(0), invoice.buyer, invoice.price);
 
-        emit InvoiceRejected(invoiceId);
+        emit InvoiceRejected(_invoiceId);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function cancelInvoice(uint216 invoiceId) external {
-        Invoice memory invoice = invoiceData[invoiceId];
+    function cancelInvoice(uint216 _invoiceId) external {
+        Invoice memory invoice = invoiceData[_invoiceId];
         if (invoice.seller != msg.sender) {
             revert NotAuthorized();
         }
         if (invoice.status != CREATED) {
             revert InvalidInvoiceState(invoice.status);
         }
-        invoiceData[invoiceId].status = CANCELLED;
-        emit InvoiceCanceled(invoiceId);
+        invoiceData[_invoiceId].status = CANCELLED;
+        emit InvoiceCanceled(_invoiceId);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function releaseInvoice(uint216 invoiceId) public {
-        Invoice memory invoice = invoiceData[invoiceId];
+    function releaseInvoice(uint216 _invoiceId) public {
+        Invoice memory invoice = invoiceData[_invoiceId];
 
         if (invoice.status == RELEASED) revert InvoiceHasAlreadyBeenReleased();
         if (invoice.status != ACCEPTED) {
@@ -232,38 +239,39 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             revert HoldPeriodHasNotBeenExceeded();
         }
 
-        invoiceData[invoiceId].status = RELEASED;
-        invoiceData[invoiceId].balance = 0;
+        invoiceData[_invoiceId].status = RELEASED;
+        invoiceData[_invoiceId].balance = 0;
 
-        heap.removeAt(index[invoiceId] - 1, index);
+        heap.removeAt(index[_invoiceId] - 1, index);
 
         IEscrow(invoice.escrow).withdraw(address(0), msg.sender, invoice.balance);
-        emit InvoiceReleased(invoiceId);
+        emit InvoiceReleased(_invoiceId);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function refundBuyer(uint216 invoiceId) public {
-        Invoice memory invoice = invoiceData[invoiceId];
+    function refundBuyer(uint216 _invoiceId) public {
+        Invoice memory invoice = invoiceData[_invoiceId];
         if (invoice.status != PAID || block.timestamp < invoice.expiresAt) {
             revert InvoiceNotEligibleForRefund();
         }
 
-        uint256 pos = index[invoiceId];
+        uint256 pos = index[_invoiceId];
 
         if (pos != 0 && pos <= heap.data.length) {
             heap.removeAt(pos - 1, index);
         }
 
-        invoiceData[invoiceId].status = REFUNDED;
-        invoiceData[invoiceId].balance = 0;
+        invoiceData[_invoiceId].status = REFUNDED;
+        invoiceData[_invoiceId].balance = 0;
         IEscrow(invoice.escrow).withdraw(address(0), invoice.buyer, invoice.price);
 
-        emit InvoiceRefunded(invoiceId);
+        emit InvoiceRefunded(_invoiceId);
     }
 
     /// @inheritdoc AutomationCompatibleInterface
-    function checkUpkeep(bytes calldata) external view returns (bool, bytes memory) {
-        return (heap.due(), bytes(""));
+    function checkUpkeep(bytes calldata) external view returns (bool upkeepNeeded, bytes memory performData) {
+        upkeepNeeded = heap.due();
+        performData = bytes("");
     }
 
     /// @inheritdoc AutomationCompatibleInterface
@@ -280,18 +288,18 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /**
      * @notice Validates that the caller can accept or reject a payment.
      * @dev Ensures caller is the seller and invoice is within the decision window.
-     * @param invoice The invoice data to validate.
+     * @param _invoice The invoice data to validate.
      */
-    function _validateInvoiceStateForPaymentDecision(Invoice memory invoice) internal view {
-        if (invoice.seller != msg.sender) {
+    function _validateInvoiceStateForPaymentDecision(Invoice memory _invoice) internal view {
+        if (_invoice.seller != msg.sender) {
             revert NotAuthorized();
         }
 
-        if (invoice.status != PAID) {
+        if (_invoice.status != PAID) {
             revert InvoiceNotPaid();
         }
 
-        if (block.timestamp > invoice.expiresAt) {
+        if (block.timestamp > _invoice.expiresAt) {
             revert AcceptanceWindowExceeded();
         }
     }
@@ -301,20 +309,20 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      * @dev This function performs all the checks required to determine whether
      *      the invoice can be released, updates the invoice status, removes it
      *      from the scheduling heap, and triggers the escrow payout.
-     * @param invoiceId The ID of the invoice to release.
+     * @param _invoiceId The ID of the invoice to release.
      * @return status A status code from TaskQueueLib indicating the outcome:
      *         - SUCCESSFUL (3): Invoice was released and removed from heap.
      *         - NOT_ELIGIBLE_FOR_RELEASE (1): Invoice not accepted or not yet due.
      *         - ERROR (2): Invalid index or heap inconsistency.
      */
-    function _release(uint216 invoiceId) internal returns (uint256) {
-        Invoice memory invoice = invoiceData[invoiceId];
+    function _release(uint216 _invoiceId) internal returns (uint256 status) {
+        Invoice memory invoice = invoiceData[_invoiceId];
 
         if (invoice.status == PAID) {
             if (block.timestamp < invoice.expiresAt) {
                 return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
             }
-            refundBuyer(invoiceId);
+            refundBuyer(_invoiceId);
             return TaskQueueLib.SUCCESSFUL;
         }
 
@@ -322,37 +330,38 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
         }
 
-        invoiceData[invoiceId].status = RELEASED;
-        invoiceData[invoiceId].balance = 0;
+        invoiceData[_invoiceId].status = RELEASED;
+        invoiceData[_invoiceId].balance = 0;
 
-        uint256 pos = index[invoiceId];
+        uint256 pos = index[_invoiceId];
         if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
 
         heap.removeAt(pos - 1, index);
 
         IEscrow(invoice.escrow).withdraw(address(0), invoice.seller, invoice.balance);
-        emit InvoiceReleased(invoiceId);
+        emit InvoiceReleased(_invoiceId);
         return TaskQueueLib.SUCCESSFUL;
     }
 
     /**
      * @notice Computes a unique order ID for an invoice using buyer, invoice ID, timestamp, and contract address.
      * @dev This function ensures the order ID is non-deterministic, even for repeated inputs.
-     * @param buyer The address of the buyer.
-     * @param invoiceNonce The invoice identifier provided during creation.
-     * @return The keccak256 hash representing the unique order ID.
+     * @param _buyer The address of the buyer.
+     * @param _invoiceNonce The invoice identifier provided during creation.
+     * @return invoiceId The keccak256 hash representing the unique order ID.
      */
-    function _computeInvoiceId(address buyer, uint256 invoiceNonce) internal view returns (uint216) {
-        return (uint256(keccak256(abi.encode(address(this), buyer, invoiceNonce))) & ((1 << 216) - 1)).toUint216();
+    function _computeInvoiceId(address _buyer, uint256 _invoiceNonce) internal view returns (uint216 invoiceId) {
+        invoiceId =
+            (uint256(keccak256(abi.encode(address(this), _buyer, _invoiceNonce))) & ((1 << 216) - 1)).toUint216();
     }
 
     /**
      * @notice Returns the owner of the PaymentProcessorStorage contract.
      * @dev This helper reads the owner directly from the linked PaymentProcessorStorage instance.
-     * @return owner The address that currently owns the PaymentProcessorStorage contract.
+     * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
      */
-    function _owner() internal view returns (address) {
-        return PaymentProcessorStorage(address(ppStorage)).owner();
+    function _owner() internal view returns (address ownerAddress) {
+        ownerAddress = PaymentProcessorStorage(address(ppStorage)).owner();
     }
 
     /**
@@ -367,74 +376,74 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setInvoiceReleaseTime(uint216 invoiceId, uint32 holdPeriod) external {
+    function setInvoiceReleaseTime(uint216 _invoiceId, uint32 _holdPeriod) external {
         if (msg.sender != _owner()) revert NotAuthorized();
-        Invoice memory invoice = invoiceData[invoiceId];
+        Invoice memory invoice = invoiceData[_invoiceId];
 
         if (invoice.status < ACCEPTED) {
             revert InvoiceHasNotBeenAccepted();
         }
 
-        uint256 newReleaseTime = block.timestamp + holdPeriod;
+        uint256 newReleaseTime = block.timestamp + _holdPeriod;
 
         if (newReleaseTime > type(uint32).max) revert ReleaseTimeOverflow();
 
-        invoiceData[invoiceId].releaseAt = newReleaseTime.toUint32();
-        heap.reschedule(invoiceId, newReleaseTime.toUint40(), index);
+        invoiceData[_invoiceId].releaseAt = newReleaseTime.toUint32();
+        heap.reschedule(_invoiceId, newReleaseTime.toUint40(), index);
 
-        emit UpdateHoldPeriod(invoiceId, newReleaseTime);
+        emit UpdateHoldPeriod(_invoiceId, newReleaseTime);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function calculateFee(uint256 amount) public view returns (uint256) {
-        return (amount * ppStorage.getFeeRate()) / BASIS_POINTS;
+    function calculateFee(uint256 _amount) public view returns (uint256 feeValue) {
+        return (_amount * ppStorage.getFeeRate()) / BASIS_POINTS;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setMinimumInvoiceValue(uint256 newMinimumInvoiceValue) public onlyAuthorized {
-        minimumInvoiceValue = newMinimumInvoiceValue;
+    function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) public onlyAuthorized {
+        minimumInvoiceValue = _newMinimumInvoiceValue;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setForwarderAddress(address forwarderAddress) external onlyAuthorized {
-        forwarder = forwarderAddress;
+    function setForwarderAddress(address _forwarderAddress) external onlyAuthorized {
+        forwarder = _forwarderAddress;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setValidPeriod(uint256 newValidPeriod) external onlyAuthorized {
+    function setValidPeriod(uint256 _newValidPeriod) external onlyAuthorized {
         if (msg.sender != _owner()) {
             revert NotAuthorized();
         }
-        validPeriod = newValidPeriod;
+        validPeriod = _newValidPeriod;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setDecisionWindow(uint256 newDecisionWindow) external onlyAuthorized {
-        decisionWindow = newDecisionWindow;
+    function setDecisionWindow(uint256 _newDecisionWindow) external onlyAuthorized {
+        decisionWindow = _newDecisionWindow;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getForwarder() external view returns (address) {
+    function getForwarder() external view returns (address forwarderAddress) {
         return forwarder;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getNextInvoiceNonce() external view returns (uint216) {
+    function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceValue) {
         return ppStorage.getNextInvoiceNonce();
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getInvoiceData(uint216 invoiceId) external view returns (Invoice memory) {
-        return invoiceData[invoiceId];
+    function getInvoiceData(uint216 _invoiceId) external view returns (Invoice memory invoiceDetails) {
+        return invoiceData[_invoiceId];
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getMinimumInvoiceValue() external view returns (uint256) {
+    function getMinimumInvoiceValue() external view returns (uint256 minimumValue) {
         return minimumInvoiceValue;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getItems() external view returns (uint216[] memory) {
+    function getItems() external view returns (uint216[] memory items) {
         return heap.getItems();
     }
 }

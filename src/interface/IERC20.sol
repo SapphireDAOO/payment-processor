@@ -9,7 +9,7 @@ pragma solidity 0.8.28;
 interface IERC20 {
     /**
      * @notice Returns the number of decimals used by the token.
-     * @return The number of decimals (typically 18).
+     * @return decimalsValue The number of decimals the token uses (typically 18).
      */
-    function decimals() external view returns (uint8);
+    function decimals() external view returns (uint8 decimalsValue);
 }
