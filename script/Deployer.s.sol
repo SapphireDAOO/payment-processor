@@ -59,7 +59,7 @@ contract Deployer is Script {
 
         PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(config);
 
-        Notes notes = new Notes(msg.sender);
+        Notes notes = new Notes(address(ppStorage));
 
         SimplePaymentProcessor simplePP =
             new SimplePaymentProcessor(address(ppStorage), MINIMUM_INVOICE_VALUE, address(notes));

@@ -40,7 +40,7 @@ abstract contract BaseSetUp is Test {
 
         vm.prank(admin);
         ppStorage = new PaymentProcessorStorage(config);
-        notes = new Notes(admin);
+        notes = new Notes(address(ppStorage));
 
         return (address(ppStorage), address(notes));
     }

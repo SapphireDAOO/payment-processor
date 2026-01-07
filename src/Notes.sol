@@ -128,8 +128,17 @@ contract Notes is INotes {
      * @param enabled Whether the user should be authorized.
      */
     function setAuthorized(address user, bool enabled) external {
-        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert Unauthorized();
+        if (msg.sender != _owner()) revert Unauthorized();
         auth[user] = enabled ? ALLOWED : NOT_ALLOWED;
+    }
+
+    /**
+     * @notice Returns the owner of the PaymentProcessorStorage contract.
+     * @dev This helper reads the owner directly from the linked PaymentProcessorStorage instance.
+     * @return owner The address that currently owns the PaymentProcessorStorage contract.
+     */
+    function _owner() internal view returns (address) {
+        return PaymentProcessorStorage(address(ppStorage)).owner();
     }
 
     /**

@@ -47,6 +47,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
         (address storageAddress, address notesAddress) = initialize();
 
         address ca = address(_advancedPaymentProcessorSetUp(storageAddress));
+        vm.prank(admin);
         Notes(notesAddress).setAuthorized(ca, true);
     }
 
@@ -60,6 +61,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
 
         advancedPP.setPriceFeed(address(addr.usdc), address(addr.usdcPriceFeed));
         advancedPP.setPriceFeed(address(addr.wbtc), address(addr.wbtcPriceFeed));
+        advancedPP.setPriceFeed(address(0), address(addr.nativeTokenPriceFeed));
         vm.stopPrank();
 
         _mintAndApproveTokens(address(advancedPP));
@@ -68,7 +70,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
             vm.makePersistent(address(advancedPP), storageAddress);
         }
 
-        vm.prank(storageAddress);
+        vm.prank(admin);
         advancedPP.setForwarderAddress(FORWARDER);
 
         return advancedPP;
