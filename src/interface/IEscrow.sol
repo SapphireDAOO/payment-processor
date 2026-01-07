@@ -22,31 +22,31 @@ interface IEscrow {
 
     /**
      * @notice Emitted when funds are refunded to the payer.
-     * @param _invoiceId The ID of the invoice associated with the refund.
-     * @param _payer The address of the payer receiving the refund.
-     * @param _amount The amount refunded in wei.
+     * @param invoiceId The ID of the invoice associated with the refund.
+     * @param payer The address of the payer receiving the refund.
+     * @param amount The amount refunded in wei.
      */
-    event FundsRefunded(uint216 indexed _invoiceId, address indexed _payer, uint256 indexed _amount);
+    event FundsRefunded(uint216 indexed invoiceId, address indexed payer, uint256 indexed amount);
 
     /**
      * @notice Emitted when funds are withdrawn by the creator.
-     * @param _invoiceId The ID of the invoice associated with the withdrawal
-     * @param _creator The address of the creator receiving the withdrawn funds.
-     * @param _amount The amount withdrawn in wei.
+     * @param invoiceId The ID of the invoice associated with the withdrawal
+     * @param creator The address of the creator receiving the withdrawn funds.
+     * @param amount The amount withdrawn in wei.
      */
-    event FundsWithdrawn(uint216 indexed _invoiceId, address indexed _creator, uint256 indexed _amount);
+    event FundsWithdrawn(uint216 indexed invoiceId, address indexed creator, uint256 indexed amount);
 
     /**
      * @notice Emitted when funds are deposited into the escrow for an invoice.
-     * @param _invoiceId The unique key of the invoice associated with the deposit.
-     * @param _value The amount of funds deposited in wei.
+     * @param invoiceId The unique key of the invoice associated with the deposit.
+     * @param value The amount of funds deposited in wei.
      */
-    event FundsDeposited(uint216 indexed _invoiceId, uint256 indexed _value);
+    event FundsDeposited(uint216 indexed invoiceId, uint256 indexed value);
 
     /**
      * @notice Emitted when a fee is successfully paid to a payment processor.
-     * @param _invoiceId The unique ID of the invoice associated with the fee.
-     * @param _amount The fee amount paid (in wei).
+     * @param invoiceId The unique ID of the invoice associated with the fee.
+     * @param amount The fee amount paid (in wei).
      */
-    event FeePaid(uint216 indexed _invoiceId, uint256 _amount);
+    event FeePaid(uint216 indexed invoiceId, uint256 amount);
 }

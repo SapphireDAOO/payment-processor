@@ -43,8 +43,8 @@ interface IEscrowFactory {
 
     /**
      * @notice Emitted when a new escrow contract is created.
-     * @param _invoiceId The unique ID of the invoice associated with the escrow.
-     * @param _escrow The address of the newly created escrow contract.
+     * @param invoiceId The unique ID of the invoice associated with the escrow.
+     * @param escrow The address of the newly created escrow contract.
      */
-    event EscrowCreated(uint216 indexed _invoiceId, address indexed _escrow);
+    event EscrowCreated(uint216 indexed invoiceId, address indexed escrow);
 }

@@ -10,7 +10,10 @@ interface IAdvancedPaymentProcessor {
     //                              ERRORS
     // ================================================================
 
+    /// @notice Thrown when a payment is attempted with a token that is not supported by the processor.
     error UnsupportedToken();
+
+    /// @notice Thrown when a Chainlink price feed is stale and cannot be trusted for conversion.
     error StalePriceFeed();
 
     /// @notice Thrown when an account attempts to withdraw or spend more than its available balance.
@@ -281,77 +284,77 @@ interface IAdvancedPaymentProcessor {
 
     /**
      * @notice Emitted when a dispute is dismissed and no party receives a refund or payout.
-     * @param _invoiceId The ID of the invoice involved in the dispute.
+     * @param invoiceId The ID of the invoice involved in the dispute.
      */
-    event DisputeDismissed(uint216 indexed _invoiceId);
+    event DisputeDismissed(uint216 indexed invoiceId);
 
     /**
      * @notice Emitted when a dispute is resolved in favor of one party without partial refund.
-     * @param _invoiceId The ID of the invoice involved in the dispute.
+     * @param invoiceId The ID of the invoice involved in the dispute.
      */
-    event DisputeResolved(uint216 indexed _invoiceId);
+    event DisputeResolved(uint216 indexed invoiceId);
 
     /**
      * @notice Emitted when a new invoice is created.
-     * @param _invoiceId The ID of the newly created invoice.
-     * @param _invoice The invoice data.
+     * @param invoiceId The ID of the newly created invoice.
+     * @param invoice The invoice data.
      */
-    event InvoiceCreated(uint216 indexed _invoiceId, Invoice _invoice);
+    event InvoiceCreated(uint216 indexed invoiceId, Invoice invoice);
 
     /**
      * @notice Emitted when a meta-invoice is successfully created.
-     * @param _metaInvoiceId The unique identifier of the newly created meta-invoice.
-     * @param _totalPrice The aggregated total price (in USD, 8 decimals) of all sub-invoices under this meta-invoice.
+     * @param metaInvoiceId The unique identifier of the newly created meta-invoice.
+     * @param totalPrice The aggregated total price (in USD, 8 decimals) of all sub-invoices under this meta-invoice.
      */
-    event MetaInvoiceCreated(uint216 indexed _metaInvoiceId, uint256 indexed _totalPrice);
+    event MetaInvoiceCreated(uint216 indexed metaInvoiceId, uint256 indexed totalPrice);
 
     /**
      * @notice Emitted when an invoice is canceled by the seller and the buyer is refunded.
-     * @param _invoiceId The ID of the canceled invoice.
+     * @param invoiceId The ID of the canceled invoice.
      */
-    event InvoiceCanceled(uint216 indexed _invoiceId);
+    event InvoiceCanceled(uint216 indexed invoiceId);
 
     /**
      * @notice Emitted when a dispute is settled and the funds are split between buyer and seller.
-     * @param _invoiceId The ID of the invoice that was disputed.
-     * @param _sellerAmount The amount transferred to the seller.
-     * @param _buyerAmount The amount refunded to the buyer.
+     * @param invoiceId The ID of the invoice that was disputed.
+     * @param sellerAmount The amount transferred to the seller.
+     * @param buyerAmount The amount refunded to the buyer.
      */
-    event DisputeSettled(uint216 indexed _invoiceId, uint256 _sellerAmount, uint256 _buyerAmount);
+    event DisputeSettled(uint216 indexed invoiceId, uint256 sellerAmount, uint256 buyerAmount);
 
     /**
      * @notice Emitted when an invoice has been successfully paid and escrow is created.
-     * @param _invoiceId The ID of the paid invoice.
-     * @param _paymentToken The address of the token used for payment (use address(0) for native token).
-     * @param _escrowAddress The address of the newly created escrow contract holding the funds.
-     * @param _amount The amount paid in the token's smallest denomination (based on token decimals).
+     * @param invoiceId The ID of the paid invoice.
+     * @param paymentToken The address of the token used for payment (use address(0) for native token).
+     * @param escrowAddress The address of the newly created escrow contract holding the funds.
+     * @param amount The amount paid in the token's smallest denomination (based on token decimals).
      */
-    event InvoicePaid(uint216 indexed _invoiceId, address _paymentToken, address _escrowAddress, uint256 _amount);
+    event InvoicePaid(uint216 indexed invoiceId, address paymentToken, address escrowAddress, uint256 amount);
 
     /**
      * @notice Emitted when the escrow release time is updated for a given invoice.
-     * @param _invoiceId The unique identifier of the invoice whose release time was modified.
-     * @param _newHoldPeriod The updated escrow hold duration in seconds.
+     * @param invoiceId The unique identifier of the invoice whose release time was modified.
+     * @param newHoldPeriod The updated escrow hold duration in seconds.
      */
-    event UpdateReleaseTime(uint216 indexed _invoiceId, uint256 _newHoldPeriod);
+    event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 
     /**
      * @notice Emitted when the payment is released to the seller.
-     * @param _invoiceId The ID of the invoice for which payment was released.
-     * @param _sellerAmount The amount transferred to the seller.
+     * @param invoiceId The ID of the invoice for which payment was released.
+     * @param sellerAmount The amount transferred to the seller.
      */
-    event PaymentReleased(uint216 indexed _invoiceId, uint256 _sellerAmount);
+    event PaymentReleased(uint216 indexed invoiceId, uint256 sellerAmount);
 
     /**
      * @notice Emitted when a dispute is raised for an invoice by the buyer.
-     * @param _invoiceId The ID of the disputed invoice.
+     * @param invoiceId The ID of the disputed invoice.
      */
-    event DisputeCreated(uint216 indexed _invoiceId);
+    event DisputeCreated(uint216 indexed invoiceId);
 
     /**
      * @notice Emitted when a refund is issued for a specific order.
-     * @param _invoiceId The unique identifier of the refunded order.
-     * @param _amount The amount refunded to the buyer.
+     * @param invoiceId The unique identifier of the refunded order.
+     * @param amount The amount refunded to the buyer.
      */
-    event Refunded(uint216 indexed _invoiceId, uint256 indexed _amount);
+    event Refunded(uint216 indexed invoiceId, uint256 indexed amount);
 }

@@ -251,57 +251,55 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Emitted when a new invoice is created.
-     * @param _invoiceId The unique identifier (hash) for the created invoice.
-     * @param _invalidateAt The expiration timestamp beyond which the invoice is no longer valid.
-     * @param _invoice The full invoice struct containing buyer, price, timestamps, state, and metadata.
+     * @param invoiceId The unique identifier (hash) for the created invoice.
+     * @param invalidateAt The expiration timestamp beyond which the invoice is no longer valid.
+     * @param invoice The full invoice struct containing buyer, price, timestamps, state, and metadata.
      */
-    event InvoiceCreated(uint216 indexed _invoiceId, uint40 indexed _invalidateAt, Invoice _invoice);
+    event InvoiceCreated(uint216 indexed invoiceId, uint40 indexed invalidateAt, Invoice invoice);
 
     /**
      * @notice Emitted when an invoice payment is made.
-     * @param _invoiceId The unique key of the accepted invoice.
-     * @param _amountPaid The amount paid towards the invoice in wei.
-     *  @param _expiresAt The timestamp by which the seller must accept or reject the invoice.
+     * @param invoiceId The unique key of the accepted invoice.
+     * @param amountPaid The amount paid towards the invoice in wei.
+     *  @param expiresAt The timestamp by which the seller must accept or reject the invoice.
      *          If no action is taken by then, the buyer would be refund.
      */
-    event InvoicePaid(
-        uint216 indexed _invoiceId, address indexed _buyer, uint256 indexed _amountPaid, uint40 _expiresAt
-    );
+    event InvoicePaid(uint216 indexed invoiceId, address indexed buyer, uint256 indexed amountPaid, uint40 expiresAt);
 
     /**
      * @notice Emitted when an invoice is rejected by the seller.
-     * @param _invoiceId The unique key of the rejected invoice.
+     * @param invoiceId The unique key of the rejected invoice.
      */
-    event InvoiceRejected(uint216 indexed _invoiceId);
+    event InvoiceRejected(uint216 indexed invoiceId);
 
     /**
      * @notice Emitted when an invoice is refunded to the buyer.
-     * @param _invoiceId The unique key of the rejected invoice.
+     * @param invoiceId The unique key of the rejected invoice.
      */
-    event InvoiceRefunded(uint216 indexed _invoiceId);
+    event InvoiceRefunded(uint216 indexed invoiceId);
 
     /**
      * @notice Emitted when an invoice is accepted by the seller.
-     * @param _invoiceId The unique key of the accepted invoice.
+     * @param invoiceId The unique key of the accepted invoice.
      */
-    event InvoiceAccepted(uint216 indexed _invoiceId);
+    event InvoiceAccepted(uint216 indexed invoiceId);
 
     /**
      * @notice Emitted when an invoice is canceled.
-     * @param _invoiceId The unique key of the canceled invoice.
+     * @param invoiceId The unique key of the canceled invoice.
      */
-    event InvoiceCanceled(uint216 indexed _invoiceId);
+    event InvoiceCanceled(uint216 indexed invoiceId);
 
     /**
      * @notice Emitted when an invoice is released (funds disbursed from escrow).
-     * @param _invoiceId The unique key of the released invoice.
+     * @param invoiceId The unique key of the released invoice.
      */
-    event InvoiceReleased(uint216 indexed _invoiceId);
+    event InvoiceReleased(uint216 indexed invoiceId);
 
     /**
      * @notice Emitted when the hold period of a given invoice is updated to a new timestamp.
-     * @param _invoiceId The key of the invoice whose hold period was updated.
-     * @param _releaseDueTimestamp The new hold period expressed as a UNIX timestamp.
+     * @param invoiceId The key of the invoice whose hold period was updated.
+     * @param releaseDueTimestamp The new hold period expressed as a UNIX timestamp.
      */
-    event UpdateHoldPeriod(uint216 indexed _invoiceId, uint256 indexed _releaseDueTimestamp);
+    event UpdateHoldPeriod(uint216 indexed invoiceId, uint256 indexed releaseDueTimestamp);
 }
