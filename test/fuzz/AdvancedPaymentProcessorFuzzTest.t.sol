@@ -20,7 +20,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         uint216 orderId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceId(), sellerOne, price));
 
-        uint256 nextInvoiceId = advancedPP.getNextInvoiceId();
+        uint256 nextInvoiceId = advancedPP.getNextInvoiceNonce();
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         assertEq(inv.price, price);
         assertEq(inv.seller, sellerOne);
@@ -116,7 +116,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         sellerShare = bound(sellerShare, 0, advancedPP.BASIS_POINTS());
 
         uint216 orderId =
-            advancedPP.createSingleInvoice(getInvoiceCreationParam(advancedPP.getNextInvoiceId(), sellerOne, price));
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(advancedPP.getNextInvoiceNonce(), sellerOne, price));
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
@@ -140,7 +140,7 @@ contract AdvancedPaymentProcessorFuzzTest is AdvancedPaymentProcessorSetUp {
         sellerShare = bound(sellerShare, 0, advancedPP.BASIS_POINTS());
 
         uint216 orderId =
-            advancedPP.createSingleInvoice(getInvoiceCreationParam(advancedPP.getNextInvoiceId(), sellerOne, price));
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(advancedPP.getNextInvoiceNonce(), sellerOne, price));
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 

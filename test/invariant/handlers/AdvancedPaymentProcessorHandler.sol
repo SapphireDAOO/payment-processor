@@ -106,7 +106,7 @@ contract AdvancedPaymentProcessorHandler is Test {
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), inv.price);
 
-        if (inv.state == advancedPP.INITIATED()) return;
+        if (inv.state == advancedPP.CREATED()) return;
         vm.prank(buyer);
         advancedPP.paySingleInvoice{ value: tokenValue }(orderId, address(0));
     }

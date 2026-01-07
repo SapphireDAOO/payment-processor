@@ -64,8 +64,7 @@ contract Deployer is Script {
         SimplePaymentProcessor simplePP =
             new SimplePaymentProcessor(address(ppStorage), MINIMUM_INVOICE_VALUE, address(notes));
 
-        AdvancedPaymentProcessor advancedPP =
-            new AdvancedPaymentProcessor(address(ppStorage), addr.nativeTokenPriceFeed);
+        AdvancedPaymentProcessor advancedPP = new AdvancedPaymentProcessor(address(ppStorage));
 
         notes.setAuthorized(msg.sender, true);
         notes.setAuthorized(address(simplePP), true);

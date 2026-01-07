@@ -54,7 +54,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
         Addr memory addr = _setUp();
 
         vm.startPrank(admin);
-        advancedPP = new AdvancedPaymentProcessor(storageAddress, address(addr.nativeTokenPriceFeed));
+        advancedPP = new AdvancedPaymentProcessor(storageAddress);
 
         PaymentProcessorStorage(storageAddress).setAuthorizedAddress(address(advancedPP), true);
 

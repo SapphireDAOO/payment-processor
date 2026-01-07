@@ -14,11 +14,11 @@ contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
         assertEq(invoiceData.createdAt, block.timestamp);
         assertEq(invoiceData.paidAt, 0);
         assertEq(invoiceData.price, _amount);
-        assertEq(invoiceData.amountPaid, 0);
+        assertEq(invoiceData.balance, 0);
         assertEq(invoiceData.buyer, address(0));
         assertEq(invoiceData.status, simplePP.CREATED());
         assertEq(invoiceData.escrow, address(0));
-        assertEq(invoiceData.invoiceId, 1);
+        assertEq(invoiceData.invoiceNonce, 1);
         assertEq(simplePP.getNextInvoiceId(), 2);
     }
 
@@ -37,7 +37,7 @@ contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
 
         ISimplePaymentProcessor.Invoice memory updated = simplePP.getInvoiceData(orderId);
         assertEq(updated.buyer, buyerOne);
-        assertEq(updated.amountPaid, _invoicePrice);
+        assertEq(updated.balance, _invoicePrice);
         assertEq(updated.status, simplePP.PAID());
         assertEq(updated.escrow, escrow);
     }

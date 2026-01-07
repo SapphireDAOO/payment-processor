@@ -10,6 +10,9 @@ interface IAdvancedPaymentProcessor {
     //                              ERRORS
     // ================================================================
 
+    error UnsupportedToken();
+    error StalePriceFeed();
+
     /// @notice Thrown when an account attempts to withdraw or spend more than its available balance.
     error InsufficientBalance();
 
@@ -56,7 +59,7 @@ interface IAdvancedPaymentProcessor {
     /// @notice Represents a single invoice created by a buyer to pay a seller, with escrow and payment tracking.
     struct Invoice {
         /// @notice A unique identifier assigned to this invoice, typically sequentially.
-        uint216 invoiceId;
+        uint216 invoiceNonce;
         /// @notice Timestamp when the payment was made.
         uint40 paidAt;
         /// @notice Timestamp when the invoice was created.
@@ -249,13 +252,13 @@ interface IAdvancedPaymentProcessor {
      * @notice Returns the ID that will be assigned to the next invoice.
      * @return The next invoice ID.
      */
-    function getNextInvoiceId() external view returns (uint216);
+    function getNextInvoiceNonce() external view returns (uint216);
 
     /**
      * @notice Returns the ID that will be assigned to the next meta-invoice.
      * @return The next meta-invoice ID.
      */
-    function getNextMetaInvoiceId() external view returns (uint216);
+    function getNextMetaInvoiceNonce() external view returns (uint216);
 
     /**
      * @notice Returns a list of all task IDs currently in the heap.
@@ -267,10 +270,10 @@ interface IAdvancedPaymentProcessor {
     /**
      * @notice Converts a USD-denominated price to the equivalent amount in the specified payment token.
      * @param paymentToken The address of the payment token (use address(0) for the native token).
-     * @param price The USD amount to convert, expressed in 8 decimals (e.g., 100e8 = $100).
+     * @param usdAmount The USD amount to convert, expressed in 8 decimals (e.g., 100e8 = $100).
      * @return The equivalent amount in the payment token's smallest unit (according to its decimals).
      */
-    function getTokenValueFromUsd(address paymentToken, uint256 price) external view returns (uint256);
+    function getTokenValueFromUsd(address paymentToken, uint256 usdAmount) external view returns (uint256);
 
     // ================================================================
     //                              EVENTS
