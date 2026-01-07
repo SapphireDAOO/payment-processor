@@ -25,18 +25,6 @@ interface INotes {
         bool exists;
     }
 
-    /// @notice Emitted when a note is created.
-    event NoteCreated(
-        uint216 indexed _invoiceId,
-        uint256 indexed _noteId,
-        address indexed _author,
-        bool _share,
-        bytes _encryptedContent
-    );
-
-    /// @notice Emitted when a user updates their opened state for a note.
-    event NoteStateChanged(uint216 indexed _invoiceId, uint256 indexed _noteId, address indexed _user, bool _opened);
-
     /**
      * @notice Create a note under an order.
      * @param _invoiceId Order identifier.
@@ -86,4 +74,25 @@ interface INotes {
         external
         view
         returns (address author, bool share, bytes memory content, bool openedStatus);
+
+    /**
+     * @notice Emitted when a new note is created for an invoice.
+     * @param invoiceId The unique identifier of the invoice the note is associated with.
+     * @param noteId The unique identifier of the created note.
+     * @param author The address of the account that created the note.
+     * @param share Indicates whether the note is shared with other parties.
+     * @param encryptedContent The encrypted contents of the note.
+     */
+    event NoteCreated(
+        uint216 indexed invoiceId, uint256 indexed noteId, address indexed author, bool share, bytes encryptedContent
+    );
+
+    /**
+     * @notice Emitted when a user changes their opened state for a note.
+     * @param invoiceId The unique identifier of the invoice the note belongs to.
+     * @param noteId The unique identifier of the note.
+     * @param user The address of the user whose note state was updated.
+     * @param opened Whether the note is marked as opened or not by the user.
+     */
+    event NoteStateChanged(uint216 indexed invoiceId, uint256 indexed noteId, address indexed user, bool opened);
 }
