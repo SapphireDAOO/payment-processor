@@ -21,8 +21,8 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
     error HoldPeriodCanNotBeZero();
 
     function test_Initialization() public view {
-        assertEq(advancedPP.getNextInvoiceId(), 1);
-        assertEq(advancedPP.getNextMetaInvoiceId(), 1);
+        assertEq(advancedPP.getNextInvoiceNonce(), 1);
+        assertEq(advancedPP.getNextMetaInvoiceNonce(), 1);
         assertEq(advancedPP.getForwarder(), FORWARDER);
     }
 
@@ -82,13 +82,13 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.expectRevert(IAdvancedPaymentProcessor.InvoiceAlreadyExists.selector);
         advancedPP.createSingleInvoice(getInvoiceCreationParam(invoiceId, sellerOne, price));
 
-        uint256 nextInvoiceId = advancedPP.getNextInvoiceId();
+        uint256 nextInvoiceId = advancedPP.getNextInvoiceNonce();
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(orderId);
         assertEq(inv.price, price);
         assertEq(inv.seller, sellerOne);
         assertEq(inv.createdAt, block.timestamp);
         // assertEq(inv.orderId, uint256(0));
-        assertEq(inv.invoiceId, advancedPP.totalUniqueInvoiceCreated());
+        assertEq(inv.invoiceNonce, advancedPP.totalUniqueInvoiceCreated());
         assertEq(nextInvoiceId, 2);
     }
 
@@ -110,7 +110,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         // create invoice
         uint216 metaInvoiceOrderId = advancedPP.createMetaInvoice(param);
 
-        uint256 upper = advancedPP.getNextInvoiceId() - 1;
+        uint256 upper = advancedPP.getNextInvoiceNonce() - 1;
 
         IAdvancedPaymentProcessor.MetaInvoice memory metaInv = advancedPP.getMetaInvoice(metaInvoiceOrderId);
 
@@ -126,7 +126,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
             // assertEq(inv.orderId, orderId);
         }
 
-        assertEq(advancedPP.getNextInvoiceId(), upper + 1);
+        assertEq(advancedPP.getNextInvoiceNonce(), upper + 1);
         assertEq(metaInv.price, prices[0] + prices[1]);
     }
 
@@ -165,7 +165,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_nativeTokenPaymentForMetaInvoice() public {
         // set up
-        uint256 invoiceId = advancedPP.getNextInvoiceId();
+        uint256 invoiceId = advancedPP.getNextInvoiceNonce();
 
         address[] memory sellers = new address[](2);
         sellers[0] = sellerOne;
@@ -640,7 +640,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         vm.prank(admin);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        ppStorage.execute(address(advancedPP), data);
+        // ppStorage.execute(address(advancedPP), data);
 
         vm.prank(buyerTwo);
         advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceOrderId, address(0));
@@ -657,7 +657,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.setInvoiceReleaseTime(orderIds[length], 3 days);
 
         vm.prank(admin);
-        ppStorage.execute(address(advancedPP), data);
+        // ppStorage.execute(address(advancedPP), data);
 
         vm.prank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);

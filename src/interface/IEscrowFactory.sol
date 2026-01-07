@@ -14,7 +14,7 @@ interface IEscrowFactory {
         ///  @notice The address of the buyer who deposits the funds into escrow.
         address buyer;
         ///  @notice The unique identifier associated with the invoice or order.
-        uint216 orderId;
+        uint216 invoiceId;
         ///  @notice The total amount to be held in escrow, denominated in the payment token or native currency.
         uint256 value;
         ///  @notice The address of the token used for payment. Use address(0) for native currency (e.g., ETH).

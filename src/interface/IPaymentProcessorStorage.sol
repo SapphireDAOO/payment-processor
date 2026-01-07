@@ -39,17 +39,6 @@ interface IPaymentProcessorStorage {
     function updateInvoiceId(uint216 by) external returns (uint216);
 
     /**
-     * @notice Executes a low-level call to an invoice contract.
-     * @dev Used by ppStorage to trigger state changes (e.g., setting release times)
-     *      in external invoice contracts. The target and calldata must be properly
-     *      encoded off-chain. Only callable by authorized contracts or managers.
-     * @param target The address of the invoice contract to call.
-     * @param data ABI-encoded calldata including the function selector and arguments.
-     * @return result The raw returned data from the low-level call.
-     */
-    function execute(address target, bytes calldata data) external returns (bytes memory);
-
-    /**
      * @notice Sets or revokes authorization for a specific address.
      * @dev Only callable by the contract owner.
      * @param authorizedAddress The address to authorize or deauthorize.

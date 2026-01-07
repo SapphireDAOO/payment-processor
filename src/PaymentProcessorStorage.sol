@@ -2,7 +2,6 @@
 pragma solidity 0.8.28;
 
 import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
-import { LibCall } from "solady/utils/LibCall.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 
 /**
@@ -11,8 +10,6 @@ import { Ownable } from "solady/auth/Ownable.sol";
  * @dev Ownable contract that exposes controlled write access to update internal mappings and counters.
  */
 contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
-    using LibCall for address;
-
     /**
      * @notice The next available unique invoice ID.
      * @dev Used to track and increment standalone or sub-invoice identifiers.
@@ -54,11 +51,6 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     function updateInvoiceId(uint216 by) external onlyAuthorized returns (uint216) {
         nextInvoiceId += by;
         return totalInvoiceCreated();
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function execute(address target, bytes calldata data) external onlyOwner returns (bytes memory) {
-        return target.callContract(data);
     }
 
     /// @inheritdoc IPaymentProcessorStorage

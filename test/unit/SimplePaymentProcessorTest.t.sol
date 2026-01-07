@@ -42,11 +42,11 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(invoiceDataOne.createdAt, block.timestamp);
         assertEq(invoiceDataOne.paidAt, 0);
         assertEq(invoiceDataOne.price, 100 ether);
-        assertEq(invoiceDataOne.amountPaid, 0);
+        assertEq(invoiceDataOne.balance, 0);
         assertEq(invoiceDataOne.buyer, address(0));
         assertEq(invoiceDataOne.status, simplePP.CREATED());
         assertEq(invoiceDataOne.escrow, address(0));
-        assertEq(invoiceDataOne.invoiceId, 1);
+        assertEq(invoiceDataOne.invoiceNonce, 1);
         assertEq(simplePP.getNextInvoiceId(), 2);
 
         vm.prank(sellerTwo);
@@ -57,11 +57,11 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(invoiceDataTwo.createdAt, block.timestamp);
         assertEq(invoiceDataTwo.paidAt, 0);
         assertEq(invoiceDataTwo.price, 25 ether);
-        assertEq(invoiceDataTwo.amountPaid, 0);
+        assertEq(invoiceDataTwo.balance, 0);
         assertEq(invoiceDataTwo.buyer, address(0));
         assertEq(invoiceDataTwo.status, simplePP.CREATED());
         assertEq(invoiceDataTwo.escrow, address(0));
-        assertEq(invoiceDataTwo.invoiceId, 2);
+        assertEq(invoiceDataTwo.invoiceNonce, 2);
         assertEq(simplePP.getNextInvoiceId(), 3);
     }
 
@@ -266,7 +266,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.prank(admin);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceHasNotBeenAccepted.selector);
-        ppStorage.execute(address(simplePP), data);
+        // ppStorage.execute(address(simplePP), data);
 
         // CREATE
         uint256 invoicePrice = 100 ether;
@@ -289,7 +289,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.setInvoiceReleaseTime(orderId, adminHoldPeriod);
 
         vm.prank(admin);
-        ppStorage.execute(address(simplePP), data);
+        // ppStorage.execute(address(simplePP), data);
 
         vm.warp(block.timestamp + adminHoldPeriod);
         vm.prank(sellerOne);
@@ -321,10 +321,10 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.startPrank(admin);
         bytes memory data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, orderIds[2], 12 hours);
-        ppStorage.execute(address(simplePP), data);
+        // ppStorage.execute(address(simplePP), data);
 
         data = abi.encodeWithSelector(simplePP.setInvoiceReleaseTime.selector, orderIds[9], 100 days);
-        ppStorage.execute(address(simplePP), data);
+        // ppStorage.execute(address(simplePP), data);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 5 days);
