@@ -16,7 +16,7 @@ contract Notes is INotes {
     uint256 public constant ALLOWED = 1;
 
     /// @notice Active note encryption version used for newly created notes.
-    uint8 private version;
+    uint8 private currentVersion;
 
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable ppStorage;
@@ -41,7 +41,7 @@ contract Notes is INotes {
      * @notice Restricts access to authorized callers.
      * @dev Reverts with Unauthorized if the caller is not allowed.
      */
-    modifier isAuthorized() {
+    modifier onlyAuthorized() {
         _isAuthorized();
         _;
     }
@@ -52,14 +52,14 @@ contract Notes is INotes {
      */
     constructor(address _paymentProcessorStorageAddress) {
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
-        version = 1;
+        currentVersion = 1;
     }
 
     /// @inheritdoc INotes
     function createNote(uint216 _invoiceId, address _author, bytes calldata _encryptedContent, bool _share)
         external
         override
-        isAuthorized
+        onlyAuthorized
         returns (uint256 noteId)
     {
         if (_encryptedContent.length == 0) revert EmptyContent();
@@ -67,7 +67,7 @@ contract Notes is INotes {
         noteId = noteCount[_invoiceId];
 
         notes[_invoiceId][noteId] =
-            Note({ author: _author, share: _share, content: _encryptedContent, exists: true, version: version });
+            Note({ author: _author, share: _share, content: _encryptedContent, exists: true, version: currentVersion });
 
         noteCount[_invoiceId] = noteId + 1;
 
@@ -76,12 +76,10 @@ contract Notes is INotes {
         }
 
         emit NoteCreated(_invoiceId, noteId, _author, _share, _encryptedContent);
-
-        return noteId;
     }
 
     /// @inheritdoc INotes
-    function setOpened(uint216 _invoiceId, uint256 _noteId, bool _open) external override {
+    function setOpened(uint216 _invoiceId, uint256 _noteId, bool _open) external override onlyAuthorized {
         Note memory note = notes[_invoiceId][_noteId];
         if (!note.exists) revert NoteNotFound();
 
@@ -116,8 +114,7 @@ contract Notes is INotes {
     function getNote(uint216 _invoiceId, uint256 _noteId)
         external
         view
-        override
-        returns (address author, bool share, bytes memory content, bool openedStatus)
+        returns (address author, bool share, bytes memory content, bool openedStatus, uint8 version)
     {
         Note memory note = notes[_invoiceId][_noteId];
         if (!note.exists) revert NoteNotFound();
@@ -128,12 +125,13 @@ contract Notes is INotes {
         share = note.share;
         content = note.content;
         openedStatus = opened[_invoiceId][_noteId][msg.sender];
+        version = note.version;
     }
 
     /// @inheritdoc INotes
     function updateVersion(uint8 _newVersion) external {
         if (msg.sender != _owner()) revert Unauthorized();
-        version = _newVersion;
+        currentVersion = _newVersion;
     }
 
     /**
@@ -144,6 +142,10 @@ contract Notes is INotes {
     function setAuthorized(address _user, bool _enabled) external {
         if (msg.sender != _owner()) revert Unauthorized();
         auth[_user] = _enabled ? ALLOWED : NOT_ALLOWED;
+    }
+
+    function getCurrentVersion() external view returns (uint8 v) {
+        return currentVersion;
     }
 
     /**
