@@ -4,11 +4,12 @@ pragma solidity 0.8.28;
 import { ISimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
 import { console } from "forge-std/console.sol";
+import { IEscrow } from "src/interface/IEscrow.sol";
 
 error NotAuthorized();
 
 contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
-    function test_storage_state() public view {
+    function test_storageState() public view {
         assertEq(ppStorage.getFeeRate(), FEE_RATE);
         assertEq(ppStorage.getFeeReceiver(), feeReceiver);
         assertEq(simplePP.getNextInvoiceNonce(), 1);
@@ -27,7 +28,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.setMinimumInvoiceValue(1 ether);
     }
 
-    function test_invoice_creation() public {
+    function test_invoiceCreation() public {
         uint256 cOneInvoicePrice = 100 ether;
         vm.startPrank(sellerOne);
 
@@ -65,7 +66,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(simplePP.getNextInvoiceNonce(), 3);
     }
 
-    function test_cancel_invoice() public {
+    function test_cancelInvoice() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
@@ -91,7 +92,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.CANCELLED());
     }
 
-    function test_make_invoice_payment() public {
+    function test_payment() public {
         // CREATE INVOICE
         uint256 invoicePrice = 100 ether;
         deal(sellerOne, 1);
@@ -139,7 +140,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(invoiceData.buyer, buyerOne);
     }
 
-    function test_payment_acceptance() public {
+    function test_paymentAcceptance() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
@@ -165,7 +166,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(ppStorage.getFeeReceiver().balance, fee);
     }
 
-    function test_payment_acceptance_after_decisionWindow() public {
+    function test_paymentAcceptanceAfterDecisionWindow() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
@@ -179,7 +180,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.acceptPayment(invoiceId);
     }
 
-    function test_payer_refund_decisionWindow() public {
+    function test_payerRefundDecisionWindow() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
@@ -203,7 +204,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(balanceBeforePayment, balanceAfterRefund);
     }
 
-    function test_payment_rejection() public {
+    function test_paymentRejection() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
@@ -220,7 +221,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(buyerOne.balance, buyerOneBalanceAfterPayment + invoicePrice);
     }
 
-    function test_default_hold_release_invoice() public {
+    function test_defaultHoldReleaseInvoice() public {
         // CREATE
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
@@ -234,7 +235,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.prank(sellerOne);
         vm.expectRevert(abi.encodeWithSelector(ISimplePaymentProcessor.InvalidInvoiceState.selector, simplePP.PAID()));
-        simplePP.releaseInvoice(invoiceId);
+        simplePP.release(invoiceId);
 
         // // ACCEPT
         vm.prank(sellerOne);
@@ -242,24 +243,24 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         //RELEASE
         vm.expectRevert(NotAuthorized.selector);
-        simplePP.releaseInvoice(invoiceId);
+        simplePP.release(invoiceId);
 
         vm.startPrank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.HoldPeriodHasNotBeenExceeded.selector);
-        simplePP.releaseInvoice(invoiceId);
+        simplePP.release(invoiceId);
 
         vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
-        simplePP.releaseInvoice(invoiceId);
+        simplePP.release(invoiceId);
 
         vm.expectRevert(ISimplePaymentProcessor.InvoiceHasAlreadyBeenReleased.selector);
-        simplePP.releaseInvoice(invoiceId);
+        simplePP.release(invoiceId);
         vm.stopPrank();
 
         assertEq(sellerOne.balance, INITIAL_BALANCE + invoicePrice - fee);
         assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.RELEASED());
     }
 
-    function test_dynamic_hold_release_invoice() public {
+    function test_dynamicHoldReleaseInvoice() public {
         uint32 adminHoldPeriod = 25 days;
 
         vm.prank(admin);
@@ -289,7 +290,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.warp(block.timestamp + adminHoldPeriod);
         vm.prank(sellerOne);
-        simplePP.releaseInvoice(invoiceId);
+        simplePP.release(invoiceId);
 
         assertEq(sellerOne.balance, INITIAL_BALANCE + invoicePrice - fee);
         assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.RELEASED());
@@ -399,5 +400,33 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.performUpkeep("");
 
         assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.REFUNDED());
+    }
+
+    function test_ineligibleRelease() public {
+        uint256 invoicePrice = 100 ether;
+
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        simplePP.acceptPayment(invoiceId);
+
+        vm.prank(admin);
+        simplePP.performUpkeep("");
+    }
+
+    function test_directEscrowWithdrawal() public {
+        uint256 invoicePrice = 100 ether;
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        address escrow = simplePP.getInvoiceData(invoiceId).escrow;
+
+        vm.expectRevert(IEscrow.Unauthorized.selector);
+        IEscrow(escrow).withdraw(address(0), address(this), escrow.balance);
     }
 }

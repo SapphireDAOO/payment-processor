@@ -25,6 +25,9 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when an action is attempted on an invoice that has not been paid.
     error InvoiceNotPaid();
 
+    /// @notice Thrown when a task’s heap index is invalid.
+    error InvalidHeapPosition();
+
     /// @notice Thrown when the payment amount sent does not match the expected invoice price.
     /// @param _sent The amount of Ether (in wei) sent with the transaction.
     /// @param _expected The exact invoice price expected (in wei).
@@ -162,7 +165,7 @@ interface ISimplePaymentProcessor {
      * @notice Releases the funds held in escrow for a specific invoice to the seller.
      * @param _invoiceId The ID of the invoice for which funds are released.
      */
-    function releaseInvoice(uint216 _invoiceId) external;
+    function release(uint216 _invoiceId) external;
 
     /**
      * @notice Sets a custom hold period for a specific invoice.
