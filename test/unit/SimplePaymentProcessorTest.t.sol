@@ -50,7 +50,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(simplePP.getNextInvoiceNonce(), 2);
 
         vm.prank(sellerTwo);
-        invoiceId = simplePP.createInvoice(25 ether, "", false);
+        invoiceId = simplePP.createInvoice(25 ether, "hello", false);
 
         ISimplePaymentProcessor.Invoice memory invoiceDataTwo = simplePP.getInvoiceData(invoiceId);
         assertEq(invoiceDataTwo.seller, sellerTwo);
@@ -119,7 +119,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         // MAKE VALID PAYMENT
         vm.warp(block.timestamp - ppStorage.getPaymentValidityDuration());
-        address escrowAddress = simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+        address escrowAddress = simplePP.pay{ value: invoicePrice }(invoiceId, "correct", false);
 
         uint256 currentInvoiceStatus = simplePP.getInvoiceData(invoiceId).status;
         // TRY ALREADY PAID INVOICE

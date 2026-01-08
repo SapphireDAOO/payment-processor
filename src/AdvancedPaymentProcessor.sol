@@ -80,7 +80,14 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
      * @notice Mapping from unique invoice ID to its invoice data.
      * @dev Used for standalone invoices (not part of a meta-invoice).
      */
-    mapping(uint216 invoiceId => Invoice data) private invoice;
+    mapping(uint216 invoiceId => Invoice invoiceData) private invoices;
+
+    /**
+     * @notice Mapping from meta-invoice ID to its aggregate meta-invoice data.
+     * @dev Stores metadata for grouped payments consisting of multiple sub-invoices.
+     *      Each MetaInvoice contains the total price and all associated sub-invoice IDs.
+     */
+    mapping(uint216 metaInvoiceId => MetaInvoice invoice) private metaInvoices;
 
     /**
      * @notice Mapping of payment tokens to their Chainlink price feed aggregator.
@@ -89,17 +96,10 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     mapping(address token => address aggregator) private priceFeed;
 
     /**
-     * @notice Mapping from meta-invoice ID to its aggregate meta-invoice data.
-     * @dev Stores metadata for grouped payments consisting of multiple sub-invoices.
-     *      Each MetaInvoice contains the total price and all associated sub-invoice IDs.
-     */
-    mapping(uint216 metaInvoiceId => MetaInvoice invoice) private metaInvoice;
-
-    /**
      *  @notice Maps task or invoice ID to its 1-based index position in the heap.
      * @dev A value of 0 means the task is not present in the heap
      */
-    mapping(uint216 invoiceId => uint256 idx) private index;
+    mapping(uint216 invoiceId => uint256 key) private index;
 
     /**
      * @notice Restricts function access to the authorized marketplace address.
@@ -140,15 +140,15 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         uint256 lastInvoiceNonce = length + firstInvoiceNonce - 1;
 
         metaInvoiceId = _computeMetaInvoiceId(firstInvoiceNonce, lastInvoiceNonce, nextMetaInvoiceNonce);
-        if (metaInvoice[metaInvoiceId].price != 0) revert MetaInvoiceAlreadyExists();
+        if (metaInvoices[metaInvoiceId].price != 0) revert MetaInvoiceAlreadyExists();
 
         for (uint216 i = 0; i < length; i++) {
             totalPrice += _param[i].price;
-            metaInvoice[metaInvoiceId].subInvoiceIds
+            metaInvoices[metaInvoiceId].subInvoiceIds
                 .push(_createInvoice(firstInvoiceNonce + i, metaInvoiceId, _param[i]));
         }
 
-        metaInvoice[metaInvoiceId].price = totalPrice;
+        metaInvoices[metaInvoiceId].price = totalPrice;
         ppStorage.updateInvoiceNonce(length.toUint216());
         nextMetaInvoiceNonce++;
 
@@ -157,29 +157,15 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         return metaInvoiceId;
     }
 
-    /**
-     * @notice Pays a single invoice or a meta invoice depending on the flag.
-     * @param _invoiceId The invoice or meta-invoice ID to pay.
-     * @param _paymentToken The payment token address (use address(0) for native token).
-     * @param _single True to pay a single invoice; false to pay a meta invoice.
-     */
-    function pay(uint216 _invoiceId, address _paymentToken, bool _single) external payable {
-        if (_single) {
-            this.paySingleInvoice(_invoiceId, _paymentToken);
-        } else {
-            this.payMetaInvoice(_invoiceId, _paymentToken);
-        }
-    }
-
     /// @inheritdoc IAdvancedPaymentProcessor
-    function paySingleInvoice(uint216 _invoiceId, address _paymentToken) external payable {
+    function payInvoice(uint216 _invoiceId, address _paymentToken) external payable {
         if (address(priceFeed[_paymentToken]) == address(0)) {
             revert InvalidPaymentToken();
         }
 
-        Invoice memory inv = invoice[_invoiceId];
+        Invoice memory inv = invoices[_invoiceId];
         _invoicePayment(inv, _invoiceId, _paymentToken, msg.value);
-        invoice[_invoiceId] = inv;
+        invoices[_invoiceId] = inv;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -187,17 +173,17 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         if (address(priceFeed[_paymentToken]) == address(0)) {
             revert InvalidPaymentToken();
         }
-        MetaInvoice memory metaInv = metaInvoice[_invoiceId];
+        MetaInvoice memory metaInv = metaInvoices[_invoiceId];
 
         if (metaInv.price == 0) revert InvoiceDoesNotExist();
 
-        uint216[] memory subInvoiceIds = metaInvoice[_invoiceId].subInvoiceIds;
+        uint216[] memory subInvoiceIds = metaInvoices[_invoiceId].subInvoiceIds;
 
         bool done;
 
         for (uint256 i = 0; i < subInvoiceIds.length; i++) {
             uint216 subInvoiceId = subInvoiceIds[i];
-            Invoice memory inv = invoice[subInvoiceId];
+            Invoice memory inv = invoices[subInvoiceId];
 
             if (inv.state != CREATED) continue;
             uint256 invPrice = getTokenValueFromUsd(_paymentToken, inv.price);
@@ -205,7 +191,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
             uint256 value = _paymentToken == address(0) ? invPrice : 0;
             _invoicePayment(inv, subInvoiceId, _paymentToken, value);
 
-            invoice[subInvoiceId] = inv;
+            invoices[subInvoiceId] = inv;
             if (i == subInvoiceIds.length - 1) done = true;
         }
 
@@ -214,18 +200,18 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function createDispute(uint216 _invoiceId) external onlyMarketplace {
-        Invoice memory inv = invoice[_invoiceId];
+        Invoice memory inv = invoices[_invoiceId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
         inv.state = DISPUTED;
-        invoice[_invoiceId] = inv;
+        invoices[_invoiceId] = inv;
         heap.removeAt(index[_invoiceId] - 1, index);
         emit DisputeCreated(_invoiceId);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external onlyMarketplace {
-        Invoice memory inv = invoice[_invoiceId];
+        Invoice memory inv = invoices[_invoiceId];
 
         if (inv.state != DISPUTED) revert InvalidInvoiceState();
         if (_sellerShare > BASIS_POINTS) revert InvalidSellersPayoutShare();
@@ -234,7 +220,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         }
 
         inv.state = _resolution;
-        invoice[_invoiceId] = inv;
+        invoices[_invoiceId] = inv;
 
         if (_resolution == DISPUTE_DISMISSED) {
             heap.insert(_invoiceId, inv.releaseAt, index);
@@ -254,7 +240,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace {
-        Invoice memory inv = invoice[_invoiceId];
+        Invoice memory inv = invoices[_invoiceId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
         uint256 amount = _applyBasisPoints(inv.balance, _refundShare);
@@ -265,7 +251,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         }
 
         inv.balance -= amount;
-        invoice[_invoiceId] = inv;
+        invoices[_invoiceId] = inv;
 
         IEscrow(inv.escrow).withdraw(inv.paymentToken, inv.buyer, amount);
         emit Refunded(_invoiceId, amount);
@@ -273,19 +259,19 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function cancelInvoice(uint216 _invoiceId) public onlyMarketplace {
-        if (invoice[_invoiceId].state != CREATED) revert InvalidInvoiceState();
-        invoice[_invoiceId].state = CANCELED;
+        if (invoices[_invoiceId].state != CREATED) revert InvalidInvoiceState();
+        invoices[_invoiceId].state = CANCELED;
         emit InvoiceCanceled(_invoiceId);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function resolveDispute(uint216 _invoiceId) external onlyMarketplace {
-        Invoice memory inv = invoice[_invoiceId];
+        Invoice memory inv = invoices[_invoiceId];
         if (inv.state != DISPUTED) revert InvalidInvoiceState();
         inv.state = DISPUTE_RESOLVED;
         heap.insert(_invoiceId, inv.releaseAt, index);
 
-        invoice[_invoiceId] = inv;
+        invoices[_invoiceId] = inv;
         emit DisputeResolved(_invoiceId);
     }
 
@@ -316,11 +302,11 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     /// @inheritdoc IAdvancedPaymentProcessor
     function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external {
         if (msg.sender != _owner()) revert NotAuthorized();
-        Invoice memory inv = invoice[_invoiceId];
+        Invoice memory inv = invoices[_invoiceId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
         inv.releaseAt = (block.timestamp + _holdPeriod).toUint40();
-        invoice[_invoiceId] = inv;
+        invoices[_invoiceId] = inv;
 
         heap.reschedule(_invoiceId, inv.releaseAt, index);
 
@@ -344,7 +330,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         if (aggregator == address(0)) revert UnsupportedToken();
         (, int256 answer,, uint256 updatedAt,) = AggregatorV3Interface(aggregator).latestRoundData();
 
-        // check for stale data
         if (block.timestamp > updatedAt + STALE_THRESHOLD) revert StalePriceFeed();
 
         uint256 usdPerToken = answer.toUint256(); // 8 decimals from Chainlink
@@ -371,14 +356,14 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
      * @return status The release status code (SUCCESSFUL, ERROR, or NOT_ELIGIBLE_FOR_RELEASE).
      */
     function _release(uint216 _invoiceId) internal returns (uint256 status) {
-        Invoice memory inv = invoice[_invoiceId];
+        Invoice memory inv = invoices[_invoiceId];
         if (!_isReleasable(inv)) return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
 
         uint256 pos = index[_invoiceId];
         if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
 
-        invoice[_invoiceId].state = RELEASED;
-        invoice[_invoiceId].balance = 0;
+        invoices[_invoiceId].state = RELEASED;
+        invoices[_invoiceId].balance = 0;
 
         heap.removeAt(pos - 1, index);
         uint256 sellerNetAmount = _processSellerPayout(inv, inv.balance);
@@ -463,9 +448,9 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
         invoiceId = (uint256(keccak256(abi.encode(_param.invoiceId))) & ((1 << 216) - 1)).toUint216();
 
-        if (invoice[invoiceId].createdAt != 0) revert InvoiceAlreadyExists();
+        if (invoices[invoiceId].createdAt != 0) revert InvoiceAlreadyExists();
 
-        invoice[invoiceId] = inv;
+        invoices[invoiceId] = inv;
 
         emit InvoiceCreated(invoiceId, inv);
         return invoiceId;
@@ -562,12 +547,12 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function getInvoice(uint216 _invoiceId) external view returns (Invoice memory invoiceData) {
-        return invoice[_invoiceId];
+        return invoices[_invoiceId];
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function getMetaInvoice(uint216 _metaInvoiceId) public view returns (MetaInvoice memory metaInvoiceData) {
-        return metaInvoice[_metaInvoiceId];
+        return metaInvoices[_metaInvoiceId];
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor

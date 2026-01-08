@@ -108,7 +108,7 @@ contract AdvancedPaymentProcessorHandler is Test {
 
         if (inv.state == advancedPP.CREATED()) return;
         vm.prank(buyer);
-        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceId, address(0));
+        advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
     }
 
     function makeMetaInvoicePayment(uint256 _index) public countCall(this.makeMetaInvoicePayment.selector) {

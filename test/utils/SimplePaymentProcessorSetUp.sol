@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 import { SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { BaseSetUp } from "./BaseSetUp.sol";
+import { Notes } from "src/Notes.sol";
 
 abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     SimplePaymentProcessor simplePP;
@@ -32,6 +33,7 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
         simplePP = new SimplePaymentProcessor(_storageAddress, MINIMUM_INVOICE_VALUE, _notesAddress);
 
         PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(simplePP), true);
+        Notes(_notesAddress).setAuthorized(address(simplePP), true);
         vm.stopPrank();
 
         vm.prank(_storageAddress);

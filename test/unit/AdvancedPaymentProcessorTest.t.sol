@@ -138,20 +138,20 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.startPrank(buyerOne);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidPaymentToken.selector);
-        advancedPP.paySingleInvoice(invoiceId, address(12));
+        advancedPP.payInvoice(invoiceId, address(12));
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidNativePayment.selector);
-        advancedPP.paySingleInvoice{ value: 0.001 ether }(invoiceId, address(0));
+        advancedPP.payInvoice{ value: 0.001 ether }(invoiceId, address(0));
         vm.stopPrank();
 
         uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(sellerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.BuyerCannotBeSeller.selector);
-        advancedPP.paySingleInvoice{ value: amountInToken }(invoiceId, address(0));
+        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: amountInToken }(invoiceId, address(0));
+        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
 
@@ -221,11 +221,11 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice(invoiceId, address(mockUsdc));
+        advancedPP.payInvoice(invoiceId, address(mockUsdc));
 
         vm.prank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.paySingleInvoice(invoiceId, address(mockUsdc));
+        advancedPP.payInvoice(invoiceId, address(mockUsdc));
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
 
@@ -329,7 +329,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.createDispute(invoiceId);
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceId, address(0));
+        advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
 
         vm.warp(block.timestamp + 25 hours);
 
@@ -383,7 +383,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(mockUsdc), price);
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice(invoiceId, address(mockUsdc));
+        advancedPP.payInvoice(invoiceId, address(mockUsdc));
 
         uint256 basisPoint = advancedPP.BASIS_POINTS();
         uint8 dismissed = advancedPP.DISPUTE_DISMISSED();
@@ -427,7 +427,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice(invoiceId, address(mockUsdc));
+        advancedPP.payInvoice(invoiceId, address(mockUsdc));
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
         advancedPP.resolveDispute(invoiceId);
@@ -447,7 +447,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.release(invoiceId);
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceId, address(0));
+        advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
 
         vm.warp(block.timestamp + 1 days);
         advancedPP.release(invoiceId);
@@ -551,7 +551,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.refund(invoiceId, refundShare);
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceId, address(0));
+        advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
         uint256 buyerBalance = buyerOne.balance;
         console.log(buyerBalance);
 
@@ -573,7 +573,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(buyerOne);
-        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceId, address(0));
+        advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
 
         uint256 buyerBalance = buyerOne.balance;
 

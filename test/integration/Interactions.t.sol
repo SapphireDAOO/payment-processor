@@ -30,7 +30,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(NATIVE_TOKEN_BUYER);
-        advancedPP.paySingleInvoice{ value: amountInToken }(invoiceId, address(0));
+        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
 
@@ -80,7 +80,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
 
         vm.prank(USDC_BUYER);
-        advancedPP.paySingleInvoice(invoiceId, address(USDC));
+        advancedPP.payInvoice(invoiceId, address(USDC));
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
 
@@ -165,7 +165,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(USDC), price);
 
         vm.prank(USDC_BUYER);
-        advancedPP.paySingleInvoice(invoiceId, address(USDC));
+        advancedPP.payInvoice(invoiceId, address(USDC));
 
         uint8 settled = advancedPP.DISPUTE_SETTLED();
 
@@ -196,7 +196,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(NATIVE_TOKEN_BUYER);
-        advancedPP.paySingleInvoice{ value: tokenValue }(invoiceId, address(0));
+        advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
 
         vm.warp(block.timestamp + 1 days);
         advancedPP.release(invoiceId);
