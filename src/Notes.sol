@@ -15,6 +15,9 @@ contract Notes is INotes {
     /// @notice Authorization flag indicating access is granted.
     uint256 public constant ALLOWED = 1;
 
+    /// @notice Active note encryption version used for newly created notes.
+    uint8 private version;
+
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable ppStorage;
 
@@ -49,6 +52,7 @@ contract Notes is INotes {
      */
     constructor(address _paymentProcessorStorageAddress) {
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
+        version = 1;
     }
 
     /// @inheritdoc INotes
@@ -62,7 +66,8 @@ contract Notes is INotes {
 
         noteId = noteCount[_invoiceId];
 
-        notes[_invoiceId][noteId] = Note({ author: _author, share: _share, content: _encryptedContent, exists: true });
+        notes[_invoiceId][noteId] =
+            Note({ author: _author, share: _share, content: _encryptedContent, exists: true, version: version });
 
         noteCount[_invoiceId] = noteId + 1;
 
@@ -123,6 +128,12 @@ contract Notes is INotes {
         share = note.share;
         content = note.content;
         openedStatus = opened[_invoiceId][_noteId][msg.sender];
+    }
+
+    /// @inheritdoc INotes
+    function updateVersion(uint8 _newVersion) external {
+        if (msg.sender != _owner()) revert Unauthorized();
+        version = _newVersion;
     }
 
     /**

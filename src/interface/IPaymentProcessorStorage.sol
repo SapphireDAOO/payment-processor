@@ -85,6 +85,13 @@ interface IPaymentProcessorStorage {
     function setGasThresold(uint256 _newGasThresold) external;
 
     /**
+     * @notice Updates the payment validity duration.
+     * @dev Only callable by the contract owner.
+     * @param _newValidityDuration The new validity duration in seconds.
+     */
+    function setPaymentValidityDuration(uint256 _newValidityDuration) external;
+
+    /**
      * @notice Returns the nonce that will be assigned to the next invoice.
      * @return nextInvoiceNonceValue The next invoice nonce value.
      */
@@ -95,6 +102,12 @@ interface IPaymentProcessorStorage {
      * @return totalInvoices The total number of invoices created.
      */
     function totalInvoiceCreated() external view returns (uint216 totalInvoices);
+
+    /**
+     * @notice Returns the duration for which a payment remains valid.
+     * @return validDuration The payment validity duration in seconds.
+     */
+    function getPaymentValidityDuration() external view returns (uint256 validDuration);
 
     /**
      * @notice Returns the current platform fee rate in basis points.

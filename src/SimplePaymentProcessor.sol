@@ -46,9 +46,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @notice Basis points denominator used for percentage calculations (1% = 100).
     uint256 public constant BASIS_POINTS = 10_000;
 
-    /// @notice Default time window during which a created invoice remains valid for payment.
-    uint256 public constant DEFAULT_PAYMENT_VALIDITY_PERIOD = 7 days;
-
     /// @notice Default decision period for the seller after an invoice is paid.
     uint256 public constant DEFAULT_SELLER_DECISION_WINDOW = 6 hours;
 
@@ -60,9 +57,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
     /// @notice The minimum allowed value (in wei) required to create a new invoice.
     uint256 private minimumInvoiceValue;
-
-    /// @notice The valid period for a transaction, after which it is considered expired.
-    uint256 public validPeriod;
 
     /// @notice The window of time allowed for accepting a transaction after creation.
     uint256 public decisionWindow;
@@ -103,7 +97,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePrice, address _notesAddress) {
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
         notes = INotes(_notesAddress);
-        validPeriod = DEFAULT_PAYMENT_VALIDITY_PERIOD;
         decisionWindow = DEFAULT_SELLER_DECISION_WINDOW;
         setMinimumInvoiceValue(_minimumInvoicePrice);
     }
@@ -120,7 +113,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         invoice.price = _invoicePrice;
         invoice.status = CREATED;
         invoice.invoiceNonce = ppStorage.updateInvoiceNonce(1);
-        invoice.invalidateAt = (block.timestamp + validPeriod).toUint40();
+        invoice.invalidateAt = (block.timestamp + ppStorage.getPaymentValidityDuration()).toUint40();
 
         invoiceId = _computeInvoiceId(msg.sender, invoice.invoiceNonce);
 
@@ -407,14 +400,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @inheritdoc ISimplePaymentProcessor
     function setForwarderAddress(address _forwarderAddress) external onlyAuthorized {
         forwarder = _forwarderAddress;
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function setValidPeriod(uint256 _newValidPeriod) external onlyAuthorized {
-        if (msg.sender != _owner()) {
-            revert NotAuthorized();
-        }
-        validPeriod = _newValidPeriod;
     }
 
     /// @inheritdoc ISimplePaymentProcessor

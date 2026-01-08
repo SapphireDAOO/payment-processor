@@ -186,12 +186,6 @@ interface ISimplePaymentProcessor {
     function setForwarderAddress(address _forwarderAddress) external;
 
     /**
-     * @notice Updates the maximum validity duration for newly created invoices.
-     * @param _newValidPeriod The new validity window in seconds.
-     */
-    function setValidPeriod(uint256 _newValidPeriod) external;
-
-    /**
      * @notice Updates the decision window sellers have to accept payments after buyer payment.
      * @param _newDecisionWindow The new decision window in seconds.
      */

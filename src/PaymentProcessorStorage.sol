@@ -10,17 +10,24 @@ import { Ownable } from "solady/auth/Ownable.sol";
  * @dev Ownable contract that exposes controlled write access to update internal mappings and counters.
  */
 contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
+    /// @notice Default time window during which a created invoice remains valid for payment.
+    uint256 public constant DEFAULT_PAYMENT_VALIDITY_PERIOD = 7 days;
+
     /**
      * @notice The next available unique invoice nonce.
      * @dev Used to track and increment standalone or sub-invoice nonces.
      */
     uint216 private nextInvoiceNonce;
 
+    /// @notice Duration (in seconds) for which a payment remains valid.
+    uint256 private paymentValidityDuration;
+
     /**
      * @notice Tracks whether an address is authorized to perform restricted actions.
      *  @dev Maps an address to a boolean indicating its authorization status.
      */
     mapping(address => bool) private isAuthorized;
+
     /**
      * @notice Stores the configuration settings for the contract (e.g., default hold period, gas threshold).
      *  @dev Struct containing modifiable parameters used throughout the contract.
@@ -45,6 +52,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         _initializeOwner(_configuration.owner);
         config = _configuration;
         nextInvoiceNonce = 1;
+        paymentValidityDuration = DEFAULT_PAYMENT_VALIDITY_PERIOD;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
@@ -74,6 +82,11 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
+    function setPaymentValidityDuration(uint256 _newValidityDuration) external onlyOwner {
+        paymentValidityDuration = _newValidityDuration;
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
     function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) public onlyOwner {
         if (_newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
         config.defaultHoldPeriod = _newDefaultHoldPeriod;
@@ -92,6 +105,11 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         if (!isAuthorized[msg.sender]) {
             revert NotAuthorized();
         }
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function getPaymentValidityDuration() external view returns (uint256 validDuration) {
+        return paymentValidityDuration;
     }
 
     /// @inheritdoc IPaymentProcessorStorage

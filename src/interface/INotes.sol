@@ -18,11 +18,13 @@ interface INotes {
     /// @param share Whether the note is shared with non-authors.
     /// @param content The encrypted note content.
     /// @param exists Whether the note exists.
+    /// @param version The note schema version.
     struct Note {
         address author;
         bool share;
         bytes content;
         bool exists;
+        uint8 version;
     }
 
     /**
@@ -60,6 +62,15 @@ interface INotes {
      * @return isOpen True if the note is opened for the user.
      */
     function isOpened(uint216 _invoiceId, uint256 _noteId, address _user) external view returns (bool isOpen);
+
+    /**
+     * @notice Updates the active note encryption version.
+     * @dev This affects only notes created after the update.
+     * Existing notes retain their original version and remain decryptable
+     * using the encrypter associated with their stored version.
+     * @param _newVersion The new note encryption version identifier to use.
+     */
+    function updateVersion(uint8 _newVersion) external;
 
     /**
      * @notice Get a single note if visible to the caller.

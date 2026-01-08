@@ -64,6 +64,7 @@ interface IAdvancedPaymentProcessor {
     /// @param paidAt Timestamp when the payment was made.
     /// @param createdAt Timestamp when the invoice was created.
     /// @param releaseAt The timestamp when funds in escrow can be released to the seller.
+    /// @param expiresAt The timestamp after which the invoice is no longer payable.
     /// @param state Current state of the invoice.
     /// @param metaInvoiceId Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.
     /// @param buyer Address of the buyer.
@@ -78,6 +79,7 @@ interface IAdvancedPaymentProcessor {
         uint40 paidAt;
         uint40 createdAt;
         uint40 releaseAt;
+        uint40 expiresAt;
         uint8 state;
         uint216 metaInvoiceId;
         address buyer;
