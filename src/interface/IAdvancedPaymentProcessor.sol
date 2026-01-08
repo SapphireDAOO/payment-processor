@@ -138,7 +138,7 @@ interface IAdvancedPaymentProcessor {
      * @param _invoiceId The ID of the invoice to be paid.
      * @param _paymentToken The token address used for payment (or zero address for ETH).
      */
-    function paySingleInvoice(uint216 _invoiceId, address _paymentToken) external payable;
+    function payInvoice(uint216 _invoiceId, address _paymentToken) external payable;
 
     /**
      * @notice Pays all sub-invoices in a meta invoice using native ETH or ERC20.
