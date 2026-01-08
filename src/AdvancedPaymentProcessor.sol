@@ -55,7 +55,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     /// @notice Buyer has raised a dispute after acceptance.
     uint8 public constant DISPUTED = CANCELED + 1;
 
-    /// @notice Dispute has been resolved in full favor of one party.
+    /// @notice Dispute has been resolved in full favor of both parties.
     uint8 public constant DISPUTE_RESOLVED = DISPUTED + 1;
 
     /// @notice Dispute has been dismissed without changes to payouts.
@@ -73,6 +73,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     /// @notice Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 = 1.0)
     uint8 public constant DEFAULT_DECIMAL = 18;
 
+    /// @notice Maximum age allowed for Chainlink price data before it is considered stale.
     uint256 public constant STALE_THRESHOLD = 1 hours;
 
     /**
@@ -458,6 +459,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         inv.metaInvoiceId = _metaInvoiceId;
         inv.state = CREATED;
         inv.invoiceNonce = _nonce;
+        inv.expiresAt = (ppStorage.getPaymentValidityDuration() + block.timestamp).toUint40();
 
         invoiceId = (uint256(keccak256(abi.encode(_param.invoiceId))) & ((1 << 216) - 1)).toUint216();
 
@@ -492,11 +494,12 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         internal
         returns (uint256 sellerReceivingValue, uint256 buyerReceivingValue)
     {
-        sellerReceivingValue = _applyBasisPoints(_inv.balance, _sellerShare);
         if (_sellerShare != BASIS_POINTS) {
             buyerReceivingValue = _applyBasisPoints(_inv.balance, BASIS_POINTS - _sellerShare);
             IEscrow(_inv.escrow).withdraw(_inv.paymentToken, _inv.buyer, buyerReceivingValue);
         }
+
+        sellerReceivingValue = _applyBasisPoints(_inv.balance, _sellerShare);
 
         _processSellerPayout(_inv, sellerReceivingValue);
         return (sellerReceivingValue, buyerReceivingValue);

@@ -33,12 +33,6 @@ contract Escrow is IEscrow {
         _;
     }
 
-    /// @notice Handles unknown calls and accepts ETH.
-    fallback() external payable { }
-
-    /// @notice Accepts plain ETH transfers.
-    receive() external payable { }
-
     /**
      * @notice Initializes the escrow contract with invoice details and deposits the funds.
      * @dev This constructor sets the invoice ID, creator, payer, and payment processor addresses, and records the sent

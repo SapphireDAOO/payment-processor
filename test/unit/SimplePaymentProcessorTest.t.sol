@@ -113,12 +113,12 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.pay{ value: s }(invoiceId, "", false);
 
         // TRY EXPIRED INVOICE
-        vm.warp(block.timestamp + simplePP.validPeriod() + 1);
+        vm.warp(block.timestamp + ppStorage.getPaymentValidityDuration() + 1);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceIsNoLongerValid.selector);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
         // MAKE VALID PAYMENT
-        vm.warp(block.timestamp - simplePP.validPeriod());
+        vm.warp(block.timestamp - ppStorage.getPaymentValidityDuration());
         address escrowAddress = simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
         uint256 currentInvoiceStatus = simplePP.getInvoiceData(invoiceId).status;
@@ -369,7 +369,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
     function test_dynamicInvalidationPeriod() public {
         vm.prank(admin);
-        simplePP.setValidPeriod(2 days);
+        ppStorage.setPaymentValidityDuration(2 days);
 
         uint256 invoicePrice = 100 ether;
 
