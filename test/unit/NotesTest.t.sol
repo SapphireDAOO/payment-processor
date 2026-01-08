@@ -12,23 +12,26 @@ contract NotesTest is NotesSetUp {
 
         uint256 noteId = notes.createNote(invoiceId, address(this), "hello everyone", true);
 
-        (address author, bool share, bytes memory content, bool openedStatus) = notes.getNote(invoiceId, noteId);
+        (address author, bool share, bytes memory content, bool openedStatus, uint8 version) =
+            notes.getNote(invoiceId, noteId);
 
         assertEq(notes.getNoteCount(invoiceId), 1);
         assertEq(author, address(this));
         assertEq(share, true);
         assertEq(content, bytes("hello everyone"));
         assertEq(openedStatus, true);
+        assertEq(version, notes.getCurrentVersion());
 
         noteId = notes.createNote(invoiceId, address(this), "how is it going?", true);
 
-        (author, share, content, openedStatus) = notes.getNote(invoiceId, noteId);
+        (author, share, content, openedStatus, version) = notes.getNote(invoiceId, noteId);
 
         assertEq(notes.getNoteCount(invoiceId), 2);
         assertEq(author, address(this));
         assertEq(share, true);
         assertEq(content, bytes("how is it going?"));
         assertEq(openedStatus, false);
+        assertEq(version, notes.getCurrentVersion());
     }
 
     function test_setOpened() public {
@@ -41,7 +44,8 @@ contract NotesTest is NotesSetUp {
 
         notes.setOpened(invoiceId, noteId, true);
 
-        (address author, bool share, bytes memory content, bool openedStatus) = notes.getNote(invoiceId, noteId);
+        (address author, bool share, bytes memory content, bool openedStatus, uint8 version) =
+            notes.getNote(invoiceId, noteId);
 
         assertEq(notes.getNoteCount(invoiceId), 1);
         assertEq(notes.isOpened(invoiceId, noteId, address(this)), true);
@@ -49,5 +53,37 @@ contract NotesTest is NotesSetUp {
         assertEq(share, true);
         assertEq(content, bytes("hello everyone"));
         assertEq(openedStatus, true);
+        assertEq(version, notes.getCurrentVersion());
+
+        noteId = notes.createNote(invoiceId, address(this), "what is the result", false);
+
+        vm.expectRevert(INotes.Unauthorized.selector);
+        notes.setOpened(invoiceId, noteId, true);
+    }
+
+    function test_getNotes() public {
+        uint216 invoiceId = 1;
+        vm.expectRevert(INotes.NoteNotFound.selector);
+        notes.getNote(invoiceId, 1);
+
+        uint256 noteId = notes.createNote(invoiceId, address(this), "hello everyone", false);
+
+        vm.prank(address(0xa0));
+        vm.expectRevert(INotes.Unauthorized.selector);
+        notes.getNote(invoiceId, noteId);
+    }
+
+    function test_newVersion() public {
+        vm.expectRevert(INotes.Unauthorized.selector);
+        notes.updateVersion(2);
+
+        vm.prank(admin);
+        notes.updateVersion(2);
+
+        uint216 invoiceId = 1;
+
+        uint256 noteId = notes.createNote(invoiceId, address(this), "hello everyone", false);
+        (,,,, uint8 version) = notes.getNote(invoiceId, noteId);
+        assertEq(version, notes.getCurrentVersion());
     }
 }

@@ -487,7 +487,6 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         sellerReceivingValue = _applyBasisPoints(_inv.balance, _sellerShare);
 
         _processSellerPayout(_inv, sellerReceivingValue);
-        return (sellerReceivingValue, buyerReceivingValue);
     }
 
     /**

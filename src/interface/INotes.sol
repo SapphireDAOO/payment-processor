@@ -84,7 +84,7 @@ interface INotes {
     function getNote(uint216 _invoiceId, uint256 _noteId)
         external
         view
-        returns (address author, bool share, bytes memory content, bool openedStatus);
+        returns (address author, bool share, bytes memory content, bool openedStatus, uint8 version);
 
     /**
      * @notice Emitted when a new note is created for an invoice.
