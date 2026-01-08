@@ -458,7 +458,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(advancedPP.getInvoice(invoiceId).state, advancedPP.RELEASED());
     }
 
-    function test_releaseInvoicePayment() public {
+    function test_releasePayment() public {
         address[] memory sellers = new address[](2);
         sellers[0] = sellerOne;
         sellers[1] = sellerOne;

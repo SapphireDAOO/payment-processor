@@ -10,6 +10,8 @@ import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
 import { INotes } from "./interface/INotes.sol";
 
+import { console } from "forge-std/console.sol";
+
 /**
  * @title SimplePaymentProcessor
  * @notice Lightweight payment processor for single-invoice flows with native payments.
@@ -178,7 +180,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         if (invoice.releaseAt == 0) {
             invoice.releaseAt = (ppStorage.getDefaultHoldPeriod() + block.timestamp).toUint40();
-            heap.reschedule(_invoiceId, uint40(invoice.releaseAt), index);
+            heap.reschedule(_invoiceId, invoice.releaseAt, index);
         }
 
         uint256 feeValue = calculateFee(invoice.price);
@@ -218,7 +220,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function releaseInvoice(uint216 _invoiceId) public {
+    function release(uint216 _invoiceId) public {
         Invoice memory invoice = invoices[_invoiceId];
 
         if (invoice.status == RELEASED) revert InvoiceHasAlreadyBeenReleased();
@@ -250,9 +252,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         uint256 pos = index[_invoiceId];
 
-        if (pos != 0 && pos <= heap.data.length) {
-            heap.removeAt(pos - 1, index);
-        }
+        if (pos == 0 && pos > heap.data.length) revert InvalidHeapPosition();
+
+        heap.removeAt(pos - 1, index);
 
         invoices[_invoiceId].status = REFUNDED;
         invoices[_invoiceId].balance = 0;
@@ -312,15 +314,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         Invoice memory invoice = invoices[_invoiceId];
 
         if (invoice.status == PAID) {
-            if (block.timestamp < invoice.expiresAt) {
-                return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
-            }
             refundBuyer(_invoiceId);
             return TaskQueueLib.SUCCESSFUL;
-        }
-
-        if (invoice.status == RELEASED || invoice.status != ACCEPTED || block.timestamp < invoice.releaseAt) {
-            return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
         }
 
         invoices[_invoiceId].status = RELEASED;

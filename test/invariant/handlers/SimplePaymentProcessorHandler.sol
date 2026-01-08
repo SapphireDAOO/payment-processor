@@ -87,13 +87,13 @@ contract SimplePaymentProcessorHandler is Test {
         pp.rejectPayment(invoiceId);
     }
 
-    function releaseInvoice(uint256 _index) public invoiceExists countCall(this.releaseInvoice.selector) {
+    function release(uint256 _index) public invoiceExists countCall(this.release.selector) {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
         if (pp.getInvoiceData(invoiceId).status == pp.RELEASED()) return;
         vm.assume(block.timestamp > block.timestamp + pp.decisionWindow());
         vm.prank(seller);
-        pp.releaseInvoice(invoiceId);
+        pp.release(invoiceId);
     }
 
     /// @notice Returns the total number of invoices created by the handler.
@@ -118,6 +118,6 @@ contract SimplePaymentProcessorHandler is Test {
         console.log("Make Payment:", calls[this.makePayment.selector]);
         console.log("Accept Invoice:", calls[this.acceptPayment.selector]);
         console.log("Reject Invoice:", calls[this.rejectPayment.selector]);
-        console.log("Release Invoice:", calls[this.releaseInvoice.selector]);
+        console.log("Release Invoice:", calls[this.release.selector]);
     }
 }
