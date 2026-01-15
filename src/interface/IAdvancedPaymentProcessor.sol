@@ -325,13 +325,16 @@ interface IAdvancedPaymentProcessor {
     event DisputeSettled(uint216 indexed invoiceId, uint256 sellerAmount, uint256 buyerAmount);
 
     /**
-     * @notice Emitted when an invoice has been successfully paid and escrow is created.
-     * @param invoiceId The ID of the paid invoice.
-     * @param paymentToken The address of the token used for payment (use address(0) for native token).
-     * @param escrowAddress The address of the newly created escrow contract holding the funds.
-     * @param amount The amount paid in the token's smallest denomination (based on token decimals).
+     * @notice Emitted when an invoice is successfully paid and an escrow contract is created.
+     * @param invoiceId The unique identifier of the paid invoice.
+     * @param paymentToken The address of the token used for payment (address(0) for native ETH).
+     * @param escrowAddress The address of the escrow contract created to hold the payment.
+     * @param amount The amount paid, denominated in the token’s smallest unit.
+     * @param releaseAt The UNIX timestamp (in seconds) when the escrowed funds become releasable.
      */
-    event InvoicePaid(uint216 indexed invoiceId, address paymentToken, address escrowAddress, uint256 amount);
+    event InvoicePaid(
+        uint216 indexed invoiceId, address paymentToken, address escrowAddress, uint256 amount, uint40 releaseAt
+    );
 
     /**
      * @notice Emitted when the escrow release time is updated for a given invoice.
@@ -341,11 +344,13 @@ interface IAdvancedPaymentProcessor {
     event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 
     /**
-     * @notice Emitted when the payment is released to the seller.
-     * @param invoiceId The ID of the invoice for which payment was released.
-     * @param sellerAmount The amount transferred to the seller.
+     * @notice Emitted when escrowed funds for an invoice are released.
+     * @param invoiceId The unique identifier of the invoice.
+     * @param receiver The address that receives the released funds (typically the seller).
+     * @param currency The address of the token used for the payment (address(0) for native ETH).
+     * @param sellerAmount The amount transferred to the receiver.
      */
-    event PaymentReleased(uint216 indexed invoiceId, uint256 sellerAmount);
+    event PaymentReleased(uint216 indexed invoiceId, address receiver, address currency, uint256 sellerAmount);
 
     /**
      * @notice Emitted when a dispute is raised for an invoice by the buyer.

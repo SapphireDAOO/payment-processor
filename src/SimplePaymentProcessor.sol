@@ -10,8 +10,6 @@ import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
 import { INotes } from "./interface/INotes.sol";
 
-import { console } from "forge-std/console.sol";
-
 /**
  * @title SimplePaymentProcessor
  * @notice Lightweight payment processor for single-invoice flows with native payments.
