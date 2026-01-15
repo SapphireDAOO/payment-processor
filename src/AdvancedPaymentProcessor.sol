@@ -243,7 +243,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         Invoice memory inv = invoices[_invoiceId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
-        uint256 amount = _applyBasisPoints(inv.balance, _refundShare);
+        uint256 amount = _applyBasisPoints(inv.amountPaid, _refundShare);
         if (amount > inv.balance) revert InsufficientBalance();
 
         if (_refundShare == BASIS_POINTS) {
@@ -367,7 +367,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
         heap.removeAt(pos - 1, index);
         uint256 sellerNetAmount = _processSellerPayout(inv, inv.balance);
-        emit PaymentReleased(_invoiceId, sellerNetAmount);
+
+        emit PaymentReleased(_invoiceId, inv.seller, inv.paymentToken, sellerNetAmount);
         return TaskQueueLib.SUCCESSFUL;
     }
 
@@ -420,7 +421,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
             _paymentToken.safeTransferFrom(msg.sender, escrowAddress, price);
         }
 
-        emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, price);
+        emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, price, _inv.releaseAt);
     }
 
     /**
