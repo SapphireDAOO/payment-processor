@@ -104,6 +104,10 @@ Price feeds must be configured with `setPriceFeed` before ERC20 payments.
 Prerequisites: [Foundry](https://book.getfoundry.sh/getting-started/installation).
 
 ```bash
+# Clone the repo
+git clone git@github.com:SapphireDAOO/payment-processor.git
+cd payment-processor
+
 # Install dependencies
 forge install
 
