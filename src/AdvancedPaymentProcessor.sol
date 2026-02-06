@@ -14,16 +14,22 @@ import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
+import { ReentrancyGuard } from "solady/utils/ReentrancyGuard.sol";
 
 /**
  * @title AdvancedPaymentProcessor
  * @notice Handles the creation, payment, and lifecycle management of single and meta invoices with escrow logic.
  * @dev Inherits interfaces for payment processing, Chainlink Automation compatibility, and escrow deployment.
  */
-contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompatibleInterface, EscrowFactory {
+contract AdvancedPaymentProcessor is
+    IAdvancedPaymentProcessor,
+    AutomationCompatibleInterface,
+    EscrowFactory,
+    ReentrancyGuard
+{
     using TaskQueueLib for TaskQueueLib.Heap;
 
-    using { SafeTransferLib.safeTransferFrom } for address;
+    using { SafeTransferLib.safeTransferETH, SafeTransferLib.safeTransferFrom } for address;
     using { SafeCastLib.toUint40, SafeCastLib.toUint216 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
     using { FixedPointMathLib.mulDiv } for uint256;
@@ -35,7 +41,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     address private forwarder;
 
     /// @notice Reference to the external Payment Processor storage contract.
-    IPaymentProcessorStorage public ppStorage;
+    IPaymentProcessorStorage public immutable ppStorage;
 
     /// @notice The next available meta-invoice ID to be assigned.
     uint216 private nextMetaInvoiceNonce;
@@ -134,7 +140,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         onlyMarketplace
         returns (uint216 metaInvoiceId)
     {
-        uint256 totalPrice;
+        uint256 totalPrice = 0;
         uint216 firstInvoiceNonce = ppStorage.getNextInvoiceNonce();
         uint256 length = _param.length;
         uint256 lastInvoiceNonce = length + firstInvoiceNonce - 1;
@@ -149,8 +155,8 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         }
 
         metaInvoices[metaInvoiceId].price = totalPrice;
-        ppStorage.updateInvoiceNonce(length.toUint216());
         nextMetaInvoiceNonce++;
+        ppStorage.updateInvoiceNonce(length.toUint216());
 
         emit MetaInvoiceCreated(metaInvoiceId, totalPrice);
 
@@ -158,7 +164,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function payInvoice(uint216 _invoiceId, address _paymentToken) external payable {
+    function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant {
         if (address(priceFeed[_paymentToken]) == address(0)) {
             revert InvalidPaymentToken();
         }
@@ -169,7 +175,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external payable {
+    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant {
         if (address(priceFeed[_paymentToken]) == address(0)) {
             revert InvalidPaymentToken();
         }
@@ -177,9 +183,16 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
         if (metaInv.price == 0) revert InvoiceDoesNotExist();
 
+        bool isNative = _paymentToken == address(0);
+        uint256 priceInToken = getTokenValueFromUsd(_paymentToken, metaInv.price);
+
+        if (priceInToken < msg.value && isNative) {
+            revert InvalidMetaInvoicePaymentAmount(msg.value, priceInToken);
+        }
+
         uint216[] memory subInvoiceIds = metaInvoices[_invoiceId].subInvoiceIds;
 
-        bool done;
+        uint256 amountPaid;
 
         for (uint256 i = 0; i < subInvoiceIds.length; i++) {
             uint216 subInvoiceId = subInvoiceIds[i];
@@ -189,13 +202,19 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
             uint256 invPrice = getTokenValueFromUsd(_paymentToken, inv.price);
 
             uint256 value = _paymentToken == address(0) ? invPrice : 0;
-            _invoicePayment(inv, subInvoiceId, _paymentToken, value);
+            amountPaid += _invoicePayment(inv, subInvoiceId, _paymentToken, value);
 
             invoices[subInvoiceId] = inv;
-            if (i == subInvoiceIds.length - 1) done = true;
         }
 
-        if (!done) revert InvalidInvoiceState();
+        if (amountPaid == 0) revert InvalidInvoiceState();
+
+        if (isNative) {
+            uint256 refundableAmount = priceInToken - amountPaid;
+            if (refundableAmount > 0 && isNative) {
+                msg.sender.safeTransferETH(refundableAmount);
+            }
+        }
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -259,8 +278,12 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function cancelInvoice(uint216 _invoiceId) public onlyMarketplace {
-        if (invoices[_invoiceId].state != CREATED) revert InvalidInvoiceState();
+        Invoice memory inv = invoices[_invoiceId];
+        if (inv.state != CREATED) revert InvalidInvoiceState();
         invoices[_invoiceId].state = CANCELED;
+        if (inv.metaInvoiceId != 0) {
+            metaInvoices[inv.metaInvoiceId].price -= inv.price;
+        }
         emit InvoiceCanceled(_invoiceId);
     }
 
@@ -385,7 +408,10 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
      * - Creates an escrow contract and updates the invoice with payment info.
      * - Transfers tokens to escrow if the payment is in ERC20.
      */
-    function _invoicePayment(Invoice memory _inv, uint216 _invoiceId, address _paymentToken, uint256 _value) internal {
+    function _invoicePayment(Invoice memory _inv, uint216 _invoiceId, address _paymentToken, uint256 _value)
+        internal
+        returns (uint256 amountPaid)
+    {
         if (msg.sender == _inv.seller) revert BuyerCannotBeSeller();
         if (_inv.state != CREATED) revert InvalidInvoiceState();
 
@@ -422,6 +448,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, AutomationCompat
         }
 
         emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, price, _inv.releaseAt);
+        return _inv.amountPaid;
     }
 
     /**

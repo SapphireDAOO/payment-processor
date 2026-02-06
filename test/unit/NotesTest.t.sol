@@ -38,11 +38,11 @@ contract NotesTest is NotesSetUp {
         uint216 invoiceId = 1;
 
         vm.expectRevert(INotes.NoteNotFound.selector);
-        notes.setOpened(invoiceId, 0, true);
+        notes.setOpened(invoiceId, address(this), 0, true);
 
         uint256 noteId = notes.createNote(invoiceId, address(this), "hello everyone", true);
 
-        notes.setOpened(invoiceId, noteId, true);
+        notes.setOpened(invoiceId, address(this), noteId, true);
 
         (address author, bool share, bytes memory content, bool openedStatus, uint8 version) =
             notes.getNote(invoiceId, noteId);
@@ -58,7 +58,7 @@ contract NotesTest is NotesSetUp {
         noteId = notes.createNote(invoiceId, address(this), "what is the result", false);
 
         vm.expectRevert(INotes.Unauthorized.selector);
-        notes.setOpened(invoiceId, noteId, true);
+        notes.setOpened(invoiceId, address(this), noteId, true);
     }
 
     function test_getNotes() public {

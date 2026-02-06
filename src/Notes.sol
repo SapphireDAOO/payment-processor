@@ -72,30 +72,31 @@ contract Notes is INotes {
         noteCount[_invoiceId] = noteId + 1;
 
         if (noteId == 0) {
-            _setOpened(_invoiceId, noteId, true);
+            _setOpened(_invoiceId, _author, noteId, true);
         }
 
         emit NoteCreated(_invoiceId, noteId, _author, _share, _encryptedContent);
     }
 
     /// @inheritdoc INotes
-    function setOpened(uint216 _invoiceId, uint256 _noteId, bool _open) external override onlyAuthorized {
+    function setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _open) external onlyAuthorized {
         Note memory note = notes[_invoiceId][_noteId];
         if (!note.exists) revert NoteNotFound();
 
         if (!note.share) revert Unauthorized();
 
-        _setOpened(_invoiceId, _noteId, _open);
+        _setOpened(_invoiceId, _account, _noteId, _open);
     }
 
     /**
      * @notice Updates the opened state for a note.
      * @param _invoiceId Order identifier.
+     * @param _account Account whose opened state is updated.
      * @param _noteId Note identifier.
-     * @param _open New opened state for the caller.
+     * @param _open New opened state for the account.
      */
-    function _setOpened(uint216 _invoiceId, uint256 _noteId, bool _open) internal {
-        opened[_invoiceId][_noteId][msg.sender] = _open;
+    function _setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _open) internal {
+        opened[_invoiceId][_noteId][_account] = _open;
 
         emit NoteStateChanged(_invoiceId, _noteId, msg.sender, _open);
     }
