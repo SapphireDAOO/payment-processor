@@ -29,6 +29,7 @@ interface INotes {
 
     /**
      * @notice Create a note under an order.
+     * @dev Only authorized callers can create notes.
      * @param _invoiceId Order identifier.
      * @param _author Note author.
      * @param _encryptedContent Encrypted note payload.
@@ -40,12 +41,14 @@ interface INotes {
         returns (uint256 noteId);
 
     /**
-     * @notice Mark a note as opened or unopened for the caller.
+     * @notice Mark a note as opened or unopened for an account.
+     * @dev Only authorized callers can update opened state.
      * @param _invoiceId Order identifier.
+     * @param _account Account whose opened state is updated.
      * @param _noteId Note identifier.
-     * @param _open New opened state for the caller.
+     * @param _open New opened state for the account.
      */
-    function setOpened(uint216 _invoiceId, uint256 _noteId, bool _open) external;
+    function setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _open) external;
 
     /**
      * @notice Get the total number of notes for an order.
@@ -65,7 +68,7 @@ interface INotes {
 
     /**
      * @notice Updates the active note encryption version.
-     * @dev This affects only notes created after the update.
+     * @dev Only owner. This affects only notes created after the update.
      * Existing notes retain their original version and remain decryptable
      * using the encrypter associated with their stored version.
      * @param _newVersion The new note encryption version identifier to use.
@@ -80,11 +83,26 @@ interface INotes {
      * @return share Whether the note is shared.
      * @return content Encrypted note content.
      * @return openedStatus Whether the caller has opened the note.
+     * @return version Note schema version.
      */
     function getNote(uint216 _invoiceId, uint256 _noteId)
         external
         view
         returns (address author, bool share, bytes memory content, bool openedStatus, uint8 version);
+
+    /**
+     * @notice Updates the authorization status for a user.
+     * @dev Only owner.
+     * @param _user The address to update.
+     * @param _enabled Whether the user should be authorized.
+     */
+    function setAuthorized(address _user, bool _enabled) external;
+
+    /**
+     * @notice Returns the active note encryption version.
+     * @return v The current note version.
+     */
+    function getCurrentVersion() external view returns (uint8 v);
 
     /**
      * @notice Emitted when a new note is created for an invoice.

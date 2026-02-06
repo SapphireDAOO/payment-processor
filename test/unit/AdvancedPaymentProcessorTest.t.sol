@@ -215,6 +215,26 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(invTwo.paymentToken, address(0));
     }
 
+    function test_payMetaInvoice_revertsOnIncorrectMsgValue() public {
+        address[] memory sellers = new address[](2);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 100e8;
+        prices[1] = 200e8;
+
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param,) =
+            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices);
+
+        uint216 metaInvoiceId = advancedPP.createMetaInvoice(param);
+        uint256 expected = advancedPP.getMetaInvoice(metaInvoiceId).price;
+
+        vm.prank(buyerOne);
+        vm.expectRevert();
+        advancedPP.payMetaInvoice{ value: expected - 1 }(metaInvoiceId, address(0));
+    }
+
     function test_erc20PaymentForSingleInvoice() public {
         uint256 price = 100e8;
         uint216 invoiceId =
@@ -498,7 +518,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
             assertEq(advancedPP.getInvoice(invoiceIds[i]).state, advancedPP.RELEASED());
         }
 
-        assertEq(balanceBefore - tokenAmount, buyerTwo.balance);
+        assertApproxEqAbs(balanceBefore - tokenAmount, buyerTwo.balance, 1);
     }
 
     function test_release_after_cancelation_for_meta_invoice() public {

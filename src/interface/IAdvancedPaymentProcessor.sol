@@ -46,6 +46,11 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when an invalid amount of native currency is sent with a payment.
     error InvalidNativePayment();
 
+    /// @notice Thrown when the native payment for a meta-invoice does not match the expected total.
+    /// @param sent The amount of native currency provided.
+    /// @param expected The expected native payment total.
+    error InvalidMetaInvoicePaymentAmount(uint256 sent, uint256 expected);
+
     /// @dev This occurs when a computed meta-invoice ID (hash) is already assigned in storage.
     error MetaInvoiceAlreadyExists();
 

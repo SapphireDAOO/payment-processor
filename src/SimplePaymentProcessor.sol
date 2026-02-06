@@ -20,7 +20,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     using TaskQueueLib for TaskQueueLib.Heap;
 
     /// @notice Notes contract used for encrypted invoice notes.
-    INotes private notes;
+    INotes private immutable notes;
 
     /// @notice Status code representing that a payment or transaction has been created.
     uint8 public constant CREATED = 1;
