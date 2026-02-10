@@ -103,7 +103,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
     /// @inheritdoc ISimplePaymentProcessor
     function createInvoice(uint256 _invoicePrice, bytes memory _storageRef, bool _share)
-        external
+        public
         returns (uint216 invoiceId)
     {
         if (_invoicePrice < minimumInvoiceValue) revert ValueIsTooLow();
@@ -130,8 +130,23 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
     /// @inheritdoc ISimplePaymentProcessor
     function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
-        external
+        public
         payable
+        returns (address escrowAddress)
+    {
+        return _payWithValue(_invoiceId, _storageRef, _share, msg.value);
+    }
+
+    /**
+     * @notice Internal payment helper that allows specifying the ETH value.
+     * @param _invoiceId The ID of the invoice being paid.
+     * @param _storageRef A bytes-encoded reference to the caller's notes storage.
+     * @param _share Whether the note is shared with non-authors.
+     * @param _value The amount of ETH to use for payment.
+     * @return escrowAddress The address of the escrow contract created.
+     */
+    function _payWithValue(uint216 _invoiceId, bytes memory _storageRef, bool _share, uint256 _value)
+        internal
         returns (address escrowAddress)
     {
         Invoice memory invoice = invoices[_invoiceId];
@@ -144,21 +159,21 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             revert SellerCannotPayOwnedInvoice();
         }
 
-        if (msg.value != invoice.price) {
-            revert IncorrectPaymentAmount(msg.value, invoice.price);
+        if (_value != invoice.price) {
+            revert IncorrectPaymentAmount(_value, invoice.price);
         }
 
         if (block.timestamp > invoice.invalidateAt) {
             revert InvoiceIsNoLongerValid();
         }
 
-        escrowAddress = address(new Escrow{ value: msg.value }(_invoiceId, invoice.seller, msg.sender, address(this)));
+        escrowAddress = address(new Escrow{ value: _value }(_invoiceId, invoice.seller, msg.sender, address(this)));
         uint40 expiresAt = (block.timestamp + decisionWindow).toUint40();
 
         invoice.escrow = escrowAddress;
         invoice.buyer = msg.sender;
         invoice.status = PAID;
-        invoice.balance = msg.value;
+        invoice.balance = _value;
         invoice.paidAt = (block.timestamp).toUint32();
         invoice.expiresAt = expiresAt;
         invoices[_invoiceId] = invoice;
@@ -166,12 +181,12 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         heap.insert(_invoiceId, expiresAt, index);
         if (_storageRef.length != 0) notes.createNote(_invoiceId, msg.sender, _storageRef, _share);
 
-        emit InvoicePaid(_invoiceId, msg.sender, msg.value, expiresAt);
+        emit InvoicePaid(_invoiceId, msg.sender, _value, expiresAt);
         return escrowAddress;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function acceptPayment(uint216 _invoiceId) external {
+    function acceptPayment(uint216 _invoiceId) public {
         Invoice memory invoice = invoices[_invoiceId];
         _validateInvoiceStateForPaymentDecision(invoice);
         invoice.status = ACCEPTED;
@@ -411,7 +426,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getInvoiceData(uint216 _invoiceId) external view returns (Invoice memory invoiceDetails) {
+    function getInvoiceData(uint216 _invoiceId) public view returns (Invoice memory invoiceDetails) {
         return invoices[_invoiceId];
     }
 
