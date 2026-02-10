@@ -90,8 +90,14 @@ contract SimplePaymentProcessorHandler is Test {
     function release(uint256 _index) public invoiceExists countCall(this.release.selector) {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
+
         if (pp.getInvoiceData(invoiceId).status == pp.RELEASED()) return;
-        vm.assume(block.timestamp > block.timestamp + pp.decisionWindow());
+
+        uint256 eligibleAt = uint256(pp.getInvoiceData(invoiceId).releaseAt);
+        if (block.timestamp <= eligibleAt) {
+            vm.warp(eligibleAt + 1);
+        }
+
         vm.prank(seller);
         pp.release(invoiceId);
     }
@@ -119,5 +125,15 @@ contract SimplePaymentProcessorHandler is Test {
         console.log("Accept Invoice:", calls[this.acceptPayment.selector]);
         console.log("Reject Invoice:", calls[this.rejectPayment.selector]);
         console.log("Release Invoice:", calls[this.release.selector]);
+    }
+
+    /// @notice Returns the number of tracked invoices.
+    function getInvoiceCount() external view returns (uint256 count) {
+        return invoiceIds.length;
+    }
+
+    /// @notice Returns the invoice id at a given index.
+    function getInvoiceId(uint256 _index) external view returns (uint216 invoiceId) {
+        return invoiceIds[_index];
     }
 }

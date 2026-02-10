@@ -211,8 +211,8 @@ contract AdvancedPaymentProcessor is
 
         if (isNative) {
             uint256 refundableAmount = priceInToken - amountPaid;
-            if (refundableAmount > 0 && isNative) {
-                msg.sender.safeTransferETH(refundableAmount);
+            if (refundableAmount > 0) {
+                (msg.sender).safeTransferETH(refundableAmount);
             }
         }
     }
