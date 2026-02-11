@@ -17,7 +17,7 @@ bracket_spacing = true
 [invariant]
 runs = 5000
 depth = 64
-fail_on_revert = false
+fail_on_revert = true
 
 [rpc_endpoints]
 amoy = "${TEST_NET_RPC_URL}"

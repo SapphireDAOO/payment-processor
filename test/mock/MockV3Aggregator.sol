@@ -31,7 +31,7 @@ contract MockV3Aggregator {
         latestTimestamp = block.timestamp;
         latestRound++;
         getAnswer[latestRound] = _answer;
-        getTimestamp[latestRound] = block.timestamp;
+        getTimestamp[latestRound] = 500 days;
         getStartedAt[latestRound] = block.timestamp;
     }
 
