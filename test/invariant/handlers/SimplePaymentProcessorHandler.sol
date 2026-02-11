@@ -18,13 +18,7 @@ contract SimplePaymentProcessorHandler is Test {
 
     uint216[] invoiceIds;
 
-    mapping(bytes4 => uint256) public calls;
     mapping(uint256 => uint256) public price;
-
-    modifier countCall(bytes4 _key) {
-        calls[_key]++;
-        _;
-    }
 
     modifier invoiceExists() {
         if (invoiceIds.length == 0) return;
@@ -39,7 +33,7 @@ contract SimplePaymentProcessorHandler is Test {
         pp = _sPP;
     }
 
-    function createInvoice(uint256 _price) public countCall(this.createInvoice.selector) {
+    function createInvoice(uint256 _price) public {
         _price = bound(_price, 1.01 ether, INVOICE_PRICE);
         vm.prank(seller);
         uint216 invoiceId = pp.createInvoice(_price, "", false);
@@ -48,7 +42,7 @@ contract SimplePaymentProcessorHandler is Test {
         totalInvoiceCreated++;
     }
 
-    function cancelInvoice(uint256 _index) public invoiceExists countCall(this.cancelInvoice.selector) {
+    function cancelInvoice(uint256 _index) public invoiceExists {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
         if (pp.getInvoiceData(invoiceId).status != pp.CREATED()) return;
@@ -56,7 +50,7 @@ contract SimplePaymentProcessorHandler is Test {
         pp.cancelInvoice(invoiceId);
     }
 
-    function makePayment(uint256 _index, uint256 _value) public invoiceExists countCall(this.makePayment.selector) {
+    function makePayment(uint256 _index, uint256 _value) public invoiceExists {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
         if (pp.getInvoiceData(invoiceId).status != pp.CREATED()) return;
@@ -69,29 +63,31 @@ contract SimplePaymentProcessorHandler is Test {
         pp.pay{ value: _value }(invoiceId, "", false);
     }
 
-    function acceptPayment(uint256 _index) public invoiceExists countCall(this.acceptPayment.selector) {
+    function acceptPayment(uint256 _index) public invoiceExists {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(invoiceId);
         if (i.status != pp.PAID()) return;
+        if (block.timestamp > i.expiresAt) return;
         vm.prank(seller);
         pp.acceptPayment(invoiceId);
     }
 
-    function rejectPayment(uint256 _index) public invoiceExists countCall(this.rejectPayment.selector) {
+    function rejectPayment(uint256 _index) public invoiceExists {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(invoiceId);
         if (i.status != pp.PAID()) return;
+        if (block.timestamp > i.expiresAt) return;
         vm.prank(seller);
         pp.rejectPayment(invoiceId);
     }
 
-    function release(uint256 _index) public invoiceExists countCall(this.release.selector) {
+    function release(uint256 _index) public invoiceExists {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
 
-        if (pp.getInvoiceData(invoiceId).status == pp.RELEASED()) return;
+        if (pp.getInvoiceData(invoiceId).status != pp.ACCEPTED()) return;
 
         uint256 eligibleAt = uint256(pp.getInvoiceData(invoiceId).releaseAt);
         if (block.timestamp <= eligibleAt) {
@@ -114,17 +110,6 @@ contract SimplePaymentProcessorHandler is Test {
      */
     function _bound(uint256 _index) internal view returns (uint256 boundedIndex) {
         return bound(_index, 0, invoiceIds.length - 1);
-    }
-
-    function callSummary() external view {
-        console.log("Simple Payment Processor Call Summary:");
-        console.log("-------------------");
-        console.log("Create Invoice:", calls[this.createInvoice.selector]);
-        console.log("Cancel Invoice:", calls[this.cancelInvoice.selector]);
-        console.log("Make Payment:", calls[this.makePayment.selector]);
-        console.log("Accept Invoice:", calls[this.acceptPayment.selector]);
-        console.log("Reject Invoice:", calls[this.rejectPayment.selector]);
-        console.log("Release Invoice:", calls[this.release.selector]);
     }
 
     /// @notice Returns the number of tracked invoices.

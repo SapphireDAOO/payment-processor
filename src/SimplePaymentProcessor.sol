@@ -212,6 +212,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         _validateInvoiceStateForPaymentDecision(invoice);
 
         invoices[_invoiceId].status = REJECTED;
+        invoices[_invoiceId].balance = 0;
         heap.removeAt(index[_invoiceId] - 1, index);
 
         IEscrow(invoice.escrow).withdraw(address(0), invoice.buyer, invoice.price);

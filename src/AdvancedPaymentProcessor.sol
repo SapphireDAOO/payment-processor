@@ -148,6 +148,7 @@ contract AdvancedPaymentProcessor is
         metaInvoiceId = _computeMetaInvoiceId(firstInvoiceNonce, lastInvoiceNonce, nextMetaInvoiceNonce);
         if (metaInvoices[metaInvoiceId].price != 0) revert MetaInvoiceAlreadyExists();
 
+        // what if invoice is meta invoice is canceled before this
         for (uint216 i = 0; i < length; i++) {
             totalPrice += _param[i].price;
             metaInvoices[metaInvoiceId].subInvoiceIds
@@ -262,11 +263,13 @@ contract AdvancedPaymentProcessor is
         Invoice memory inv = invoices[_invoiceId];
         if (inv.state != PAID) revert InvalidInvoiceState();
 
-        uint256 amount = _applyBasisPoints(inv.amountPaid, _refundShare);
+        uint256 amount = _applyBasisPoints(inv.balance, _refundShare);
+
         if (amount > inv.balance) revert InsufficientBalance();
 
         if (_refundShare == BASIS_POINTS) {
             heap.removeAt(index[_invoiceId] - 1, index);
+            inv.state = REFUNDED;
         }
 
         inv.balance -= amount;

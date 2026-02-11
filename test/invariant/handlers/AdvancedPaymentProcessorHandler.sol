@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../../src/AdvancedPaymentProcessor.sol";
-import { Test } from "forge-std/Test.sol";
+import { Test, console } from "forge-std/Test.sol";
 import { getInvoiceCreationParam, getInvoiceCreationParams } from "../../utils/InvoiceTestHelpers.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { LibString } from "solady/utils/LibString.sol";
@@ -120,12 +120,14 @@ contract AdvancedPaymentProcessorHandler is Test {
 
         uint216[] memory ids = subInvoice[invoiceId];
 
+        bool hasPayable;
         bool paid;
         for (uint256 i; i < ids.length; i++) {
             IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(ids[i]);
+            if (inv.state == advancedPP.CREATED()) hasPayable = true;
             if (inv.balance != 0) paid = true;
         }
-        if (paid || metaInv.price == 0) return;
+        if (!hasPayable || paid || metaInv.price == 0) return;
 
         vm.prank(buyer);
         advancedPP.payMetaInvoice{ value: tokenValue }(invoiceId, address(0));
@@ -173,10 +175,10 @@ contract AdvancedPaymentProcessorHandler is Test {
         uint216 invoiceId = singleInvoiceIds[_index];
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-        if (
-            inv.state != advancedPP.PAID() && inv.state != advancedPP.DISPUTE_RESOLVED()
-                && inv.state != advancedPP.DISPUTE_DISMISSED()
-        ) return;
+        if (inv.state != advancedPP.PAID()) return;
+        if (inv.balance == 0) return;
+
+        console.log("share", _share);
 
         vm.prank(advancedPP.ppStorage().getMarketplace());
         advancedPP.refund(invoiceId, _share);

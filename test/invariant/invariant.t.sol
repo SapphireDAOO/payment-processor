@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { StdInvariant } from "forge-std/StdInvariant.sol";
-import { Test } from "forge-std/Test.sol";
+import { Test, console } from "forge-std/Test.sol";
 
 import { BaseSetUp, PaymentProcessorStorage } from "../utils/BaseSetUp.sol";
 
@@ -32,16 +32,6 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
 
         sHandler = new SimplePaymentProcessorHandler(simplePaymentProcessor, buyerOne, sellerOne);
         aHandler = new AdvancedPaymentProcessorHandler(advancedPaymentProcessor, admin, buyerOne, sellerOne);
-
-        // bytes4[] memory sExcludedSelectors = new bytes4[](2);
-        // sExcludedSelectors[1] = sHandler.getTotalInvoiceCreated.selector;
-
-        // bytes4[] memory aExcludedSelectors = new bytes4[](3);
-        // aExcludedSelectors[1] = aHandler.getTotalSingleInvoiceCreated.selector;
-        // aExcludedSelectors[2] = aHandler.getTotalMetaInvoiceCreated.selector;
-
-        // excludeSelector(FuzzSelector({ addr: address(sHandler), selectors: sExcludedSelectors }));
-        // excludeSelector(FuzzSelector({ addr: address(aHandler), selectors: aExcludedSelectors }));
 
         targetContract(address(aHandler));
         targetContract(address(sHandler));
@@ -96,6 +86,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
 
     function invariant_advanced_invoice_state_consistency() external view {
         uint256 count = aHandler.getInvoiceCount();
+        console.log("count", count);
         for (uint256 i = 0; i < count; i++) {
             uint216 invoiceId = aHandler.getInvoiceId(i);
             IAdvancedPaymentProcessor.Invoice memory inv = advancedPaymentProcessor.getInvoice(invoiceId);
