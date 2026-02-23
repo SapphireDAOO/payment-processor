@@ -107,6 +107,10 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         }
     }
 
+    function authorized(address account) external view returns (bool) {
+        return isAuthorized[account];
+    }
+
     /// @inheritdoc IPaymentProcessorStorage
     function getPaymentValidityDuration() external view returns (uint256 validDuration) {
         return paymentValidityDuration;
