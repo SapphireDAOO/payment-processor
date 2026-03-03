@@ -286,6 +286,7 @@ contract AdvancedPaymentProcessor is
         invoices[_invoiceId].state = CANCELED;
         if (inv.metaInvoiceId != 0) {
             metaInvoices[inv.metaInvoiceId].price -= inv.price;
+            // emit even for off-chain tracking
         }
         emit InvoiceCanceled(_invoiceId);
     }
@@ -329,6 +330,8 @@ contract AdvancedPaymentProcessor is
     function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external {
         if (msg.sender != _owner()) revert NotAuthorized();
         Invoice memory inv = invoices[_invoiceId];
+
+        // review this
         if (inv.state != PAID) revert InvalidInvoiceState();
 
         inv.releaseAt = (block.timestamp + _holdPeriod).toUint40();
@@ -466,7 +469,7 @@ contract AdvancedPaymentProcessor is
         returns (uint216 invoiceId)
     {
         if (_param.price == 0) revert PriceCannotBeZero();
-        // make the minimum price dynamic
+        // review make the minimum price dynamic
         if (_param.price < 1e8) revert PriceIsTooLow();
         Invoice memory inv;
         inv.seller = _param.seller;

@@ -10,9 +10,15 @@ remappings = [
     "@openzeppelin/=lib/openzeppelin-contracts/",
 ]
 
+
 [fmt]
 line_length = 120
 bracket_spacing = true
+
+[fuzz]
+runs = 512
+dictionary_weight=40
+seed = "0xa1ef0ee"
 
 [invariant]
 runs = 5000

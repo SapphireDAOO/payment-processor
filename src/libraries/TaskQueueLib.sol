@@ -91,7 +91,7 @@ library TaskQueueLib {
 
         uint256 i = p - 1;
         uint256 oldKey = _heap.data[i];
-        (, uint64 oldDueAt) = _decode(oldKey);
+        (, uint40 oldDueAt) = _decode(oldKey);
 
         uint256 newKey = _encode(_id, _newDueAt);
         _heap.data[i] = newKey;
