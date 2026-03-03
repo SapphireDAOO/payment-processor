@@ -42,9 +42,8 @@ contract Deployer is Script {
 
     function run() external {
         console.log("-----Deploying-----");
+        console.log("Chain ID:", block.chainid);
         vm.startBroadcast();
-
-        console.log("------");
 
         Addr memory addr = _setUp();
 
@@ -73,10 +72,21 @@ contract Deployer is Script {
         ppStorage.setAuthorizedAddress(address(simplePP), true);
         PaymentProcessorStorage(ppStorage).setAuthorizedAddress(address(advancedPP), true);
 
+        advancedPP.setPriceFeed(address(0), addr.nativeTokenPriceFeed);
         advancedPP.setPriceFeed(addr.usdc, addr.usdcPriceFeed);
         advancedPP.setPriceFeed(addr.wbtc, addr.wbtcPriceFeed);
 
         vm.stopBroadcast();
+
+        console.log("-----Deployed-----");
+        console.log("PaymentProcessorStorage:", address(ppStorage));
+        console.log("Notes:                 ", address(notes));
+        console.log("SimplePaymentProcessor:", address(simplePP));
+        console.log("AdvancedPaymentProcessor:", address(advancedPP));
+        if (block.chainid != MAINNET_CHAIN_ID) {
+            console.log("MockUsdc:              ", addr.usdc);
+            console.log("MockWbtc:              ", addr.wbtc);
+        }
     }
 
     function _setUp() internal returns (Addr memory) {

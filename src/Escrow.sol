@@ -10,6 +10,9 @@ import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
  * @dev Conforms to the IEscrow interface. Used by the payment processor for individual invoice escrow handling.
  */
 contract Escrow is IEscrow {
+    // review have a base escrow, extend for erc20 or native
+    // add emergency withdraw for erc20
+    // maybe allow direct transfer for native token
     using { SafeTransferLib.safeTransferETH, SafeTransferLib.safeTransfer } for address;
 
     /// @notice The address of the buyer associated with this escrow.
@@ -22,7 +25,7 @@ contract Escrow is IEscrow {
     address public immutable PAYMENT_PROCESSOR;
 
     /// @notice The invoice ID associated with the escrow.
-    uint256 public immutable INVOICE;
+    uint216 public immutable INVOICE;
 
     /**
      * @notice Restricts access to the payment processor contract.
