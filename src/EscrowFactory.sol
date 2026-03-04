@@ -22,7 +22,6 @@ abstract contract EscrowFactory is IEscrowFactory {
         return CREATE3.predictDeterministicAddress(_salt);
     }
 
-    // review param should probably take bytecode too instead of direct contract
     /**
      * @notice Deploys a new Escrow contract deterministically using CREATE3.
      * @dev Uses a unique salt derived from the seller, buyer, and invoice ID to ensure predictable address generation.

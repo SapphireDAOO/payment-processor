@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../../src/SimplePaymentProcessor.sol";
-import { Test, console } from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 
 contract SimplePaymentProcessorHandler is Test {
     SimplePaymentProcessor public pp;

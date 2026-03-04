@@ -266,7 +266,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         uint256 pos = index[_invoiceId];
 
-        if (pos == 0 && pos > heap.data.length) revert InvalidHeapPosition();
+        if (pos == 0 || pos > heap.data.length) revert InvalidHeapPosition();
 
         heap.removeAt(pos - 1, index);
 
@@ -289,9 +289,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             revert NotAuthorized();
         }
 
-        uint256 gasThresold = ppStorage.getGasThreshold();
+        uint256 gasThreshold = ppStorage.getGasThreshold();
 
-        heap.processDueTask(_release, gasThresold);
+        heap.processDueTask(_release, gasThreshold);
     }
 
     /**
@@ -332,11 +332,13 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             return TaskQueueLib.SUCCESSFUL;
         }
 
-        invoices[_invoiceId].status = RELEASED;
-        invoices[_invoiceId].balance = 0;
+        if (invoice.status != ACCEPTED) return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
 
         uint256 pos = index[_invoiceId];
         if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
+
+        invoices[_invoiceId].status = RELEASED;
+        invoices[_invoiceId].balance = 0;
 
         heap.removeAt(pos - 1, index);
 

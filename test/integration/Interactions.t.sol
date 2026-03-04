@@ -61,7 +61,7 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         vm.prank(NATIVE_TOKEN_BUYER);
 
-        advancedPP.payMetaInvoice{ value: tokenAmount }(metaInvoiceId, address(0));
+        advancedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId);
 
         for (uint256 i = 0; i < invoiceIds.length; i++) {
             IAdvancedPaymentProcessor.Invoice memory subInvoice = advancedPP.getInvoice(invoiceIds[i]);

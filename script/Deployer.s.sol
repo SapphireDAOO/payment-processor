@@ -24,7 +24,7 @@ contract Deployer is Script {
     uint256 constant FEE_RATE = 500;
     uint256 constant DEFAULT_HOLD_PERIOD = 10 minutes;
     uint256 constant MINIMUM_INVOICE_VALUE = 0.005 ether;
-    uint256 constant DEFAULT_GAS_THRESOLD = 100_000;
+    uint256 constant DEFAULT_GAS_Threshold = 100_000;
 
     address constant USDC = 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359;
     address constant WBTC = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
@@ -53,7 +53,7 @@ contract Deployer is Script {
             marketplace: msg.sender,
             feeRate: FEE_RATE,
             defaultHoldPeriod: DEFAULT_HOLD_PERIOD,
-            gasThresold: DEFAULT_GAS_THRESOLD
+            gasThreshold: DEFAULT_GAS_Threshold
         });
 
         PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(config);

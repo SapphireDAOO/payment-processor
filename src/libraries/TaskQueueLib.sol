@@ -113,14 +113,14 @@ library TaskQueueLib {
      *      - `ERROR`: Aborts the loop.
      * @param _heap The heap data structure storing encoded tasks.
      * @param _releaseCallback A function that attempts to release a task by ID, returning a status code.
-     * @param _gasThresold The minimum remaining gas required to continue processing.
+     * @param _gasThreshold The minimum remaining gas required to continue processing.
      */
     function processDueTask(
         Heap storage _heap,
         function(uint216) internal returns (uint256) _releaseCallback,
-        uint256 _gasThresold
+        uint256 _gasThreshold
     ) internal {
-        while (_heap.data.length > 0 && gasleft() > _gasThresold) {
+        while (_heap.data.length > 0 && gasleft() > _gasThreshold) {
             (uint216 id, uint40 dueAt) = peek(_heap);
 
             if (block.timestamp < dueAt) break;
@@ -188,7 +188,8 @@ library TaskQueueLib {
     }
 
     /**
-     * @dev Maintains the heap property by moving an item down the tree.
+     * @notice Restores the min-heap property by bubbling an element down toward the leaves.
+     * @dev Swaps the element at `_i` with its smallest child until the heap invariant is satisfied.
      */
     function _siftDown(Heap storage _heap, uint256 _i, mapping(uint216 => uint256) storage _index) private {
         uint256 len = _heap.data.length;
@@ -205,7 +206,8 @@ library TaskQueueLib {
     }
 
     /**
-     * @dev Maintains the heap property by moving an item up the tree.
+     * @notice Restores the min-heap property by bubbling an element up toward the root.
+     * @dev Swaps the element at `_i` with its parent until the heap invariant is satisfied.
      */
     function _siftUp(Heap storage _heap, uint256 _i, mapping(uint216 => uint256) storage _index) private {
         while (_i != 0) {
@@ -218,7 +220,8 @@ library TaskQueueLib {
     }
 
     /**
-     * @dev Swaps two elements in the heap and updates the index mapping.
+     * @notice Swaps two elements in the heap array and updates both entries in the index mapping.
+     * @dev Both `_i` and `_j` are zero-based positions in `_heap.data`.
      */
     function _swap(Heap storage _heap, mapping(uint216 => uint256) storage _index, uint256 _i, uint256 _j) private {
         uint256 a = _heap.data[_i];

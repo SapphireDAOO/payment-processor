@@ -74,7 +74,7 @@ This repo focuses on on-chain payment state, escrow, and automated release/refun
 - `feeReceiver`: destination for fees.
 - `feeRate`: BPS (100 = 1%).
 - `defaultHoldPeriod`: escrow hold time in seconds.
-- `gasThresold`: minimum gas to keep processing heap.
+- `gasThreshold`: minimum gas to keep processing heap.
 - `marketplace`: authorized address for Advanced processor.
 - `authorized`: list of addresses allowed to call restricted storage functions.
 
@@ -158,5 +158,5 @@ Slither will not overwrite an existing `slither-report.json`. Delete or rename t
 ## Operational Notes
 
 - Ensure `PaymentProcessorStorage` authorizes processor contracts.
-- Keep `gasThresold` conservative to avoid OOG in `performUpkeep`.
+- Keep `gasThreshold` conservative to avoid OOG in `performUpkeep`.
 - Configure Chainlink feeds for each ERC20 token in the advanced processor.
