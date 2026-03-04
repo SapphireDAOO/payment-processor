@@ -193,14 +193,24 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
         uint256 price = 100e8;
         uint216 invoiceId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
-        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
 
-        vm.prank(NATIVE_TOKEN_BUYER);
-        advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(WBTC), price);
+        uint256 buyerBalanceBefore = IERC20(WBTC).balanceOf(WTBC_BUYER);
+        uint256 sellerBalanceBefore = IERC20(WBTC).balanceOf(sellerOne);
+
+        uint256 fee = advancedPP.applyBasisPoints(tokenValue, FEE_RATE);
+
+        vm.prank(WTBC_BUYER);
+        advancedPP.payInvoice(invoiceId, WBTC);
 
         vm.warp(block.timestamp + 1 days);
         advancedPP.release(invoiceId);
 
+        uint256 buyerBalanceAfter = IERC20(WBTC).balanceOf(WTBC_BUYER);
+        uint256 sellerBalanceAfter = IERC20(WBTC).balanceOf(sellerOne);
+
+        assertEq(buyerBalanceAfter, buyerBalanceBefore - tokenValue);
+        assertEq(sellerBalanceAfter, sellerBalanceBefore + tokenValue - fee);
         assertEq(advancedPP.getInvoice(invoiceId).state, advancedPP.RELEASED());
     }
 }

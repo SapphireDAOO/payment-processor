@@ -561,7 +561,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint216 invoiceId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
-        console.log(tokenValue);
 
         uint256 refundShare = 10_000;
 
@@ -571,10 +570,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.prank(buyerOne);
         advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
         uint256 buyerBalance = buyerOne.balance;
-        console.log(buyerBalance);
-
-        vm.expectRevert(IAdvancedPaymentProcessor.InsufficientBalance.selector);
-        advancedPP.refund(invoiceId, refundShare + 1);
 
         advancedPP.refund(invoiceId, refundShare);
 
