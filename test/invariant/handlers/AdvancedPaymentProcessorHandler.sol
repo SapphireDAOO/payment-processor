@@ -130,7 +130,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (!hasPayable || paid || metaInv.price == 0) return;
 
         vm.prank(buyer);
-        advancedPP.payMetaInvoice{ value: tokenValue }(invoiceId, address(0));
+        advancedPP.payMetaInvoiceWithValue{ value: tokenValue }(invoiceId);
     }
 
     function cancelInvoice(uint256 _index) public onlyExistingInvoice {

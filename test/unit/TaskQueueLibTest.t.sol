@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { Test, console } from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 import { TaskQueueHarness } from "../harness/TaskQueueHarness.sol";
 
 error DuplicateTask();
@@ -54,8 +54,8 @@ contract TaskQueueLibTest is Test {
             h.insert(i, 1);
         }
 
-        uint256 gasThresold = 100;
-        h.processDueTasks(gasThresold);
+        uint256 gasThreshold = 100;
+        h.processDueTasks(gasThreshold);
         assertEq(h.size(), 0);
     }
 

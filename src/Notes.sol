@@ -98,7 +98,7 @@ contract Notes is INotes {
     function _setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _open) internal {
         opened[_invoiceId][_noteId][_account] = _open;
 
-        emit NoteStateChanged(_invoiceId, _noteId, msg.sender, _open);
+        emit NoteStateChanged(_invoiceId, _noteId, _account, _open);
     }
 
     /// @inheritdoc INotes
@@ -145,6 +145,8 @@ contract Notes is INotes {
         auth[_user] = _enabled ? ALLOWED : NOT_ALLOWED;
     }
 
+    /// @notice Returns the current note encryption version.
+    /// @return v The active version number used when creating new notes.
     function getCurrentVersion() external view returns (uint8 v) {
         return currentVersion;
     }

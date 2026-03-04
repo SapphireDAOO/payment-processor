@@ -40,6 +40,9 @@ contract AdvancedPaymentProcessor is
     /// @notice Address of the forwarder contract responsible for calling performUpkeep.
     address private forwarder;
 
+    /// @notice Minimum USD price (8 decimals) an invoice must meet to be accepted by the processor.
+    uint256 private minimumPrice;
+
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable ppStorage;
 
@@ -82,6 +85,9 @@ contract AdvancedPaymentProcessor is
     /// @notice Maximum age allowed for Chainlink price data before it is considered stale.
     uint256 public constant STALE_THRESHOLD = 1 hours;
 
+    /// @notice Minimum invoice price applied when none is explicitly set (1 USD in 8-decimal Chainlink format).
+    uint256 public constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8;
+
     /**
      * @notice Mapping from unique invoice ID to its invoice data.
      * @dev Used for standalone invoices (not part of a meta-invoice).
@@ -117,12 +123,22 @@ contract AdvancedPaymentProcessor is
     }
 
     /**
+     * @notice Restricts function access to the owner of the PaymentProcessorStorage contract.
+     * @dev Reverts with NotAuthorized() if the caller is not the owner.
+     */
+    modifier onlyOwner() {
+        _onlyOwner();
+        _;
+    }
+
+    /**
      * @notice Initializes the AdvancedPaymentProcessor contract with core configuration.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      */
     constructor(address _paymentProcessorStorageAddress) {
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
         nextMetaInvoiceNonce = 1;
+        minimumPrice = DEFAULT_MINIMUM_INVOICE_PRICE;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -140,15 +156,17 @@ contract AdvancedPaymentProcessor is
         onlyMarketplace
         returns (uint216 metaInvoiceId)
     {
+        uint256 length = _param.length;
+        if (length == 0) revert EmptyMetaInvoice();
+
         uint256 totalPrice = 0;
         uint216 firstInvoiceNonce = ppStorage.getNextInvoiceNonce();
-        uint256 length = _param.length;
+
         uint256 lastInvoiceNonce = length + firstInvoiceNonce - 1;
 
         metaInvoiceId = _computeMetaInvoiceId(firstInvoiceNonce, lastInvoiceNonce, nextMetaInvoiceNonce);
         if (metaInvoices[metaInvoiceId].price != 0) revert MetaInvoiceAlreadyExists();
 
-        // what if invoice is meta invoice is canceled before this
         for (uint216 i = 0; i < length; i++) {
             totalPrice += _param[i].price;
             metaInvoices[metaInvoiceId].subInvoiceIds
@@ -166,56 +184,55 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant {
-        if (address(priceFeed[_paymentToken]) == address(0)) {
-            revert InvalidPaymentToken();
-        }
+        if (address(priceFeed[_paymentToken]) == address(0)) revert InvalidPaymentToken();
 
         Invoice memory inv = invoices[_invoiceId];
-        _invoicePayment(inv, _invoiceId, _paymentToken, msg.value);
+        uint256 priceInToken = getTokenValueFromUsd(_paymentToken, inv.price);
+
+        if (_paymentToken == address(0)) {
+            if (msg.value != priceInToken) revert InvalidNativePayment();
+        } else {
+            if (msg.value != 0) revert InvalidNativePayment();
+        }
+
+        _pay(inv, _invoiceId, _paymentToken, priceInToken);
         invoices[_invoiceId] = inv;
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant {
-        if (address(priceFeed[_paymentToken]) == address(0)) {
-            revert InvalidPaymentToken();
-        }
-        MetaInvoice memory metaInv = metaInvoices[_invoiceId];
+    /**
+     * @notice Pays all sub-invoices in a meta-invoice using native ETH.
+     * @dev Caller must send exactly the oracle-converted total. Any dust from integer rounding is refunded.
+     * @param _invoiceId The meta-invoice ID to pay.
+     */
+    function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant {
+        if (address(priceFeed[address(0)]) == address(0)) revert InvalidPaymentToken();
 
+        MetaInvoice memory metaInv = metaInvoices[_invoiceId];
         if (metaInv.price == 0) revert InvoiceDoesNotExist();
 
-        bool isNative = _paymentToken == address(0);
-        uint256 priceInToken = getTokenValueFromUsd(_paymentToken, metaInv.price);
+        uint256 usdPerToken = _usdPerToken(address(0));
+        uint256 priceInToken = metaInv.price.mulDiv(10 ** DEFAULT_DECIMAL, usdPerToken);
+        if (priceInToken != msg.value) revert InvalidMetaInvoicePaymentAmount(msg.value, priceInToken);
 
-        if (priceInToken < msg.value && isNative) {
-            revert InvalidMetaInvoicePaymentAmount(msg.value, priceInToken);
-        }
-
-        uint216[] memory subInvoiceIds = metaInvoices[_invoiceId].subInvoiceIds;
-
-        uint256 amountPaid;
-
-        for (uint256 i = 0; i < subInvoiceIds.length; i++) {
-            uint216 subInvoiceId = subInvoiceIds[i];
-            Invoice memory inv = invoices[subInvoiceId];
-
-            if (inv.state != CREATED) continue;
-            uint256 invPrice = getTokenValueFromUsd(_paymentToken, inv.price);
-
-            uint256 value = _paymentToken == address(0) ? invPrice : 0;
-            amountPaid += _invoicePayment(inv, subInvoiceId, _paymentToken, value);
-
-            invoices[subInvoiceId] = inv;
-        }
-
+        uint256 amountPaid = _paySubInvoices(metaInv.subInvoiceIds, address(0), usdPerToken, DEFAULT_DECIMAL);
         if (amountPaid == 0) revert InvalidInvoiceState();
 
-        if (isNative) {
-            uint256 refundableAmount = priceInToken - amountPaid;
-            if (refundableAmount > 0) {
-                (msg.sender).safeTransferETH(refundableAmount);
-            }
-        }
+        uint256 refundableAmount = priceInToken - amountPaid;
+        if (refundableAmount > 0) (msg.sender).safeTransferETH(refundableAmount);
+    }
+
+    /// @inheritdoc IAdvancedPaymentProcessor
+    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant {
+        if (address(priceFeed[_paymentToken]) == address(0)) revert InvalidPaymentToken();
+
+        MetaInvoice memory metaInv = metaInvoices[_invoiceId];
+        if (metaInv.price == 0) revert InvoiceDoesNotExist();
+
+        uint256 usdPerToken = _usdPerToken(_paymentToken);
+        uint8 decimals = IERC20(_paymentToken).decimals();
+
+        uint256 amountPaid = _paySubInvoices(metaInv.subInvoiceIds, _paymentToken, usdPerToken, decimals);
+        if (amountPaid == 0) revert InvalidInvoiceState();
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -248,6 +265,7 @@ contract AdvancedPaymentProcessor is
         }
 
         if (_resolution == DISPUTE_SETTLED) {
+            invoices[_invoiceId].balance = 0;
             (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(inv, _sellerShare);
             emit DisputeSettled(_invoiceId, sellerReceivingValue, buyerReceivingValue);
         }
@@ -262,6 +280,7 @@ contract AdvancedPaymentProcessor is
     function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace {
         Invoice memory inv = invoices[_invoiceId];
         if (inv.state != PAID) revert InvalidInvoiceState();
+        if (_refundShare == 0 || _refundShare > BASIS_POINTS) revert InvalidSellersPayoutShare();
 
         uint256 amount = _applyBasisPoints(inv.balance, _refundShare);
 
@@ -286,7 +305,6 @@ contract AdvancedPaymentProcessor is
         invoices[_invoiceId].state = CANCELED;
         if (inv.metaInvoiceId != 0) {
             metaInvoices[inv.metaInvoiceId].price -= inv.price;
-            // emit even for off-chain tracking
         }
         emit InvoiceCanceled(_invoiceId);
     }
@@ -314,25 +332,22 @@ contract AdvancedPaymentProcessor is
             revert NotAuthorized();
         }
 
-        uint256 gasThresold = ppStorage.getGasThreshold();
-        heap.processDueTask(_release, gasThresold);
+        uint256 gasThreshold = ppStorage.getGasThreshold();
+        heap.processDueTask(_release, gasThreshold);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setPriceFeed(address _token, address _aggregator) external {
-        if (msg.sender != _owner()) {
-            revert NotAuthorized();
-        }
+    function setPriceFeed(address _token, address _aggregator) external onlyOwner {
         priceFeed[_token] = _aggregator;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external {
-        if (msg.sender != _owner()) revert NotAuthorized();
+    function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external onlyOwner {
         Invoice memory inv = invoices[_invoiceId];
 
-        // review this
-        if (inv.state != PAID) revert InvalidInvoiceState();
+        if (inv.state != PAID && inv.state != DISPUTE_RESOLVED && inv.state != DISPUTE_DISMISSED) {
+            revert InvalidInvoiceState();
+        }
 
         inv.releaseAt = (block.timestamp + _holdPeriod).toUint40();
         invoices[_invoiceId] = inv;
@@ -343,9 +358,13 @@ contract AdvancedPaymentProcessor is
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setForwarderAddress(address _forwarderAddress) external {
-        if (msg.sender != _owner()) revert NotAuthorized();
+    function setForwarderAddress(address _forwarderAddress) external onlyOwner {
         forwarder = _forwarderAddress;
+    }
+
+    /// @inheritdoc IAdvancedPaymentProcessor
+    function setMinimumPrice(uint256 _newMinimumPrice) external onlyOwner {
+        minimumPrice = _newMinimumPrice;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -355,21 +374,32 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function getTokenValueFromUsd(address _paymentToken, uint256 _usdAmount) public view returns (uint256 tokenValue) {
-        address aggregator = priceFeed[_paymentToken];
-        if (aggregator == address(0)) revert UnsupportedToken();
-        (, int256 answer,, uint256 updatedAt,) = AggregatorV3Interface(aggregator).latestRoundData();
-
-        if (block.timestamp > updatedAt + STALE_THRESHOLD) revert StalePriceFeed();
-
-        uint256 usdPerToken = answer.toUint256(); // 8 decimals from Chainlink
-
+        uint256 usdPerToken = _usdPerToken(_paymentToken);
         uint8 tokenDecimals = _paymentToken == address(0) ? DEFAULT_DECIMAL : IERC20(_paymentToken).decimals();
 
         tokenValue = _usdAmount.mulDiv(10 ** tokenDecimals, usdPerToken);
     }
 
     /**
-     * @dev Checks if an invoice state is eligible for release.
+     * @notice Fetches the Chainlink USD price for a payment token and validates feed freshness.
+     * @param _paymentToken The token address (address(0) for native ETH).
+     * @return The token's USD price with 8 decimals as returned by the Chainlink aggregator.
+     */
+    function _usdPerToken(address _paymentToken) internal view returns (uint256) {
+        address aggregator = priceFeed[_paymentToken];
+        if (aggregator == address(0)) revert UnsupportedToken();
+        (, int256 answer,, uint256 updatedAt,) = AggregatorV3Interface(aggregator).latestRoundData();
+
+        if (block.timestamp > updatedAt + STALE_THRESHOLD) revert StalePriceFeed();
+
+        return answer.toUint256(); // 8 decimals from Chainlink
+    }
+
+    /**
+     * @notice Checks whether an invoice is currently eligible to be released to the seller.
+     * @dev An invoice is releasable if it is in the PAID, DISPUTE_RESOLVED, or DISPUTE_DISMISSED state
+     *      and its `releaseAt` timestamp has been reached or passed.
+     * @param _inv The in-memory invoice struct to evaluate.
      * @return isReleasable True if the invoice can be released.
      */
     function _isReleasable(Invoice memory _inv) internal view returns (bool isReleasable) {
@@ -402,36 +432,29 @@ contract AdvancedPaymentProcessor is
     }
 
     /**
-     * @notice Handles payment for an invoice, performs validation, and initializes escrow.
-     * @param _inv The invoice to be paid.
-     * @param _invoiceId The key of the invoice being paid.
-     * @param _paymentToken The address of the payment token (use address(0) for the native token).
-     *  @param _value The amount of native token sent with the transaction.
-     *
-     * @dev
-     * - Converts the USD price to payment token amount using Chainlink oracles.
-     * - Validates invoice state, sender, and expiration.
-     * - Creates an escrow contract and updates the invoice with payment info.
-     * - Transfers tokens to escrow if the payment is in ERC20.
+     * @notice Shared base for all invoice payment paths.
+     * @dev For native ETH payments, the caller must have already validated `msg.value == _tokenPrice`.
+     *      For ERC20 payments, tokens are pulled from the caller via safeTransferFrom.
+     * @param _inv The invoice memory struct to be updated in-place.
+     * @param _invoiceId The ID of the invoice being paid.
+     * @param _paymentToken The token address (address(0) for native ETH).
+     * @param _tokenPrice The oracle-converted price in the payment token's units.
      */
-    function _invoicePayment(Invoice memory _inv, uint216 _invoiceId, address _paymentToken, uint256 _value)
+    function _pay(Invoice memory _inv, uint216 _invoiceId, address _paymentToken, uint256 _tokenPrice)
         internal
         returns (uint256 amountPaid)
     {
+        if (block.timestamp > _inv.expiresAt) revert InvoiceExpired();
         if (msg.sender == _inv.seller) revert BuyerCannotBeSeller();
         if (_inv.state != CREATED) revert InvalidInvoiceState();
 
-        uint256 price = getTokenValueFromUsd(_paymentToken, _inv.price);
-        bool isNative = _paymentToken == address(0);
-
-        if (isNative && _value != price) revert InvalidNativePayment();
-
+        uint256 nativeValue = _paymentToken == address(0) ? _tokenPrice : 0;
         address escrowAddress = _create(
             EscrowCreationParams({
                 seller: _inv.seller,
                 buyer: msg.sender,
                 invoiceId: _invoiceId,
-                value: isNative ? _value : 0,
+                value: nativeValue,
                 paymentToken: _paymentToken
             })
         );
@@ -440,21 +463,48 @@ contract AdvancedPaymentProcessor is
         _inv.state = PAID;
         _inv.escrow = escrowAddress;
         _inv.paidAt = (block.timestamp).toUint40();
-        _inv.balance = price;
-        _inv.amountPaid = price;
+        _inv.balance = _tokenPrice;
+        _inv.amountPaid = _tokenPrice;
+        _inv.paymentToken = _paymentToken;
+
+        if (_paymentToken != address(0)) {
+            _paymentToken.safeTransferFrom(msg.sender, escrowAddress, _tokenPrice);
+        }
 
         if (_inv.releaseAt == 0) {
             _inv.releaseAt = (block.timestamp + ppStorage.getDefaultHoldPeriod()).toUint40();
             heap.insert(_invoiceId, _inv.releaseAt, index);
         }
 
-        if (!isNative) {
-            _inv.paymentToken = _paymentToken;
-            _paymentToken.safeTransferFrom(msg.sender, escrowAddress, price);
-        }
-
-        emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, price, _inv.releaseAt);
+        emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, _tokenPrice, _inv.releaseAt);
         return _inv.amountPaid;
+    }
+
+    /**
+     * @notice Iterates sub-invoices and pays each one that is still in the CREATED state.
+     * @dev Computes each sub-invoice's token price from a single cached oracle price to avoid
+     *      multiple Chainlink calls and to ensure consistent rounding across the batch.
+     * @param _subInvoiceIds The array of sub-invoice IDs to process.
+     * @param _paymentToken The token address (address(0) for native ETH).
+     * @param _tokenUsdPrice The oracle USD price per token unit (8 decimals), fetched once by the caller.
+     * @param _decimals The token's decimal precision.
+     * @return amountPaid Total token amount paid across all processed sub-invoices.
+     */
+    function _paySubInvoices(
+        uint216[] memory _subInvoiceIds,
+        address _paymentToken,
+        uint256 _tokenUsdPrice,
+        uint8 _decimals
+    ) internal returns (uint256 amountPaid) {
+        for (uint256 i = 0; i < _subInvoiceIds.length; i++) {
+            uint216 subInvoiceId = _subInvoiceIds[i];
+            Invoice memory inv = invoices[subInvoiceId];
+            if (inv.state == CREATED) {
+                uint256 price = inv.price.mulDiv(10 ** _decimals, _tokenUsdPrice);
+                amountPaid += _pay(inv, subInvoiceId, _paymentToken, price);
+                invoices[subInvoiceId] = inv;
+            }
+        }
     }
 
     /**
@@ -469,8 +519,7 @@ contract AdvancedPaymentProcessor is
         returns (uint216 invoiceId)
     {
         if (_param.price == 0) revert PriceCannotBeZero();
-        // review make the minimum price dynamic
-        if (_param.price < 1e8) revert PriceIsTooLow();
+        if (_param.price < minimumPrice) revert PriceIsTooLow();
         Invoice memory inv;
         inv.seller = _param.seller;
         inv.price = _param.price;
@@ -570,6 +619,14 @@ contract AdvancedPaymentProcessor is
     }
 
     /**
+     * @notice Ensures that the caller is the owner of the PaymentProcessorStorage contract.
+     * @dev Reverts with `NotAuthorized` if `msg.sender` is not the storage owner.
+     */
+    function _onlyOwner() internal view {
+        if (msg.sender != _owner()) revert NotAuthorized();
+    }
+
+    /**
      * @notice Ensures that the caller is the registered marketplace address.
      * @dev Reverts with `NotAuthorized` if `msg.sender` is not equal to
      *      the marketplace address stored in `ppStorage`.
@@ -596,6 +653,11 @@ contract AdvancedPaymentProcessor is
     /// @inheritdoc IAdvancedPaymentProcessor
     function totalMetaInvoiceCreated() external view returns (uint216 totalMetaInvoices) {
         return nextMetaInvoiceNonce - 1;
+    }
+
+    /// @inheritdoc IAdvancedPaymentProcessor
+    function getMinimumPrice() external view returns (uint256 currentMinimumPrice) {
+        return minimumPrice;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor

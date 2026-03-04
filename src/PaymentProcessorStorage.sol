@@ -13,6 +13,9 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @notice Default time window during which a created invoice remains valid for payment.
     uint256 public constant DEFAULT_PAYMENT_VALIDITY_PERIOD = 7 days;
 
+    /// @notice Total basis points used for percentage calculations. 10_000 = 100%.
+    uint256 public constant BASIS_POINTS = 10_000;
+
     /**
      * @notice The next available unique invoice nonce.
      * @dev Used to track and increment standalone or sub-invoice nonces.
@@ -73,12 +76,13 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
 
     /// @inheritdoc IPaymentProcessorStorage
     function setFeeRate(uint256 _newFeeRate) external onlyOwner {
+        if (_newFeeRate > BASIS_POINTS) revert InvalidFeeRate();
         config.feeRate = _newFeeRate;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setGasThresold(uint256 _newGasThresold) external onlyOwner {
-        config.gasThresold = _newGasThresold;
+    function setGasThreshold(uint256 _newGasThreshold) external onlyOwner {
+        config.gasThreshold = _newGasThreshold;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
@@ -144,6 +148,6 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
 
     /// @inheritdoc IPaymentProcessorStorage
     function getGasThreshold() external view returns (uint256 gasThreshold) {
-        return config.gasThresold;
+        return config.gasThreshold;
     }
 }

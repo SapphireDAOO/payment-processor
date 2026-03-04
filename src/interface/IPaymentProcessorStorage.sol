@@ -16,20 +16,23 @@ interface IPaymentProcessorStorage {
     /// @notice Thrown when the hold period provided is zero, which is invalid.
     error HoldPeriodCanNotBeZero();
 
+    /// @notice Thrown when the provided fee rate exceeds the maximum allowed (10,000 basis points = 100%).
+    error InvalidFeeRate();
+
     /// @notice Holds core configuration parameters for the contract.
     /// @param owner The address authorized to modify configuration parameters.
     /// @param feeReceiver Address that receives platform fees upon seller payout.
     /// @param marketplace Address authorized to interact with invoice creation and specific management functions.
     /// @param feeRate Platform fee rate in basis points (BPS). i.e 100 BPS = 1%; 10,000 BPS = 100%.
     /// @param defaultHoldPeriod The default hold period for funds in escrow, measured in seconds.
-    /// @param gasThresold The minimum amount of gas that must remain to continue processing tasks.
+    /// @param gasThreshold The minimum amount of gas that must remain to continue processing tasks.
     struct Configuration {
         address owner;
         address feeReceiver;
         address marketplace;
         uint256 feeRate;
         uint256 defaultHoldPeriod;
-        uint256 gasThresold;
+        uint256 gasThreshold;
     }
 
     /**
@@ -80,9 +83,9 @@ interface IPaymentProcessorStorage {
      * @notice Updates the gas threshold used in automated upkeep logic.
      * @dev Callable only by authorized roles (e.g., admin or owner).
      * This threshold determines the minimum gas required to continue processing during `performUpkeep`.
-     * @param _newGasThresold The new gas threshold value (in units of gas).
+     * @param _newGasThreshold The new gas threshold value (in units of gas).
      */
-    function setGasThresold(uint256 _newGasThresold) external;
+    function setGasThreshold(uint256 _newGasThreshold) external;
 
     /**
      * @notice Updates the payment validity duration.

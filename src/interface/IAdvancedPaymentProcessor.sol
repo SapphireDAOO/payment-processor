@@ -13,6 +13,12 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when a payment is attempted with a token that is not supported by the processor.
     error UnsupportedToken();
 
+    /// @notice Thrown when a payment is attempted on an invoice that has passed its expiry timestamp.
+    error InvoiceExpired();
+
+    /// @notice Thrown when a meta-invoice is created with an empty sub-invoice list.
+    error EmptyMetaInvoice();
+
     /// @notice Thrown when a Chainlink price feed is stale and cannot be trusted for conversion.
     error StalePriceFeed();
 
@@ -51,7 +57,7 @@ interface IAdvancedPaymentProcessor {
     /// @param expected The expected native payment total.
     error InvalidMetaInvoicePaymentAmount(uint256 sent, uint256 expected);
 
-    /// @dev This occurs when a computed meta-invoice ID (hash) is already assigned in storage.
+    /// @notice Thrown when a computed meta-invoice ID (hash) is already assigned in storage.
     error MetaInvoiceAlreadyExists();
 
     /// @notice Thrown when a dispute resolution type is invalid.
@@ -146,38 +152,49 @@ interface IAdvancedPaymentProcessor {
     function payInvoice(uint216 _invoiceId, address _paymentToken) external payable;
 
     /**
+     * @notice Pays all sub-invoices in a meta-invoice using native ETH.
+     * @dev Caller must send exactly the oracle-converted total for the meta-invoice price.
+     *      Any dust from per-sub-invoice integer rounding is refunded to the caller.
+     * @param _invoiceId The meta-invoice ID to pay.
+     */
+    function payMetaInvoiceWithValue(uint216 _invoiceId) external payable;
+
+    /**
      * @notice Pays all sub-invoices in a meta invoice using native ETH or ERC20.
      * @dev Caller must be the buyer of all sub-invoices. Use `address(0)` for native payment.
      * @param _invoiceId The meta invoice ID to be paid.
      * @param _paymentToken The token address used for payment (or zero address for ETH).
      */
-    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external payable;
+    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external;
 
     /**
-     * @notice Cancels a single invoice.
-     * @dev Callable only by the seller of the invoice.
-     * Only valid for invoices in the PAID state.
+     * @notice Cancels a single invoice before payment.
+     * @dev Callable only by the marketplace. If the invoice belongs to a meta-invoice,
+     *      the meta-invoice total price is reduced accordingly.
      * @param _invoiceId The ID of the invoice to cancel.
      */
     function cancelInvoice(uint216 _invoiceId) external;
 
     /**
      * @notice Creates a dispute for an invoice.
-     * @dev Callable only by the buyer of the invoice.
-     * Only valid for invoices in the ACCEPTED state and within the dispute window.
+     * @dev Callable only by the marketplace on behalf of the buyer.
+     * Only valid for invoices in the PAID state.
      * @param _invoiceId The ID of the invoice to dispute.
      */
     function createDispute(uint216 _invoiceId) external;
 
     /**
-     * @notice Issues a refund for a given order.
+     * @notice Issues a partial or full refund for a paid invoice.
+     * @dev Callable only by the marketplace. Invoice must be in the PAID state.
+     *      `_refundShare` must be between 1 and 10,000 basis points (inclusive).
+     *      A full refund (10,000 BPS) transitions the invoice to REFUNDED and removes it from the heap.
      * @param _invoiceId The identifier of the order to refund.
-     * @param _refundShare The portion of the invoice price to refund, specified in basis points (1% = 100).
+     * @param _refundShare The portion of the escrow balance to refund, in basis points (1% = 100, 100% = 10000).
      */
     function refund(uint216 _invoiceId, uint256 _refundShare) external;
 
     /**
-     * @notice handle a dispute on a given invoice.
+     * @notice Handles a dispute on a given invoice.
      * @dev Callable only by the marketplace. Must be called after a dispute is created.
      * The resolution can be DISPUTE_DISMISSED, or DISPUTE_SETTLED.
      * If settled, the seller and buyer receive a split of the funds based on sellerShare.
@@ -214,7 +231,8 @@ interface IAdvancedPaymentProcessor {
 
     /**
      * @notice Sets a custom release time for a given invoice by adding a hold period to the current timestamp.
-     * @dev Callable only by the storage contract (via `execute()`), not directly by users or marketplace.
+     * @dev Callable only by the owner. Valid for invoices in the PAID, DISPUTE_RESOLVED, or DISPUTE_DISMISSED state
+     *      (i.e., invoices currently tracked in the heap).
      * @param _invoiceId The ID of the invoice to update.
      * @param _holdPeriod Additional hold period (in seconds) to add to the current timestamp.
      */
@@ -225,6 +243,12 @@ interface IAdvancedPaymentProcessor {
      * @param _forwarderAddress The new forwarder contract address to be set.
      */
     function setForwarderAddress(address _forwarderAddress) external;
+
+    /**
+     * @notice Sets the minimum USD price an invoice must have to be created.
+     * @param _newMinimumPrice The new minimum price threshold (8 decimals, same unit as invoice prices).
+     */
+    function setMinimumPrice(uint256 _newMinimumPrice) external;
 
     /**
      * @notice Retrieves the invoice data for a specific invoice ID.
@@ -251,6 +275,12 @@ interface IAdvancedPaymentProcessor {
      * @return totalMetaInvoices The total number of meta-invoices created.
      */
     function totalMetaInvoiceCreated() external view returns (uint216 totalMetaInvoices);
+
+    /**
+     * @notice Returns the minimum USD price an invoice must meet to be created.
+     * @return minimumPrice The current minimum price threshold (8 decimals).
+     */
+    function getMinimumPrice() external view returns (uint256 minimumPrice);
 
     /**
      * @notice Returns the address of the configured forwarder contract.

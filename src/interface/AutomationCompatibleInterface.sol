@@ -11,8 +11,8 @@ interface AutomationCompatibleInterface {
     /**
      * @notice Checks if upkeep is needed.
      * @param _checkData Optional input data passed from the Automation registry.
-     * @return upkeepNeeded Data to pass to `performUpkeep` if upkeep is needed.
-     * @return performData Boolean indicating whether `performUpkeep` should be called.
+     * @return upkeepNeeded Boolean indicating whether `performUpkeep` should be called.
+     * @return performData Encoded data to pass to `performUpkeep` if upkeep is needed.
      */
     function checkUpkeep(bytes calldata _checkData) external view returns (bool upkeepNeeded, bytes memory performData);
 

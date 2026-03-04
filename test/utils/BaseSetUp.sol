@@ -20,7 +20,7 @@ abstract contract BaseSetUp is Test {
     uint256 public constant FEE_RATE = 500;
 
     uint256 constant DEFAULT_HOLD_PERIOD = 1 days;
-    uint256 constant DEFAULT_GAS_THRESOLD = 100_000;
+    uint256 constant DEFAULT_GAS_Threshold = 100_000;
 
     /**
      * @notice Initializes shared storage and notes contracts for tests.
@@ -40,7 +40,7 @@ abstract contract BaseSetUp is Test {
             marketplace: address(this),
             feeRate: FEE_RATE,
             defaultHoldPeriod: DEFAULT_HOLD_PERIOD,
-            gasThresold: DEFAULT_GAS_THRESOLD
+            gasThreshold: DEFAULT_GAS_Threshold
         });
 
         vm.prank(admin);
