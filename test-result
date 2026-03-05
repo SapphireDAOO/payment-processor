@@ -1,13 +1,11 @@
-Compiling 65 files with Solc 0.8.28
-Solc 0.8.28 finished in 2.70s
-Compiler run successful!
+No files changed, compilation skipped
 
 Ran 4 tests for test/unit/NotesTest.t.sol:NotesTest
 [PASS] test_createNote() (gas: 227906)
 [PASS] test_getNotes() (gas: 147451)
 [PASS] test_newVersion() (gas: 154008)
 [PASS] test_setOpened() (gas: 233922)
-Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 805.63µs (233.29µs CPU time)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 4.00ms (260.00µs CPU time)
 
 Ran 18 tests for test/unit/SimplePaymentProcessorTest.t.sol:SimplePaymentProcessorTest
 [PASS] test_automatedRefund() (gas: 401689)
@@ -28,7 +26,7 @@ Ran 18 tests for test/unit/SimplePaymentProcessorTest.t.sol:SimplePaymentProcess
 [PASS] test_setForwarder() (gas: 13966)
 [PASS] test_setMinimumInvoiceValue() (gas: 13902)
 [PASS] test_storageState() (gas: 34928)
-Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 3.59ms (3.42ms CPU time)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 7.67ms (4.90ms CPU time)
 
 Ran 25 tests for test/unit/AdvancedPaymentProcessorTest.t.sol:AdvancedPaymentProcessorTest
 [PASS] test_Initialization() (gas: 20720)
@@ -56,32 +54,34 @@ Ran 25 tests for test/unit/AdvancedPaymentProcessorTest.t.sol:AdvancedPaymentPro
 [PASS] test_singleInvoiceCreation() (gas: 202659)
 [PASS] test_storageConfig() (gas: 47655)
 [PASS] test_updateInvoiceNonce() (gas: 10812)
-Suite result: ok. 25 passed; 0 failed; 0 skipped; finished in 4.24ms (3.16ms CPU time)
+Suite result: ok. 25 passed; 0 failed; 0 skipped; finished in 13.92ms (9.91ms CPU time)
 
-Ran 2 tests for test/fuzz/SimplePaymentProcessorFuzzTest.t.sol:SimplePaymentProcessorFuzzTest
-[PASS] testFuzz_createAndPayInvoice(uint256) (runs: 512, μ: 467162, ~: 467191)
-[PASS] testFuzz_invoice_creation(uint256) (runs: 512, μ: 141334, ~: 141334)
-Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 54.79ms (81.03ms CPU time)
-
-Ran 7 tests for test/fuzz/AdvancedPaymentProcessorFuzzTest.t.sol:AdvancedPaymentProcessorFuzzTest
-[PASS] testFuzz_createMetaInvoice(uint256,uint256,uint256,uint256) (runs: 512, μ: 413103, ~: 413329)
-[PASS] testFuzz_createSingleInvoice(uint256) (runs: 512, μ: 154967, ~: 155147)
-[PASS] testFuzz_getTokenValueFromUsd(uint256) (runs: 512, μ: 27510, ~: 27789)
-[PASS] testFuzz_handleDispute(uint256,uint256,uint256) (runs: 512, μ: 590494, ~: 579980)
-[PASS] testFuzz_payInvoice(uint256) (runs: 512, μ: 580832, ~: 580882)
-[PASS] testFuzz_payMetaInvoice(uint256,uint256,uint256,uint256) (runs: 512, μ: 1287845, ~: 1285763)
-[PASS] testFuzz_releasePayment(uint256,uint256) (runs: 512, μ: 559460, ~: 559711)
-Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 121.15ms (382.85ms CPU time)
+Ran 14 tests for test/fuzz/AdvancedPaymentProcessorFuzzTest.t.sol:AdvancedPaymentProcessorFuzzTest
+[PASS] test_createMetaInvoice(uint256,uint256,uint256,uint256) (runs: 512, μ: 413072, ~: 413309)
+[PASS] test_createSingleInvoice(uint256) (runs: 512, μ: 154997, ~: 155192)
+[PASS] test_disputeSettledFundDistribution(uint256,uint256) (runs: 512, μ: 587876, ~: 588697)
+[PASS] test_getTokenValueFromUsd(uint256) (runs: 512, μ: 27539, ~: 27834)
+[PASS] test_handleDispute(uint256,uint256,uint256) (runs: 512, μ: 590386, ~: 579935)
+[PASS] test_partialRefund(uint256,uint256) (runs: 512, μ: 600305, ~: 600532)
+[PASS] test_payInvoice(uint256) (runs: 512, μ: 580841, ~: 580905)
+[PASS] test_payInvoiceErc20RejectsNonZeroMsgValue(uint256,uint256) (runs: 512, μ: 203295, ~: 203026)
+[PASS] test_payInvoiceWithERC20(uint256) (runs: 512, μ: 628511, ~: 628575)
+[PASS] test_payMetaInvoice(uint256,uint256,uint256,uint256) (runs: 512, μ: 1287871, ~: 1285744)
+[PASS] test_payMetaInvoiceWithValue(uint256,uint256) (runs: 512, μ: 1202634, ~: 1200154)
+[PASS] test_releasePayment(uint256,uint256) (runs: 512, μ: 559438, ~: 559669)
+[PASS] test_resolveDisputeAndRelease(uint256) (runs: 512, μ: 589263, ~: 589327)
+[PASS] test_setInvoiceReleaseTime(uint256,uint256) (runs: 512, μ: 577126, ~: 577462)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 281.74ms (938.03ms CPU time)
 
 Ran 7 tests for test/integration/Interactions.t.sol:Interactions
 [PASS] test_erc20PaymentForMetaInvoice() (gas: 1319682)
-[PASS] test_erc20PaymentForSingleInvoice() (gas: 647646)
+[FAIL: TransferFromFailed()] test_erc20PaymentForSingleInvoice() (gas: 428040)
 [PASS] test_invoiceRelease() (gas: 621727)
-[PASS] test_nativeTokenPaymentForMetaInvoice() (gas: 1219490)
+[PASS] test_nativeTokenPaymentForMetaInvoice() (gas: 1226352)
 [PASS] test_nativeTokenPaymentForSingleInvoice() (gas: 583545)
 [PASS] test_sellerCancelInitiatedInvoice() (gas: 698906)
-[PASS] test_settledDispute() (gas: 653462)
-Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 7.09s (12.29s CPU time)
+[FAIL: TransferFromFailed()] test_settledDispute() (gas: 435242)
+Suite result: FAILED. 5 passed; 2 failed; 0 skipped; finished in 7.76s (12.91s CPU time)
 
 Ran 23 tests for test/unit/TaskQueueLibTest.t.sol:TaskQueueLibTest
 [PASS] test_dueAfterDueTime() (gas: 77613)
@@ -107,7 +107,16 @@ Ran 23 tests for test/unit/TaskQueueLibTest.t.sol:TaskQueueLibTest
 [PASS] test_rescheduleLaterSinksDown() (gas: 179131)
 [PASS] test_rescheduleRevertsWhenNotFound() (gas: 10791)
 [PASS] test_rescheduleSameTimeNoOp() (gas: 80169)
-Suite result: ok. 23 passed; 0 failed; 0 skipped; finished in 48.28s (38.23s CPU time)
+Suite result: ok. 23 passed; 0 failed; 0 skipped; finished in 35.77s (38.35s CPU time)
+
+Ran 6 tests for test/fuzz/SimplePaymentProcessorFuzzTest.t.sol:SimplePaymentProcessorFuzzTest
+[PASS] test_acceptAndRelease(uint256) (runs: 512, μ: 452040, ~: 452068)
+[PASS] test_calculateFee(uint256) (runs: 512, μ: 18317, ~: 18291)
+[PASS] test_cancelInvoice(uint256) (runs: 512, μ: 144601, ~: 144629)
+[PASS] test_createAndPayInvoice(uint256) (runs: 512, μ: 467275, ~: 467303)
+[PASS] test_invoiceCreation(uint256) (runs: 512, μ: 145031, ~: 145059)
+[PASS] test_rejectPayment(uint256) (runs: 512, μ: 395497, ~: 395525)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 48.33s (212.35ms CPU time)
 
 Ran 5 tests for test/invariant/invariant.t.sol:Invariant
 [PASS] invariant_advanced_invoice_state_consistency() (runs: 5000, calls: 320000, reverts: 0)
@@ -300,6 +309,13 @@ Ran 5 tests for test/invariant/invariant.t.sol:Invariant
 | SimplePaymentProcessorHandler   | release                  | 20076 | 0       | 0        |
 ╰---------------------------------+--------------------------+-------+---------+----------╯
 
-Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 61.13s (183.64s CPU time)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 61.31s (184.03s CPU time)
 
-Ran 8 test suites in 61.13s (116.69s CPU time): 91 tests passed, 0 failed, 0 skipped (91 total tests)
+Ran 8 test suites in 61.32s (153.48s CPU time): 100 tests passed, 2 failed, 0 skipped (102 total tests)
+
+Failing tests:
+Encountered 2 failing tests in test/integration/Interactions.t.sol:Interactions
+[FAIL: TransferFromFailed()] test_erc20PaymentForSingleInvoice() (gas: 428040)
+[FAIL: TransferFromFailed()] test_settledDispute() (gas: 435242)
+
+Encountered a total of 2 failing tests, 100 tests succeeded

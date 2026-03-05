@@ -1,3 +1,5 @@
+SENDER=0x0f447989b14a3f0bbf08808020ec1a6de0b8cbc4
+
 include .env
 export
 
@@ -29,14 +31,14 @@ clean:
 
 deploy-local:
 	@forge script script/Deployer.s.sol --rpc-url anvil \
-	--private-key $(PRIVATE_KEY) --broadcast -vvv
+	--account sp-key --sender $(SENDER) --broadcast -vvv
 
 deploy-test:
 	@forge script script/Deployer.s.sol --rpc-url $(TEST_NET_RPC_URL) \
-	--private-key $(PRIVATE_KEY) --etherscan-api-key $(ETHERSCAN_API_KEY) \
+	--account sp-key --sender $(SENDER) --etherscan-api-key $(ETHERSCAN_API_KEY) \
 	--verify --broadcast -vvv
 
 deploy-mainnet:
 	@forge script script/Deployer.s.sol --rpc-url $(MAINNET_RPC_URL) \
-	--private-key $(PRIVATE_KEY) --etherscan-api-key $(ETHERSCAN_API_KEY) \
+	--account sp-key --sender $(SENDER) --etherscan-api-key $(ETHERSCAN_API_KEY) \
 	--verify --broadcast -vvv

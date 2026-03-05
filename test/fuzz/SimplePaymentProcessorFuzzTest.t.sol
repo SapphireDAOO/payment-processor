@@ -5,8 +5,8 @@ import { ISimplePaymentProcessor } from "../../src/interface/ISimplePaymentProce
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
 
 contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
-    function testFuzz_invoice_creation(uint256 _amount) public {
-        vm.assume(_amount > 1 ether);
+    function test_invoiceCreation(uint256 _amount) public {
+        _amount = bound(_amount, 1 ether, 1000 ether);
         vm.prank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(_amount, "", false);
         ISimplePaymentProcessor.Invoice memory invoiceData = simplePP.getInvoiceData(invoiceId);
@@ -22,7 +22,7 @@ contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
         assertEq(simplePP.getNextInvoiceNonce(), 2);
     }
 
-    function testFuzz_createAndPayInvoice(uint256 _invoicePrice) public {
+    function test_createAndPayInvoice(uint256 _invoicePrice) public {
         _invoicePrice = bound(_invoicePrice, 1 ether, 1000 ether);
 
         vm.prank(sellerOne);
@@ -40,5 +40,77 @@ contract SimplePaymentProcessorFuzzTest is SimplePaymentProcessorSetUp {
         assertEq(updated.balance, _invoicePrice);
         assertEq(updated.status, simplePP.PAID());
         assertEq(updated.escrow, escrow);
+    }
+
+    function test_acceptAndRelease(uint256 _invoicePrice) public {
+        _invoicePrice = bound(_invoicePrice, 1 ether, 1000 ether);
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(_invoicePrice, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: _invoicePrice }(invoiceId, "", false);
+
+        uint256 feeReceiverBefore = feeReceiver.balance;
+
+        vm.prank(sellerOne);
+        simplePP.acceptPayment(invoiceId);
+
+        uint256 expectedFee = simplePP.calculateFee(_invoicePrice);
+        assertEq(feeReceiver.balance, feeReceiverBefore + expectedFee);
+
+        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
+
+        uint256 sellerBefore = sellerOne.balance;
+
+        vm.prank(sellerOne);
+        simplePP.release(invoiceId);
+
+        ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
+        assertEq(inv.status, simplePP.RELEASED());
+        assertEq(sellerOne.balance, sellerBefore + (_invoicePrice - expectedFee));
+        assertEq(feeReceiver.balance, feeReceiverBefore + expectedFee);
+    }
+
+    function test_rejectPayment(uint256 _invoicePrice) public {
+        _invoicePrice = bound(_invoicePrice, 1 ether, 1000 ether);
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(_invoicePrice, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: _invoicePrice }(invoiceId, "", false);
+
+        uint256 buyerBefore = buyerOne.balance;
+
+        vm.prank(sellerOne);
+        simplePP.rejectPayment(invoiceId);
+
+        ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
+        assertEq(inv.status, simplePP.REJECTED());
+        assertEq(buyerOne.balance, buyerBefore + _invoicePrice);
+    }
+
+    function test_cancelInvoice(uint256 _invoicePrice) public {
+        _invoicePrice = bound(_invoicePrice, 1 ether, 1000 ether);
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(_invoicePrice, "", false);
+
+        vm.prank(sellerOne);
+        simplePP.cancelInvoice(invoiceId);
+
+        ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
+        assertEq(inv.status, simplePP.CANCELLED());
+        assertEq(inv.escrow, address(0));
+    }
+
+    function test_calculateFee(uint256 _amount) public view {
+        _amount = bound(_amount, 0, type(uint256).max / FEE_RATE);
+
+        uint256 fee = simplePP.calculateFee(_amount);
+        uint256 expected = (_amount * FEE_RATE) / simplePP.BASIS_POINTS();
+
+        assertEq(fee, expected);
     }
 }
