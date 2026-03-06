@@ -212,12 +212,14 @@ contract AdvancedPaymentProcessor is
 
         uint256 usdPerToken = _usdPerToken(address(0));
         uint256 priceInToken = metaInv.price.mulDiv(10 ** DEFAULT_DECIMAL, usdPerToken);
+
         if (priceInToken != msg.value) revert InvalidMetaInvoicePaymentAmount(msg.value, priceInToken);
 
         uint256 amountPaid = _paySubInvoices(metaInv.subInvoiceIds, address(0), usdPerToken, DEFAULT_DECIMAL);
         if (amountPaid == 0) revert InvalidInvoiceState();
 
         uint256 refundableAmount = priceInToken - amountPaid;
+
         if (refundableAmount > 0) (msg.sender).safeTransferETH(refundableAmount);
     }
 
@@ -389,6 +391,7 @@ contract AdvancedPaymentProcessor is
         address aggregator = priceFeed[_paymentToken];
         if (aggregator == address(0)) revert UnsupportedToken();
         (, int256 answer,, uint256 updatedAt,) = AggregatorV3Interface(aggregator).latestRoundData();
+        if (answer <= 0) revert InvalidPrice();
 
         if (block.timestamp > updatedAt + STALE_THRESHOLD) revert StalePriceFeed();
 
@@ -567,7 +570,7 @@ contract AdvancedPaymentProcessor is
             IEscrow(_inv.escrow).withdraw(_inv.paymentToken, _inv.buyer, buyerReceivingValue);
         }
 
-        sellerReceivingValue = _applyBasisPoints(_inv.balance, _sellerShare);
+        sellerReceivingValue = _inv.balance - buyerReceivingValue;
 
         _processSellerPayout(_inv, sellerReceivingValue);
     }

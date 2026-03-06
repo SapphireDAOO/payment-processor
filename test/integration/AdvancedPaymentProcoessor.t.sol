@@ -11,7 +11,7 @@ import {
     applyBasisPoints
 } from "../utils/InvoiceTestHelpers.sol";
 
-contract Interactions is AdvancedPaymentProcessorSetUp {
+contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp {
     using { getEscrowAddress, applyBasisPoints } for AdvancedPaymentProcessor;
 
     string POLYGON_MAINNET_RPC = vm.envString("MAINNET_RPC");
@@ -180,7 +180,8 @@ contract Interactions is AdvancedPaymentProcessorSetUp {
 
         uint256 buyerShare = advancedPP.applyBasisPoints(tokenValue, advancedPP.BASIS_POINTS() - sellerPercentage);
 
-        uint256 sellerShare = advancedPP.applyBasisPoints(tokenValue, sellerPercentage);
+        uint256 sellerShare = tokenValue - buyerShare;
+        //  advancedPP.applyBasisPoints(tokenValue, sellerPercentage);
         uint256 fee = advancedPP.applyBasisPoints(sellerShare, FEE_RATE);
 
         assertEq(advancedPP.getInvoice(invoiceId).state, advancedPP.DISPUTE_SETTLED());

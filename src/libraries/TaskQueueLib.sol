@@ -179,15 +179,6 @@ library TaskQueueLib {
     }
 
     /**
-     * @notice Extracts and returns the task ID from a given heap key.
-     * @param _key The encoded heap key containing the task ID and due timestamp.
-     * @return id The decoded task ID.
-     */
-    function _getId(uint256 _key) private pure returns (uint216 id) {
-        (id,) = _decode(_key);
-    }
-
-    /**
      * @notice Restores the min-heap property by bubbling an element down toward the leaves.
      * @dev Swaps the element at `_i` with its smallest child until the heap invariant is satisfied.
      */

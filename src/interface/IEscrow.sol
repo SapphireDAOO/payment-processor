@@ -21,32 +21,9 @@ interface IEscrow {
     function withdraw(address _token, address _receiver, uint256 _amount) external;
 
     /**
-     * @notice Emitted when funds are refunded to the payer.
-     * @param invoiceId The ID of the invoice associated with the refund.
-     * @param payer The address of the payer receiving the refund.
-     * @param amount The amount refunded in wei.
-     */
-    event FundsRefunded(uint216 indexed invoiceId, address indexed payer, uint256 indexed amount);
-
-    /**
-     * @notice Emitted when funds are withdrawn by the creator.
-     * @param invoiceId The ID of the invoice associated with the withdrawal
-     * @param creator The address of the creator receiving the withdrawn funds.
-     * @param amount The amount withdrawn in wei.
-     */
-    event FundsWithdrawn(uint216 indexed invoiceId, address indexed creator, uint256 indexed amount);
-
-    /**
      * @notice Emitted when funds are deposited into the escrow for an invoice.
      * @param invoiceId The unique key of the invoice associated with the deposit.
      * @param value The amount of funds deposited in wei.
      */
     event FundsDeposited(uint216 indexed invoiceId, uint256 indexed value);
-
-    /**
-     * @notice Emitted when a fee is successfully paid to a payment processor.
-     * @param invoiceId The unique ID of the invoice associated with the fee.
-     * @param amount The fee amount paid (in wei).
-     */
-    event FeePaid(uint216 indexed invoiceId, uint256 amount);
 }

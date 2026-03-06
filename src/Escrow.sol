@@ -12,12 +12,6 @@ import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 contract Escrow is IEscrow {
     using { SafeTransferLib.safeTransferETH, SafeTransferLib.safeTransfer } for address;
 
-    /// @notice The address of the buyer associated with this escrow.
-    address public immutable BUYER;
-
-    /// @notice The address of the seller associated with this escrow.
-    address public immutable SELLER;
-
     /// @notice The address of the payment processor.
     address public immutable PAYMENT_PROCESSOR;
 
@@ -38,14 +32,11 @@ contract Escrow is IEscrow {
      * @dev This constructor sets the invoice ID, creator, payer, and payment processor addresses, and records the sent
      * Ether as the balance.
      * @param _invoiceId The unique identifier of the invoice associated with this escrow.
-     * @param _creator The address of the invoice creator.
-     * @param _payer The address of the payer for the invoice.
      * @param _paymentProcessorAddress The address of the payment processor contract managing the invoice.
      */
-    constructor(uint216 _invoiceId, address _creator, address _payer, address _paymentProcessorAddress) payable {
+    constructor(uint216 _invoiceId, address _paymentProcessorAddress) payable {
         INVOICE = _invoiceId;
-        SELLER = _creator;
-        BUYER = _payer;
+
         PAYMENT_PROCESSOR = _paymentProcessorAddress;
         emit FundsDeposited(_invoiceId, msg.value);
     }

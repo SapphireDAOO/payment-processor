@@ -9,6 +9,7 @@ contract SimplePaymentProcessorHandler is Test {
 
     uint256 private totalInvoiceCreated;
 
+    address admin;
     address seller;
     address buyer;
 
@@ -25,16 +26,19 @@ contract SimplePaymentProcessorHandler is Test {
         _;
     }
 
-    constructor(SimplePaymentProcessor _sPP, address _buyersAddr, address _sellersAddr) {
+    constructor(SimplePaymentProcessor _sPP, address _buyersAddr, address _sellersAddr, address _adminAddr) {
         totalInvoiceCreated = 0;
         seller = _sellersAddr;
         buyer = _buyersAddr;
+        admin = _adminAddr;
 
         pp = _sPP;
     }
 
     function createInvoice(uint256 _price) public {
-        _price = bound(_price, 1.01 ether, INVOICE_PRICE);
+        uint256 minValue = pp.getMinimumInvoiceValue();
+        if (minValue > INVOICE_PRICE) return;
+        _price = bound(_price, minValue, INVOICE_PRICE);
         vm.prank(seller);
         uint216 invoiceId = pp.createInvoice(_price, "", false);
         price[invoiceId] = _price;
@@ -53,11 +57,10 @@ contract SimplePaymentProcessorHandler is Test {
     function makePayment(uint256 _index, uint256 _value) public invoiceExists {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
-        if (pp.getInvoiceData(invoiceId).status != pp.CREATED()) return;
-        uint256 iPrice = pp.getInvoiceData(invoiceId).price;
-        _value = bound(_value, iPrice, iPrice);
-
-        _value = bound(_value, 0, price[invoiceId]);
+        ISimplePaymentProcessor.Invoice memory inv = pp.getInvoiceData(invoiceId);
+        if (inv.status != pp.CREATED()) return;
+        if (block.timestamp > inv.invalidateAt) return;
+        _value = bound(_value, inv.price, inv.price);
 
         vm.prank(buyer);
         pp.pay{ value: _value }(invoiceId, "", false);
@@ -96,6 +99,41 @@ contract SimplePaymentProcessorHandler is Test {
 
         vm.prank(seller);
         pp.release(invoiceId);
+    }
+
+    function setInvoiceReleaseTime(uint256 _index, uint32 _holdPeriod) public invoiceExists {
+        _index = _bound(_index);
+        uint216 invoiceId = invoiceIds[_index];
+        if (pp.getInvoiceData(invoiceId).status != pp.ACCEPTED()) return;
+        _holdPeriod = uint32(bound(uint256(_holdPeriod), 1 hours, 30 days));
+        vm.prank(admin);
+        pp.setInvoiceReleaseTime(invoiceId, _holdPeriod);
+    }
+
+    function setMinimumInvoiceValue(uint256 _newMin) public {
+        _newMin = bound(_newMin, 0, 100 ether);
+        vm.prank(admin);
+        pp.setMinimumInvoiceValue(_newMin);
+    }
+
+    function setDecisionWindow(uint256 _newWindow) public {
+        _newWindow = bound(_newWindow, 1 hours, 7 days);
+        vm.prank(admin);
+        pp.setDecisionWindow(_newWindow);
+    }
+
+    function refundBuyer(uint256 _index) public invoiceExists {
+        _index = _bound(_index);
+        uint216 invoiceId = invoiceIds[_index];
+        ISimplePaymentProcessor.Invoice memory inv = pp.getInvoiceData(invoiceId);
+        if (inv.status != pp.PAID()) return;
+        if (block.timestamp < inv.expiresAt) vm.warp(uint256(inv.expiresAt) + 1);
+        pp.refundBuyer(invoiceId);
+    }
+
+    function performUpkeep() public {
+        vm.prank(admin);
+        pp.performUpkeep("");
     }
 
     /// @notice Returns the total number of invoices created by the handler.
