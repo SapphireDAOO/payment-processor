@@ -28,6 +28,7 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when a task’s heap index is invalid.
     error InvalidHeapPosition();
 
+    /// @notice Thrown when the decision window value provided is invalid (e.g., zero).
     error InvalidDecisionWindow();
 
     /// @notice Thrown when the payment amount sent does not match the expected invoice price.
@@ -152,7 +153,6 @@ interface ISimplePaymentProcessor {
      * @dev This function updates the invoice status to `REJECTED`, refunds the payer via the escrow contract,
      * and emits the `InvoiceRejected` event.
      * @param _invoiceId The key of the invoice being rejected.
-     * address and payer.
      */
     function rejectPayment(uint216 _invoiceId) external;
 

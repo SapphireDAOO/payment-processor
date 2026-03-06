@@ -139,7 +139,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         vm.startPrank(buyerOne);
 
-        vm.expectRevert(IAdvancedPaymentProcessor.InvalidPaymentToken.selector);
+        vm.expectRevert(IAdvancedPaymentProcessor.UnsupportedToken.selector);
         advancedPP.payInvoice(invoiceId, address(12));
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidNativePayment.selector);
@@ -189,7 +189,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         vm.startPrank(buyerOne);
 
-        vm.expectRevert(IAdvancedPaymentProcessor.InvalidPaymentToken.selector);
+        vm.expectRevert(IAdvancedPaymentProcessor.UnsupportedToken.selector);
         advancedPP.payMetaInvoice(metaInvoiceId, address(12));
 
         advancedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId);
@@ -727,6 +727,124 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         vm.prank(admin);
         advancedPP.performUpkeep("");
+    }
+
+    function test_customEscrowHoldPeriodIsUsedWhenSet() public {
+        uint256 price = 100e8;
+        uint32 customHold = 7 days;
+
+        IAdvancedPaymentProcessor.InvoiceCreationParam memory param =
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price);
+        param.escrowHoldPeriod = customHold;
+
+        uint216 invoiceId = advancedPP.createSingleInvoice(param);
+
+        assertEq(advancedPP.getInvoice(invoiceId).escrowHoldPeriod, customHold);
+
+        uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
+        uint256 paidAt = block.timestamp;
+
+        vm.prank(buyerOne);
+        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
+
+        assertEq(inv.releaseAt, paidAt + customHold);
+        assertEq(inv.state, advancedPP.PAID());
+    }
+
+    function test_defaultHoldPeriodUsedWhenEscrowHoldPeriodIsZero() public {
+        uint256 price = 100e8;
+
+        uint216 invoiceId =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
+
+        assertEq(advancedPP.getInvoice(invoiceId).escrowHoldPeriod, 0);
+
+        uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
+        uint256 paidAt = block.timestamp;
+
+        vm.prank(buyerOne);
+        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
+
+        assertEq(inv.releaseAt, paidAt + ppStorage.getDefaultHoldPeriod());
+    }
+
+    function test_customEscrowHoldPeriod_cannotReleaseBeforeIt() public {
+        uint256 price = 100e8;
+        uint32 customHold = 7 days;
+
+        IAdvancedPaymentProcessor.InvoiceCreationParam memory param =
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price);
+        param.escrowHoldPeriod = customHold;
+
+        uint216 invoiceId = advancedPP.createSingleInvoice(param);
+
+        uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
+
+        vm.prank(buyerOne);
+        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+
+        // warp past default hold (1 day) but not past custom hold (7 days)
+        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
+
+        vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
+        advancedPP.release(invoiceId);
+    }
+
+    function test_customEscrowHoldPeriod_canReleaseAfterIt() public {
+        uint256 price = 100e8;
+        uint32 customHold = 7 days;
+
+        IAdvancedPaymentProcessor.InvoiceCreationParam memory param =
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price);
+        param.escrowHoldPeriod = customHold;
+
+        uint216 invoiceId = advancedPP.createSingleInvoice(param);
+
+        uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
+
+        vm.prank(buyerOne);
+        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+
+        vm.warp(block.timestamp + customHold + 1);
+        advancedPP.release(invoiceId);
+
+        assertEq(advancedPP.getInvoice(invoiceId).state, advancedPP.RELEASED());
+    }
+
+    function test_customEscrowHoldPeriodForMetaInvoice() public {
+        uint32 customHold = 14 days;
+
+        address[] memory sellers = new address[](2);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 100e8;
+        prices[1] = 200e8;
+
+        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory invoiceIds) =
+            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices);
+
+        params[0].escrowHoldPeriod = customHold;
+        params[1].escrowHoldPeriod = customHold;
+
+        uint216 metaInvoiceId = advancedPP.createMetaInvoice(params);
+
+        uint256 totalTokenValue = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
+        uint256 paidAt = block.timestamp;
+
+        vm.prank(buyerOne);
+        advancedPP.payMetaInvoiceWithValue{ value: totalTokenValue }(metaInvoiceId);
+
+        for (uint256 i = 0; i < invoiceIds.length; i++) {
+            IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceIds[i]);
+            assertEq(inv.releaseAt, paidAt + customHold);
+            assertEq(inv.state, advancedPP.PAID());
+        }
     }
 
     function test_createSingleInvoice(uint256 _price) public {

@@ -22,6 +22,7 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when a Chainlink price feed is stale and cannot be trusted for conversion.
     error StalePriceFeed();
 
+    /// @notice Thrown when the Chainlink price feed returns a zero or negative answer.
     error InvalidPrice();
 
     /// @notice Thrown when an account attempts to withdraw or spend more than its available balance.
@@ -39,14 +40,11 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when an attempt is made to create an invoice with a price of zero.
     error PriceCannotBeZero();
 
-    /// @notice Reverts if the buyer and seller are the same address.
+    /// @notice Thrown if the buyer and seller are the same address.
     error BuyerCannotBeSeller();
 
     /// @notice Thrown when the invoice is in a state that does not allow the attempted action.
     error InvalidInvoiceState();
-
-    /// @notice Thrown when an unsupported or disallowed token is used for payment.
-    error InvalidPaymentToken();
 
     /// @notice Thrown when the invoice does not exist.
     error InvoiceDoesNotExist();
@@ -79,6 +77,7 @@ interface IAdvancedPaymentProcessor {
     /// @param releaseAt The timestamp when funds in escrow can be released to the seller.
     /// @param expiresAt The timestamp after which the invoice is no longer payable.
     /// @param state Current state of the invoice.
+    /// @param escrowHoldPeriod Custom hold duration (in seconds) between payment and release, set at invoice creation. When non-zero, it overrides the storage default.
     /// @param metaInvoiceId Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.
     /// @param buyer Address of the buyer.
     /// @param seller Address of the seller.
@@ -94,6 +93,7 @@ interface IAdvancedPaymentProcessor {
         uint40 releaseAt;
         uint40 expiresAt;
         uint8 state;
+        uint32 escrowHoldPeriod;
         uint216 metaInvoiceId;
         address buyer;
         address seller;
@@ -113,15 +113,15 @@ interface IAdvancedPaymentProcessor {
     }
 
     /// @notice Parameters used to create a new invoice or sub-invoice.
-    /// @param invoiceId A unique string identifier for the invoice.
+    /// @param invoiceId A unique string identifier for the invoice, provided by the caller and hashed for use in the contract.
     /// @param seller Address of the seller.
-    /// @param price Price or amount to be paid for the invoice.
+    /// @param price Price or amount to be paid for the invoice in USD (8 decimals).
     /// @param escrowHoldPeriod Duration (in seconds) that the escrow will lock the payment before it's releasable.
     struct InvoiceCreationParam {
         string invoiceId;
         address seller;
         uint256 price;
-        uint256 escrowHoldPeriod;
+        uint32 escrowHoldPeriod;
     }
 
     // ================================================================
@@ -139,7 +139,7 @@ interface IAdvancedPaymentProcessor {
     /**
      * @notice Creates a meta-invoice composed of multiple sub-invoices for a buyer.
      * @dev Only callable by the marketplace contract. Each sub-invoice is created using the provided parameters,
-     * and all are linked under a single meta-invoice key.
+     * and all are linked under a single meta-invoice ID.
      * @param _param An array of parameters used to create each sub-invoice.
      * @return metaInvoiceId The keccak256 hash representing the meta-invoice ID.
      */
@@ -147,7 +147,6 @@ interface IAdvancedPaymentProcessor {
 
     /**
      * @notice Pays a single invoice using native ETH or an approved ERC20 token.
-     * @dev Caller must be the invoice buyer. Use `address(0)` for native payments.
      * @param _invoiceId The ID of the invoice to be paid.
      * @param _paymentToken The token address used for payment (or zero address for ETH).
      */
@@ -157,6 +156,9 @@ interface IAdvancedPaymentProcessor {
      * @notice Pays all sub-invoices in a meta-invoice using native ETH.
      * @dev Caller must send exactly the oracle-converted total for the meta-invoice price.
      *      Any dust from per-sub-invoice integer rounding is refunded to the caller.
+     *      Canceled sub-invoices are automatically excluded: each cancellation reduces the
+     *      stored meta-invoice price, so `msg.value` only needs to cover the remaining
+     *      non-canceled sub-invoices. Sub-invoices not in CREATED state are silently skipped.
      * @param _invoiceId The meta-invoice ID to pay.
      */
     function payMetaInvoiceWithValue(uint216 _invoiceId) external payable;
@@ -164,8 +166,11 @@ interface IAdvancedPaymentProcessor {
     /**
      * @notice Pays all sub-invoices in a meta invoice using native ETH or ERC20.
      * @dev Caller must be the buyer of all sub-invoices. Use `address(0)` for native payment.
+     *      Canceled sub-invoices are automatically excluded: each cancellation reduces the
+     *      stored meta-invoice price, so the caller only pays for the remaining non-canceled
+     *      sub-invoices. Sub-invoices not in CREATED state are silently skipped.
      * @param _invoiceId The meta invoice ID to be paid.
-     * @param _paymentToken The token address used for payment (or zero address for ETH).
+     * @param _paymentToken The token address used for payment.
      */
     function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external;
 
@@ -179,8 +184,9 @@ interface IAdvancedPaymentProcessor {
 
     /**
      * @notice Creates a dispute for an invoice.
-     * @dev Callable only by the marketplace on behalf of the buyer.
-     * Only valid for invoices in the PAID state.
+     * @dev Callable only by the marketplace. Only valid for invoices in the PAID state.
+     *      Removes the invoice from the auto-release queue, canceling the pending release timer
+     *      until the dispute is resolved or dismissed.
      * @param _invoiceId The ID of the invoice to dispute.
      */
     function createDispute(uint216 _invoiceId) external;
@@ -188,21 +194,28 @@ interface IAdvancedPaymentProcessor {
     /**
      * @notice Issues a partial or full refund for a paid invoice.
      * @dev Callable only by the marketplace. Invoice must be in the PAID state.
-     *      `_refundShare` must be between 1 and 10,000 basis points (inclusive).
-     *      A full refund (10,000 BPS) transitions the invoice to REFUNDED and removes it from the heap.
-     * @param _invoiceId The identifier of the order to refund.
+     *      `_refundShare` must be between 1 and 10,000 basis points (inclusive). The refund
+     *      amount is sent directly to the buyer from escrow.
+     *      A full refund (10,000 BPS) transitions the invoice to REFUNDED and removes it from
+     *      the auto-release heap. A partial refund reduces the escrow balance but leaves the
+     *      invoice in PAID state — it remains in the heap and can still be auto-released.
+     * @param _invoiceId The identifier of the invoice to refund.
      * @param _refundShare The portion of the escrow balance to refund, in basis points (1% = 100, 100% = 10000).
      */
     function refund(uint216 _invoiceId, uint256 _refundShare) external;
 
     /**
      * @notice Handles a dispute on a given invoice.
-     * @dev Callable only by the marketplace. Must be called after a dispute is created.
-     * The resolution can be DISPUTE_DISMISSED, or DISPUTE_SETTLED.
-     * If settled, the seller and buyer receive a split of the funds based on sellerShare.
+     * @dev Callable only by the marketplace. Invoice must be in the DISPUTED state.
+     *      `_resolution` must be either DISPUTE_DISMISSED or DISPUTE_SETTLED; DISPUTE_RESOLVED
+     *      is a separate flow handled by `resolveDispute`.
+     *      `_sellerShare` must be between 0 and 10,000 BPS (0 = full refund to buyer).
+     *      If dismissed, the invoice is re-inserted into the auto-release heap, restoring its
+     *      release timer. If settled, funds are immediately distributed between seller and buyer
+     *      according to `_sellerShare` and the invoice balance is zeroed.
      * @param _invoiceId The ID of the invoice.
-     * @param _resolution The resolution state (must be one of the defined DISPUTE_* constants).
-     * @param _sellerShare The portion of the invoice price (in basis points) to be awarded to the seller.
+     * @param _resolution The resolution outcome: DISPUTE_DISMISSED or DISPUTE_SETTLED.
+     * @param _sellerShare The portion of the escrow balance (in basis points) awarded to the seller (0–10,000).
      */
     function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external;
 
@@ -210,7 +223,6 @@ interface IAdvancedPaymentProcessor {
      * @notice Finalizes a dispute and marks the invoice as resolved.
      * @dev Callable only by the marketplace after a dispute has been raised by the buyer.
      * This function is used when both parties (buyer and seller) have come to an agreement
-     * without requiring arbitration, or when the dispute period has expired with no further action.
      * Transitions the invoice state from DISPUTED to DISPUTE_RESOLVED.
      * @param _invoiceId The unique identifier of the disputed invoice.
      */
@@ -218,16 +230,20 @@ interface IAdvancedPaymentProcessor {
 
     /**
      * @notice Releases escrowed funds to the seller after the release window has passed.
-     * @dev Callable only by the marketplace. Only valid for invoices in the ACCEPTED state
-     * and only after `releaseAt` timestamp has been reached.
+     * @dev Callable only by the marketplace. Valid for invoices in the PAID, DISPUTE_RESOLVED,
+     *      or DISPUTE_DISMISSED state once `releaseAt` has been reached. Platform fees are
+     *      deducted before the net amount is transferred to the seller. The invoice transitions
+     *      to RELEASED, its balance is zeroed, and it is removed from the auto-release heap.
      * @param _invoiceId The ID of the invoice.
      */
     function release(uint216 _invoiceId) external;
 
     /**
      * @notice Sets the Chainlink price feed aggregator for a specific payment token.
-     * @param _token The address of the ERC20 token.
-     * @param _aggregator The address of the Chainlink aggregator for the token.
+     * @dev Callable only by the owner. Use address(0) for `_token` to set the native currency feed.
+     *      Setting `_aggregator` to address(0) removes the token from accepted payment methods.
+     * @param _token The payment token address, or address(0) for native currency.
+     * @param _aggregator The Chainlink aggregator address, or address(0) to disable the token.
      */
     function setPriceFeed(address _token, address _aggregator) external;
 
@@ -297,10 +313,10 @@ interface IAdvancedPaymentProcessor {
     function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonce);
 
     /**
-     * @notice Returns the ID that will be assigned to the next meta-invoice.
-     * @return nextMetaInvoiceId The next meta-invoice nonce value.
+     * @notice Returns the nonce that will be assigned to the next meta-invoice.
+     * @return nextMetaInvoiceNonce The next meta-invoice nonce value.
      */
-    function getNextMetaInvoiceNonce() external view returns (uint216 nextMetaInvoiceId);
+    function getNextMetaInvoiceNonce() external view returns (uint216 nextMetaInvoiceNonce);
 
     /**
      * @notice Returns a list of all task IDs currently in the heap.
@@ -322,18 +338,6 @@ interface IAdvancedPaymentProcessor {
     // ================================================================
 
     /**
-     * @notice Emitted when a dispute is dismissed and no party receives a refund or payout.
-     * @param invoiceId The ID of the invoice involved in the dispute.
-     */
-    event DisputeDismissed(uint216 indexed invoiceId);
-
-    /**
-     * @notice Emitted when a dispute is resolved in favor of one party without partial refund.
-     * @param invoiceId The ID of the invoice involved in the dispute.
-     */
-    event DisputeResolved(uint216 indexed invoiceId);
-
-    /**
      * @notice Emitted when a new invoice is created.
      * @param invoiceId The ID of the newly created invoice.
      * @param invoice The invoice data.
@@ -348,20 +352,6 @@ interface IAdvancedPaymentProcessor {
     event MetaInvoiceCreated(uint216 indexed metaInvoiceId, uint256 indexed totalPrice);
 
     /**
-     * @notice Emitted when an invoice is canceled by the seller and the buyer is refunded.
-     * @param invoiceId The ID of the canceled invoice.
-     */
-    event InvoiceCanceled(uint216 indexed invoiceId);
-
-    /**
-     * @notice Emitted when a dispute is settled and the funds are split between buyer and seller.
-     * @param invoiceId The ID of the invoice that was disputed.
-     * @param sellerAmount The amount transferred to the seller.
-     * @param buyerAmount The amount refunded to the buyer.
-     */
-    event DisputeSettled(uint216 indexed invoiceId, uint256 sellerAmount, uint256 buyerAmount);
-
-    /**
      * @notice Emitted when an invoice is successfully paid and an escrow contract is created.
      * @param invoiceId The unique identifier of the paid invoice.
      * @param paymentToken The address of the token used for payment (address(0) for native ETH).
@@ -374,13 +364,6 @@ interface IAdvancedPaymentProcessor {
     );
 
     /**
-     * @notice Emitted when the escrow release time is updated for a given invoice.
-     * @param invoiceId The unique identifier of the invoice whose release time was modified.
-     * @param newHoldPeriod The updated escrow hold duration in seconds.
-     */
-    event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
-
-    /**
      * @notice Emitted when escrowed funds for an invoice are released.
      * @param invoiceId The unique identifier of the invoice.
      * @param receiver The address that receives the released funds (typically the seller).
@@ -390,15 +373,54 @@ interface IAdvancedPaymentProcessor {
     event PaymentReleased(uint216 indexed invoiceId, address receiver, address currency, uint256 sellerAmount);
 
     /**
+     * @notice Emitted when a refund is issued for a specific order.
+     * @param invoiceId The unique identifier of the refunded order.
+     * @param amount The amount refunded to the buyer.
+     */
+    event Refunded(uint216 indexed invoiceId, uint256 indexed amount);
+
+    /**
+     * @notice Emitted when an invoice is canceled before any payment has been made.
+     * @dev Only valid for invoices in the CREATED state — no buyer exists and no funds are moved.
+     *      If the invoice belongs to a meta-invoice, the meta-invoice's total price is reduced
+     *      by the canceled sub-invoice's price.
+     * @param invoiceId The ID of the canceled invoice.
+     */
+    event InvoiceCanceled(uint216 indexed invoiceId);
+
+    /**
      * @notice Emitted when a dispute is raised for an invoice by the buyer.
      * @param invoiceId The ID of the disputed invoice.
      */
     event DisputeCreated(uint216 indexed invoiceId);
 
     /**
-     * @notice Emitted when a refund is issued for a specific order.
-     * @param invoiceId The unique identifier of the refunded order.
-     * @param amount The amount refunded to the buyer.
+     * @notice Emitted when a dispute is dismissed and no party receives a refund or payout.
+     * @param invoiceId The ID of the invoice involved in the dispute.
      */
-    event Refunded(uint216 indexed invoiceId, uint256 indexed amount);
+    event DisputeDismissed(uint216 indexed invoiceId);
+
+    /**
+     * @notice Emitted when a dispute is resolved in the seller's favor via `resolveDispute`.
+     * @dev The invoice transitions to DISPUTE_RESOLVED and is re-inserted into the auto-release
+     *      heap. The seller receives the full escrow balance (minus platform fees) once `releaseAt`
+     *      is reached. No funds are distributed at the time this event is emitted.
+     * @param invoiceId The ID of the invoice involved in the dispute.
+     */
+    event DisputeResolved(uint216 indexed invoiceId);
+
+    /**
+     * @notice Emitted when a dispute is settled and the funds are split between buyer and seller.
+     * @param invoiceId The ID of the invoice that was disputed.
+     * @param sellerAmount The amount transferred to the seller.
+     * @param buyerAmount The amount refunded to the buyer.
+     */
+    event DisputeSettled(uint216 indexed invoiceId, uint256 sellerAmount, uint256 buyerAmount);
+
+    /**
+     * @notice Emitted when the escrow release time is updated for a given invoice.
+     * @param invoiceId The unique identifier of the invoice whose release time was modified.
+     * @param newHoldPeriod The updated escrow hold duration in seconds.
+     */
+    event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 }

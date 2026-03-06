@@ -5,7 +5,7 @@ pragma solidity 0.8.28;
  * @title Chainlink Aggregator V3 Interface
  *  @notice Interface for fetching the latest price data from a Chainlink price feed.
  *  @dev This is a minimal version focusing on `latestRoundData`.
- *  @custom:source https://github.com/smartcontractkit/chainlink/blob/develop/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol
+ *  @custom:source https://github.com/smartcontractkit/chainlink-evm/blob/develop/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol
  */
 interface AggregatorV3Interface {
     /**

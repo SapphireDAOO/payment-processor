@@ -181,6 +181,9 @@ library TaskQueueLib {
     /**
      * @notice Restores the min-heap property by bubbling an element down toward the leaves.
      * @dev Swaps the element at `_i` with its smallest child until the heap invariant is satisfied.
+     * @param _heap The heap storage struct.
+     * @param _i The zero-based index of the element to sift down.
+     * @param _index Mapping from task ID to 1-based index in the heap.
      */
     function _siftDown(Heap storage _heap, uint256 _i, mapping(uint216 => uint256) storage _index) private {
         uint256 len = _heap.data.length;
@@ -199,6 +202,9 @@ library TaskQueueLib {
     /**
      * @notice Restores the min-heap property by bubbling an element up toward the root.
      * @dev Swaps the element at `_i` with its parent until the heap invariant is satisfied.
+     * @param _heap The heap storage struct.
+     * @param _i The zero-based index of the element to sift up.
+     * @param _index Mapping from task ID to 1-based index in the heap.
      */
     function _siftUp(Heap storage _heap, uint256 _i, mapping(uint216 => uint256) storage _index) private {
         while (_i != 0) {
@@ -213,6 +219,10 @@ library TaskQueueLib {
     /**
      * @notice Swaps two elements in the heap array and updates both entries in the index mapping.
      * @dev Both `_i` and `_j` are zero-based positions in `_heap.data`.
+     * @param _heap The heap storage struct.
+     * @param _index Mapping from task ID to 1-based index in the heap.
+     * @param _i The zero-based index of the first element.
+     * @param _j The zero-based index of the second element.
      */
     function _swap(Heap storage _heap, mapping(uint216 => uint256) storage _index, uint256 _i, uint256 _j) private {
         uint256 a = _heap.data[_i];

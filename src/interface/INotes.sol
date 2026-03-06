@@ -16,15 +16,15 @@ interface INotes {
     /// @notice Stored note data.
     /// @param author The note author.
     /// @param share Whether the note is shared with non-authors.
-    /// @param content The encrypted note content.
     /// @param exists Whether the note exists.
     /// @param version The note schema version.
+    /// @param content The encrypted note content.
     struct Note {
         address author;
         bool share;
-        bytes content;
         bool exists;
         uint8 version;
+        bytes content;
     }
 
     /**

@@ -38,9 +38,9 @@ abstract contract BaseSetUp is Test {
             owner: admin,
             feeReceiver: feeReceiver,
             marketplace: address(this),
-            feeRate: FEE_RATE,
-            defaultHoldPeriod: DEFAULT_HOLD_PERIOD,
-            gasThreshold: DEFAULT_GAS_Threshold
+            feeRate: uint96(FEE_RATE),
+            defaultHoldPeriod: uint96(DEFAULT_HOLD_PERIOD),
+            gasThreshold: uint96(DEFAULT_GAS_Threshold)
         });
 
         vm.prank(admin);

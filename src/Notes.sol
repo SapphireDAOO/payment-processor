@@ -135,18 +135,13 @@ contract Notes is INotes {
         currentVersion = _newVersion;
     }
 
-    /**
-     * @notice Updates the authorization status for a user.
-     * @param _user The address to update.
-     * @param _enabled Whether the user should be authorized.
-     */
+    /// @inheritdoc INotes
     function setAuthorized(address _user, bool _enabled) external {
         if (msg.sender != _owner()) revert Unauthorized();
         auth[_user] = _enabled ? ALLOWED : NOT_ALLOWED;
     }
 
-    /// @notice Returns the current note encryption version.
-    /// @return v The active version number used when creating new notes.
+    /// @inheritdoc INotes
     function getCurrentVersion() external view returns (uint8 v) {
         return currentVersion;
     }

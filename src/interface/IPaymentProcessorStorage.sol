@@ -21,18 +21,18 @@ interface IPaymentProcessorStorage {
 
     /// @notice Holds core configuration parameters for the contract.
     /// @param owner The address authorized to modify configuration parameters.
-    /// @param feeReceiver Address that receives platform fees upon seller payout.
-    /// @param marketplace Address authorized to interact with invoice creation and specific management functions.
     /// @param feeRate Platform fee rate in basis points (BPS). i.e 100 BPS = 1%; 10,000 BPS = 100%.
+    /// @param feeReceiver Address that receives platform fees upon seller payout.
     /// @param defaultHoldPeriod The default hold period for funds in escrow, measured in seconds.
+    /// @param marketplace Address authorized to interact with invoice creation and specific management functions.
     /// @param gasThreshold The minimum amount of gas that must remain to continue processing tasks.
     struct Configuration {
         address owner;
+        uint96 feeRate;
         address feeReceiver;
+        uint96 defaultHoldPeriod;
         address marketplace;
-        uint256 feeRate;
-        uint256 defaultHoldPeriod;
-        uint256 gasThreshold;
+        uint96 gasThreshold;
     }
 
     /**

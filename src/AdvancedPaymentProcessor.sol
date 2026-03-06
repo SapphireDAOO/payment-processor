@@ -4,7 +4,6 @@ pragma solidity 0.8.28;
 import { EscrowFactory } from "./EscrowFactory.sol";
 import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";
 
-import { IERC20 } from "./interface/IERC20.sol";
 import { IEscrow } from "./interface/IEscrow.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { IAdvancedPaymentProcessor } from "./interface/IAdvancedPaymentProcessor.sol";
@@ -184,7 +183,7 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant {
-        if (address(priceFeed[_paymentToken]) == address(0)) revert InvalidPaymentToken();
+        if (address(priceFeed[_paymentToken]) == address(0)) revert UnsupportedToken();
 
         Invoice memory inv = invoices[_invoiceId];
         uint256 priceInToken = getTokenValueFromUsd(_paymentToken, inv.price);
@@ -205,7 +204,7 @@ contract AdvancedPaymentProcessor is
      * @param _invoiceId The meta-invoice ID to pay.
      */
     function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant {
-        if (address(priceFeed[address(0)]) == address(0)) revert InvalidPaymentToken();
+        if (address(priceFeed[address(0)]) == address(0)) revert UnsupportedToken();
 
         MetaInvoice memory metaInv = metaInvoices[_invoiceId];
         if (metaInv.price == 0) revert InvoiceDoesNotExist();
@@ -225,13 +224,13 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant {
-        if (address(priceFeed[_paymentToken]) == address(0)) revert InvalidPaymentToken();
+        if (address(priceFeed[_paymentToken]) == address(0)) revert UnsupportedToken();
 
         MetaInvoice memory metaInv = metaInvoices[_invoiceId];
         if (metaInv.price == 0) revert InvoiceDoesNotExist();
 
         uint256 usdPerToken = _usdPerToken(_paymentToken);
-        uint8 decimals = IERC20(_paymentToken).decimals();
+        uint8 decimals = _getDecimals(_paymentToken);
 
         uint256 amountPaid = _paySubInvoices(metaInv.subInvoiceIds, _paymentToken, usdPerToken, decimals);
         if (amountPaid == 0) revert InvalidInvoiceState();
@@ -377,7 +376,7 @@ contract AdvancedPaymentProcessor is
     /// @inheritdoc IAdvancedPaymentProcessor
     function getTokenValueFromUsd(address _paymentToken, uint256 _usdAmount) public view returns (uint256 tokenValue) {
         uint256 usdPerToken = _usdPerToken(_paymentToken);
-        uint8 tokenDecimals = _paymentToken == address(0) ? DEFAULT_DECIMAL : IERC20(_paymentToken).decimals();
+        uint8 tokenDecimals = _paymentToken == address(0) ? DEFAULT_DECIMAL : _getDecimals(_paymentToken);
 
         tokenValue = _usdAmount.mulDiv(10 ** tokenDecimals, usdPerToken);
     }
@@ -475,7 +474,9 @@ contract AdvancedPaymentProcessor is
         }
 
         if (_inv.releaseAt == 0) {
-            _inv.releaseAt = (block.timestamp + ppStorage.getDefaultHoldPeriod()).toUint40();
+            uint256 holdPeriod =
+                _inv.escrowHoldPeriod != 0 ? uint256(_inv.escrowHoldPeriod) : ppStorage.getDefaultHoldPeriod();
+            _inv.releaseAt = (block.timestamp + holdPeriod).toUint40();
             heap.insert(_invoiceId, _inv.releaseAt, index);
         }
 
@@ -531,6 +532,7 @@ contract AdvancedPaymentProcessor is
         inv.state = CREATED;
         inv.invoiceNonce = _nonce;
         inv.expiresAt = (ppStorage.getPaymentValidityDuration() + block.timestamp).toUint40();
+        inv.escrowHoldPeriod = _param.escrowHoldPeriod;
 
         invoiceId = (uint256(keccak256(abi.encode(_param.invoiceId))) & ((1 << 216) - 1)).toUint216();
 
@@ -610,6 +612,22 @@ contract AdvancedPaymentProcessor is
     {
         metaInvoiceId =
             (uint256(keccak256(abi.encode(_lower, _upper, _salt, address(this)))) & ((1 << 216) - 1)).toUint216();
+    }
+
+    /**
+     * @notice Returns the decimal precision of an ERC20 token by calling its `decimals()` function.
+     * @dev Falls back to `DEFAULT_DECIMAL` (18) if the call fails or the token does not implement `decimals()`.
+     * @param _token The address of the ERC20 token.
+     * @return tokenDecimals The number of decimals the token uses.
+     */
+    function _getDecimals(address _token) internal view returns (uint8 tokenDecimals) {
+        (bool ok, bytes memory data) = _token.staticcall(abi.encodeWithSignature("decimals()"));
+
+        if (ok) {
+            return abi.decode(data, (uint8));
+        }
+
+        return DEFAULT_DECIMAL;
     }
 
     /**
