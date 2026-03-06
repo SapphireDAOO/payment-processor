@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
+import { ISimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
 
 contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {

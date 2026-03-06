@@ -77,12 +77,12 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @inheritdoc IPaymentProcessorStorage
     function setFeeRate(uint256 _newFeeRate) external onlyOwner {
         if (_newFeeRate > BASIS_POINTS) revert InvalidFeeRate();
-        config.feeRate = _newFeeRate;
+        config.feeRate = uint96(_newFeeRate);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
     function setGasThreshold(uint256 _newGasThreshold) external onlyOwner {
-        config.gasThreshold = _newGasThreshold;
+        config.gasThreshold = uint96(_newGasThreshold);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
@@ -93,7 +93,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @inheritdoc IPaymentProcessorStorage
     function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) public onlyOwner {
         if (_newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
-        config.defaultHoldPeriod = _newDefaultHoldPeriod;
+        config.defaultHoldPeriod = uint96(_newDefaultHoldPeriod);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
