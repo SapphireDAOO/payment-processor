@@ -167,7 +167,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             revert InvoiceIsNoLongerValid();
         }
 
-        escrowAddress = address(new Escrow{ value: _value }(_invoiceId, invoice.seller, msg.sender, address(this)));
+        escrowAddress = address(new Escrow{ value: _value }(_invoiceId, address(this)));
         uint40 expiresAt = (block.timestamp + decisionWindow).toUint40();
 
         invoice.escrow = escrowAddress;
@@ -384,7 +384,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         if (msg.sender != _owner()) revert NotAuthorized();
         Invoice memory invoice = invoices[_invoiceId];
 
-        if (invoice.status < ACCEPTED) {
+        if (invoice.status != ACCEPTED) {
             revert InvoiceHasNotBeenAccepted();
         }
 
@@ -415,6 +415,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
     /// @inheritdoc ISimplePaymentProcessor
     function setDecisionWindow(uint256 _newDecisionWindow) external onlyAuthorized {
+        if (_newDecisionWindow == 0) revert InvalidDecisionWindow();
         decisionWindow = _newDecisionWindow;
     }
 

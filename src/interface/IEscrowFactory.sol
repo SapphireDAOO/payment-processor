@@ -8,8 +8,6 @@ pragma solidity 0.8.28;
  */
 interface IEscrowFactory {
     /// @notice Parameters required to initialize an escrow contract.
-    /// @param seller The address of the seller who will receive the funds upon successful transaction.
-    /// @param buyer The address of the buyer who deposits the funds into escrow.
     /// @param invoiceId The unique identifier associated with the invoice or order.
     /// @param value The total amount to be held in escrow, denominated in the payment token or native currency.
     /// @param paymentToken The address of the token used for payment. Use address(0) for native currency (e.g., ETH).

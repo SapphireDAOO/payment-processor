@@ -28,6 +28,8 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when a task’s heap index is invalid.
     error InvalidHeapPosition();
 
+    error InvalidDecisionWindow();
+
     /// @notice Thrown when the payment amount sent does not match the expected invoice price.
     /// @param _sent The amount of Ether (in wei) sent with the transaction.
     /// @param _expected The exact invoice price expected (in wei).
@@ -195,7 +197,7 @@ interface ISimplePaymentProcessor {
     function setDecisionWindow(uint256 _newDecisionWindow) external;
 
     /**
-     * @notice Refunds the seller of a specific invoice.
+     * @notice Refunds the buyer of a specific invoice.
      * @dev This function allows the buyer to be refund if the acceptance window has not been exceeded
      * and the invoice is eligible for a refund. The refund will be processed through the escrow contract.
      * @param _invoiceId The ID of the invoice to be refunded.

@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { StdInvariant } from "forge-std/StdInvariant.sol";
-import { Test, console } from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 
 import { BaseSetUp, PaymentProcessorStorage } from "../utils/BaseSetUp.sol";
 
@@ -30,7 +30,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
         simplePaymentProcessor = _simplePaymentProcessorSetUp(storageAddress, notesAddress);
         advancedPaymentProcessor = _advancedPaymentProcessorSetUp(storageAddress);
 
-        sHandler = new SimplePaymentProcessorHandler(simplePaymentProcessor, buyerOne, sellerOne);
+        sHandler = new SimplePaymentProcessorHandler(simplePaymentProcessor, buyerOne, sellerOne, admin);
         aHandler = new AdvancedPaymentProcessorHandler(advancedPaymentProcessor, admin, buyerOne, sellerOne);
 
         targetContract(address(aHandler));
@@ -47,7 +47,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
         assertEq(aHandler.getTotalMetaInvoiceCreated(), advancedPaymentProcessor.totalMetaInvoiceCreated());
     }
 
-    function invariant_simple_invoice_state_consistency() external view {
+    function invariant_simpleInvoiceStateConsistency() external view {
         uint256 count = sHandler.getInvoiceCount();
         for (uint256 i = 0; i < count; i++) {
             uint216 invoiceId = sHandler.getInvoiceId(i);
@@ -84,9 +84,8 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
         }
     }
 
-    function invariant_advanced_invoice_state_consistency() external view {
+    function invariant_advancedInvoiceStateConsistency() external view {
         uint256 count = aHandler.getInvoiceCount();
-        console.log("count", count);
         for (uint256 i = 0; i < count; i++) {
             uint216 invoiceId = aHandler.getInvoiceId(i);
             IAdvancedPaymentProcessor.Invoice memory inv = advancedPaymentProcessor.getInvoice(invoiceId);
@@ -122,7 +121,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
         }
     }
 
-    function invariant_meta_invoice_price_consistency() external view {
+    function invariant_metaInvoicePriceConsistency() external view {
         uint256 metaCount = aHandler.getMetaInvoiceCount();
         for (uint256 i = 0; i < metaCount; i++) {
             uint216 metaInvoiceId = aHandler.getMetaInvoiceId(i);
@@ -140,5 +139,13 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
             }
             assertEq(metaInv.price, sum);
         }
+    }
+
+    function invariant_simpleProcessorNativeTokenBalanceIsAlwaysZero() external view {
+        assertEq(address(advancedPaymentProcessor).balance, 0);
+    }
+
+    function invariant_advancedProcessorNativeTokenBalanceAlwaysZero() external view {
+        assertEq(address(advancedPaymentProcessor).balance, 0);
     }
 }

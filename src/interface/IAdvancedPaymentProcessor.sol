@@ -22,6 +22,8 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when a Chainlink price feed is stale and cannot be trusted for conversion.
     error StalePriceFeed();
 
+    error InvalidPrice();
+
     /// @notice Thrown when an account attempts to withdraw or spend more than its available balance.
     error InsufficientBalance();
 

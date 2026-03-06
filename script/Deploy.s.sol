@@ -17,7 +17,7 @@ struct Addr {
     address wbtc;
 }
 
-contract Deployer is Script {
+contract Deploy is Script {
     MockUsdc mockUsdc;
     MockWbtc mockWBtc;
 

@@ -36,7 +36,7 @@ abstract contract EscrowFactory is IEscrowFactory {
      * @return escrow The address of the newly deployed Escrow contract.
      */
     function _create(EscrowCreationParams memory _params) internal returns (address escrow) {
-        bytes memory constructorArg = abi.encode(_params.invoiceId, _params.seller, _params.buyer, address(this));
+        bytes memory constructorArg = abi.encode(_params.invoiceId, address(this));
         bytes32 salt = computeSalt(_params.seller, _params.buyer, _params.invoiceId);
 
         if (_params.paymentToken != address(0)) {

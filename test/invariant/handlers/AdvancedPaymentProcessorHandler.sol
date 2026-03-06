@@ -55,7 +55,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (advancedPP.getInvoice(identifier).state != 0) {
             return;
         }
-        _price = bound(_price, 1e8, 1_000e8);
+        _price = bound(_price, advancedPP.getMinimumPrice(), 1_000e8);
 
         vm.prank(advancedPP.ppStorage().getMarketplace());
 
@@ -67,8 +67,8 @@ contract AdvancedPaymentProcessorHandler is Test {
     }
 
     function createMetaInvoice(uint256 _priceO, uint256 _priceT) public {
-        _priceO = bound(_priceO, 1e8, 1_000e8);
-        _priceT = bound(_priceT, 1e8, 1_000e8);
+        _priceO = bound(_priceO, advancedPP.getMinimumPrice(), 1_000e8);
+        _priceT = bound(_priceT, advancedPP.getMinimumPrice(), 1_000e8);
 
         address[] memory sellers = new address[](2);
         sellers[0] = seller;
@@ -101,9 +101,11 @@ contract AdvancedPaymentProcessorHandler is Test {
         uint216 invoiceId = singleInvoiceIds[_index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
 
+        if (inv.state != advancedPP.CREATED()) return;
+        if (block.timestamp > inv.expiresAt) return;
+
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), inv.price);
 
-        if (inv.state != advancedPP.CREATED()) return;
         vm.prank(buyer);
         advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
     }
@@ -124,7 +126,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         bool paid;
         for (uint256 i; i < ids.length; i++) {
             IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(ids[i]);
-            if (inv.state == advancedPP.CREATED()) hasPayable = true;
+            if (inv.state == advancedPP.CREATED() && block.timestamp <= inv.expiresAt) hasPayable = true;
             if (inv.balance != 0) paid = true;
         }
         if (!hasPayable || paid || metaInv.price == 0) return;
@@ -210,6 +212,31 @@ contract AdvancedPaymentProcessorHandler is Test {
 
         vm.prank(advancedPP.ppStorage().getMarketplace());
         advancedPP.resolveDispute(invoiceId);
+    }
+
+    function setInvoiceReleaseTime(uint256 _index, uint256 _holdPeriod) public onlyExistingInvoice {
+        if (singleAndSubInvoice.length == 0) return;
+        _index = bound(_index, 0, singleAndSubInvoice.length - 1);
+        uint216 invoiceId = singleAndSubInvoice[_index];
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
+        if (
+            inv.state != advancedPP.PAID() && inv.state != advancedPP.DISPUTE_RESOLVED()
+                && inv.state != advancedPP.DISPUTE_DISMISSED()
+        ) return;
+        _holdPeriod = bound(_holdPeriod, 1 hours, 30 days);
+        vm.prank(admin);
+        advancedPP.setInvoiceReleaseTime(invoiceId, _holdPeriod);
+    }
+
+    function setMinimumPrice(uint256 _newMin) public {
+        _newMin = bound(_newMin, 1e6, 1_000e8);
+        vm.prank(admin);
+        advancedPP.setMinimumPrice(_newMin);
+    }
+
+    function performUpkeep() public {
+        vm.prank(admin);
+        advancedPP.performUpkeep("");
     }
 
     /// @notice Returns the total number of single invoices created by the handler.
