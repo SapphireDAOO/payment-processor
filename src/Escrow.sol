@@ -16,7 +16,7 @@ contract Escrow is IEscrow {
     address public immutable PAYMENT_PROCESSOR;
 
     /// @notice The invoice ID associated with the escrow.
-    uint216 public immutable INVOICE;
+    uint216 public immutable INVOICE_ID;
 
     /**
      * @notice Restricts access to the payment processor contract.
@@ -28,14 +28,15 @@ contract Escrow is IEscrow {
     }
 
     /**
-     * @notice Initializes the escrow contract with invoice details and deposits the funds.
-     * @dev This constructor sets the invoice ID, creator, payer, and payment processor addresses, and records the sent
-     * Ether as the balance.
+     * @notice Initializes the escrow contract and receives the deposited funds.
+     * @dev Sets the immutable invoice ID and payment processor address. Any ETH sent with
+     *      deployment is held by the contract and tracked off-chain via the `FundsDeposited` event.
+     *      ERC20 escrows receive tokens via a direct transfer before or after deployment.
      * @param _invoiceId The unique identifier of the invoice associated with this escrow.
      * @param _paymentProcessorAddress The address of the payment processor contract managing the invoice.
      */
     constructor(uint216 _invoiceId, address _paymentProcessorAddress) payable {
-        INVOICE = _invoiceId;
+        INVOICE_ID = _invoiceId;
 
         PAYMENT_PROCESSOR = _paymentProcessorAddress;
         emit FundsDeposited(_invoiceId, msg.value);

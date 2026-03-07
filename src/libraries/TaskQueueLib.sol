@@ -105,19 +105,20 @@ library TaskQueueLib {
 
     /**
      * @notice Iterates through the heap and attempts to release due tasks based on available gas.
-     * @dev This function uses a gas threshold to avoid running out of gas. It repeatedly attempts
-     *      to release the current task using the provided `releaseCallback`. If the task is not
-     *      eligible or an error occurs, it moves to the next task in the heap using the `index` mapping.
-     *      - `SUCCESSFUL`: The task was released and the next is processed.
-     *      - `NOT_ELIGIBLE_FOR_RELEASE`: Skips to the next task.
+     * @dev Peeks at the heap root on each iteration. If the top task is not yet due
+     *      (`block.timestamp < dueAt`), the loop exits immediately — the min-heap ordering
+     *      guarantees all remaining tasks are also not yet due. Otherwise, `_callback` is
+     *      invoked with the task ID and the result determines control flow:
+     *      - `SUCCESSFUL`: Task released and removed from heap; continues to next task.
+     *      - `NOT_ELIGIBLE_FOR_RELEASE`: Aborts the loop.
      *      - `ERROR`: Aborts the loop.
      * @param _heap The heap data structure storing encoded tasks.
-     * @param _releaseCallback A function that attempts to release a task by ID, returning a status code.
+     * @param _callback A function that attempts to release or refund a task by ID, returning a status code.
      * @param _gasThreshold The minimum remaining gas required to continue processing.
      */
     function processDueTask(
         Heap storage _heap,
-        function(uint216) internal returns (uint256) _releaseCallback,
+        function(uint216) internal returns (uint256) _callback,
         uint256 _gasThreshold
     ) internal {
         while (_heap.data.length > 0 && gasleft() > _gasThreshold) {
@@ -125,7 +126,7 @@ library TaskQueueLib {
 
             if (block.timestamp < dueAt) break;
 
-            uint256 result = _releaseCallback(id);
+            uint256 result = _callback(id);
 
             if (result == SUCCESSFUL) continue;
             if (result == NOT_ELIGIBLE_FOR_RELEASE) break;
@@ -235,19 +236,36 @@ library TaskQueueLib {
     }
 
     /**
-     * @notice Returns the task IDs currently in the heap in raw order (not sorted).
+     * @notice Returns the task IDs sorted by due time (earliest first).
+     * @dev Copies heap keys into memory and insertion-sorts them. Since `dueAt` occupies the
+     *      high 40 bits of each encoded key, a numeric sort on the keys is equivalent to sorting
+     *      by `dueAt` ascending. This is a view function intended for off-chain use.
      * @param _heap The heap storage struct.
-     * @return items Array of task IDs.
+     * @return items Array of task IDs ordered from earliest to latest due time.
      */
     function getItems(Heap storage _heap) internal view returns (uint216[] memory items) {
         uint256 size = _heap.data.length;
         if (size == 0) return new uint216[](0);
-        items = new uint216[](size);
+
+        uint256[] memory keys = new uint256[](size);
         for (uint256 i = 0; i < size; i++) {
-            (uint216 it,) = _decode(_heap.data[i]);
-            items[i] = it;
+            keys[i] = _heap.data[i];
         }
 
-        return items;
+        for (uint256 i = 1; i < size; i++) {
+            uint256 key = keys[i];
+            uint256 j = i;
+            while (j > 0 && keys[j - 1] > key) {
+                keys[j] = keys[j - 1];
+                j--;
+            }
+            keys[j] = key;
+        }
+
+        items = new uint216[](size);
+        for (uint256 i = 0; i < size; i++) {
+            (uint216 id,) = _decode(keys[i]);
+            items[i] = id;
+        }
     }
 }

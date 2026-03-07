@@ -6,7 +6,7 @@ import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProc
 
 /**
  * @title Notes
- * @notice Stores encrypted order notes and tracks per-user opened state.
+ * @notice Stores encrypted invoice notes and tracks per-user opened state.
  * @dev Access is gated by an allowlist controlled via setAuthorized.
  */
 contract Notes is INotes {
@@ -21,16 +21,14 @@ contract Notes is INotes {
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable ppStorage;
 
-    /// @notice Stores notes per order.
-    /// @dev invoiceId => noteId => Note data
-    mapping(uint216 invoiceId => mapping(uint256 noteId => Note note)) private notes;
+    /// @notice Stores notes per invoice.
+    mapping(uint216 invoiceId => mapping(uint256 noteId => Note data)) private notes;
 
-    /// @notice Tracks the total number of notes created for each order.
-    /// @dev Used to assign incremental noteIds per order
+    /// @notice Tracks the total number of notes created for each invoice.
+    /// @dev Used to assign incremental noteIds per invoice
     mapping(uint216 invoiceId => uint256 totalNotes) private noteCount;
 
     /// @notice Tracks whether a user has opened a specific note.
-    /// @dev invoiceId => noteId => user => opened status
     mapping(uint216 invoiceId => mapping(uint256 noteId => mapping(address user => bool isOpened))) private opened;
 
     /// @notice Tracks which addresses are allowed to create notes.
@@ -90,7 +88,7 @@ contract Notes is INotes {
 
     /**
      * @notice Updates the opened state for a note.
-     * @param _invoiceId Order identifier.
+     * @param _invoiceId Invoice identifier.
      * @param _account Account whose opened state is updated.
      * @param _noteId Note identifier.
      * @param _open New opened state for the account.
