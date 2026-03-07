@@ -53,28 +53,28 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
             uint216 invoiceId = sHandler.getInvoiceId(i);
             ISimplePaymentProcessor.Invoice memory inv = simplePaymentProcessor.getInvoiceData(invoiceId);
 
-            if (inv.status == simplePaymentProcessor.CREATED() || inv.status == simplePaymentProcessor.CANCELLED()) {
+            if (inv.state == simplePaymentProcessor.CREATED() || inv.state == simplePaymentProcessor.CANCELLED()) {
                 assertEq(inv.balance, 0);
                 assertEq(inv.escrow, address(0));
                 assertEq(inv.buyer, address(0));
             }
 
-            if (inv.status == simplePaymentProcessor.PAID()) {
+            if (inv.state == simplePaymentProcessor.PAID()) {
                 assertTrue(inv.escrow != address(0));
                 assertEq(inv.balance, inv.price);
                 assertTrue(inv.buyer != address(0));
                 assertEq(inv.escrow.balance, inv.balance);
             }
 
-            if (inv.status == simplePaymentProcessor.ACCEPTED()) {
+            if (inv.state == simplePaymentProcessor.ACCEPTED()) {
                 uint256 fee = simplePaymentProcessor.calculateFee(inv.price);
                 assertEq(inv.balance, inv.price - fee);
                 assertEq(inv.escrow.balance, inv.balance);
             }
 
             if (
-                inv.status == simplePaymentProcessor.REJECTED() || inv.status == simplePaymentProcessor.REFUNDED()
-                    || inv.status == simplePaymentProcessor.RELEASED()
+                inv.state == simplePaymentProcessor.REJECTED() || inv.state == simplePaymentProcessor.REFUNDED()
+                    || inv.state == simplePaymentProcessor.RELEASED()
             ) {
                 assertEq(inv.balance, 0);
                 if (inv.escrow != address(0)) {

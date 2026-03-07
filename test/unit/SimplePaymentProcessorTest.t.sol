@@ -45,7 +45,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(invoiceDataOne.price, 100 ether);
         assertEq(invoiceDataOne.balance, 0);
         assertEq(invoiceDataOne.buyer, address(0));
-        assertEq(invoiceDataOne.status, simplePP.CREATED());
+        assertEq(invoiceDataOne.state, simplePP.CREATED());
         assertEq(invoiceDataOne.escrow, address(0));
         assertEq(invoiceDataOne.invoiceNonce, 1);
         assertEq(simplePP.getNextInvoiceNonce(), 2);
@@ -60,7 +60,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(invoiceDataTwo.price, 25 ether);
         assertEq(invoiceDataTwo.balance, 0);
         assertEq(invoiceDataTwo.buyer, address(0));
-        assertEq(invoiceDataTwo.status, simplePP.CREATED());
+        assertEq(invoiceDataTwo.state, simplePP.CREATED());
         assertEq(invoiceDataTwo.escrow, address(0));
         assertEq(invoiceDataTwo.invoiceNonce, 2);
         assertEq(simplePP.getNextInvoiceNonce(), 3);
@@ -77,19 +77,19 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
-        uint256 currentInvoiceStatus = simplePP.getInvoiceData(invoiceId).status;
+        uint256 currentInvoiceStatus = simplePP.getInvoiceData(invoiceId).state;
 
-        vm.startPrank(sellerOne);
         vm.expectRevert(
             abi.encodeWithSelector(ISimplePaymentProcessor.InvalidInvoiceState.selector, currentInvoiceStatus)
         );
+        vm.startPrank(sellerOne);
         simplePP.cancelInvoice(invoiceId);
 
         invoiceId = simplePP.createInvoice(invoicePrice, "", false);
         simplePP.cancelInvoice(invoiceId);
         vm.stopPrank();
 
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.CANCELLED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.CANCELLED());
     }
 
     function test_payment() public {
@@ -122,7 +122,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.warp(block.timestamp - ppStorage.getPaymentValidityDuration());
         address escrowAddress = simplePP.pay{ value: invoicePrice }(invoiceId, "correct", false);
 
-        uint256 currentInvoiceStatus = simplePP.getInvoiceData(invoiceId).status;
+        uint256 currentInvoiceStatus = simplePP.getInvoiceData(invoiceId).state;
         // TRY ALREADY PAID INVOICE
         vm.expectRevert(
             abi.encodeWithSelector(ISimplePaymentProcessor.InvalidInvoiceState.selector, currentInvoiceStatus)
@@ -136,7 +136,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(escrowAddress.balance, invoicePrice);
         assertEq(escrowAddress.balance + address(simplePP).balance, invoicePrice);
         assertEq(invoiceData.escrow, escrowAddress);
-        assertEq(invoiceData.status, simplePP.PAID());
+        assertEq(invoiceData.state, simplePP.PAID());
         assertEq(invoiceData.buyer, buyerOne);
     }
 
@@ -145,14 +145,16 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
-        vm.prank(sellerTwo);
         vm.expectRevert(NotAuthorized.selector);
+        vm.prank(sellerTwo);
         simplePP.acceptPayment(invoiceId);
 
         vm.warp(block.number + 10);
 
+        vm.expectRevert(
+            abi.encodeWithSelector(ISimplePaymentProcessor.InvalidInvoiceState.selector, simplePP.CREATED())
+        );
         vm.prank(sellerOne);
-        vm.expectRevert(ISimplePaymentProcessor.InvoiceNotPaid.selector);
         simplePP.acceptPayment(invoiceId);
 
         vm.prank(buyerOne);
@@ -162,7 +164,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.acceptPayment(invoiceId);
         ISimplePaymentProcessor.Invoice memory i = simplePP.getInvoiceData(invoiceId);
         uint256 fee = simplePP.calculateFee(i.price);
-        assertEq(i.status, simplePP.ACCEPTED());
+        assertEq(i.state, simplePP.ACCEPTED());
         assertEq(ppStorage.getFeeReceiver().balance, fee);
     }
 
@@ -200,7 +202,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         uint256 balanceAfterRefund = buyerOne.balance;
 
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.REFUNDED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.REFUNDED());
         assertEq(balanceBeforePayment, balanceAfterRefund);
     }
 
@@ -217,7 +219,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.rejectPayment(invoiceId);
 
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.REJECTED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.REJECTED());
         assertEq(buyerOne.balance, buyerOneBalanceAfterPayment + invoicePrice);
     }
 
@@ -252,19 +254,21 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
         simplePP.release(invoiceId);
 
-        vm.expectRevert(ISimplePaymentProcessor.InvoiceHasAlreadyBeenReleased.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(ISimplePaymentProcessor.InvalidInvoiceState.selector, simplePP.RELEASED())
+        );
         simplePP.release(invoiceId);
         vm.stopPrank();
 
         assertEq(sellerOne.balance, INITIAL_BALANCE + invoicePrice - fee);
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.RELEASED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.RELEASED());
     }
 
     function test_dynamicHoldReleaseInvoice() public {
         uint32 adminHoldPeriod = 25 days;
 
         vm.prank(admin);
-        vm.expectRevert(ISimplePaymentProcessor.InvoiceHasNotBeenAccepted.selector);
+        vm.expectRevert(abi.encodeWithSelector(ISimplePaymentProcessor.InvalidInvoiceState.selector, 0));
         simplePP.setInvoiceReleaseTime(0, adminHoldPeriod);
 
         // CREATE
@@ -293,7 +297,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.release(invoiceId);
 
         assertEq(sellerOne.balance, INITIAL_BALANCE + invoicePrice - fee);
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.RELEASED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.RELEASED());
     }
 
     function test_automatedRelease() public {
@@ -341,9 +345,9 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(admin);
         simplePP.performUpkeep("");
         for (uint256 i = 0; i < numberOfInvoice; i++) {
-            console.log("order:", invoiceIds[i], simplePP.getInvoiceData(invoiceIds[i]).status, i);
+            console.log("order:", invoiceIds[i], simplePP.getInvoiceData(invoiceIds[i]).state, i);
         }
-        assertEq(simplePP.getInvoiceData(invoiceIds[9]).status, simplePP.ACCEPTED());
+        assertEq(simplePP.getInvoiceData(invoiceIds[9]).state, simplePP.ACCEPTED());
     }
 
     function test_automatedRefund() public {
@@ -363,7 +367,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         uint256 buyerBalanceAfterRefund = address(buyerOne).balance;
 
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.REFUNDED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.REFUNDED());
         assertEq(buyerBalanceBeforeRefund + invoicePrice, buyerBalanceAfterRefund);
         assertEq(simplePP.getItems().length, 0);
     }
@@ -399,7 +403,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(admin);
         simplePP.performUpkeep("");
 
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.REFUNDED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.REFUNDED());
     }
 
     function test_ineligibleRelease() public {
@@ -441,7 +445,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(invoiceData.price, _amount);
         assertEq(invoiceData.balance, 0);
         assertEq(invoiceData.buyer, address(0));
-        assertEq(invoiceData.status, simplePP.CREATED());
+        assertEq(invoiceData.state, simplePP.CREATED());
         assertEq(invoiceData.escrow, address(0));
         assertEq(invoiceData.invoiceNonce, 1);
         assertEq(simplePP.getNextInvoiceNonce(), 2);
@@ -455,7 +459,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         ISimplePaymentProcessor.Invoice memory invoice = simplePP.getInvoiceData(invoiceId);
         assertEq(invoice.price, _invoicePrice);
-        assertEq(invoice.status, simplePP.CREATED());
+        assertEq(invoice.state, simplePP.CREATED());
 
         vm.prank(buyerOne);
         address escrow = simplePP.pay{ value: _invoicePrice }(invoiceId, "", false);
@@ -463,7 +467,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         ISimplePaymentProcessor.Invoice memory updated = simplePP.getInvoiceData(invoiceId);
         assertEq(updated.buyer, buyerOne);
         assertEq(updated.balance, _invoicePrice);
-        assertEq(updated.status, simplePP.PAID());
+        assertEq(updated.state, simplePP.PAID());
         assertEq(updated.escrow, escrow);
     }
 
@@ -492,7 +496,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.release(invoiceId);
 
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
-        assertEq(inv.status, simplePP.RELEASED());
+        assertEq(inv.state, simplePP.RELEASED());
         assertEq(sellerOne.balance, sellerBefore + (_invoicePrice - expectedFee));
         assertEq(feeReceiver.balance, feeReceiverBefore + expectedFee);
     }
@@ -512,7 +516,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.rejectPayment(invoiceId);
 
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
-        assertEq(inv.status, simplePP.REJECTED());
+        assertEq(inv.state, simplePP.REJECTED());
         assertEq(buyerOne.balance, buyerBefore + _invoicePrice);
     }
 
@@ -526,7 +530,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.cancelInvoice(invoiceId);
 
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
-        assertEq(inv.status, simplePP.CANCELLED());
+        assertEq(inv.state, simplePP.CANCELLED());
         assertEq(inv.escrow, address(0));
     }
 

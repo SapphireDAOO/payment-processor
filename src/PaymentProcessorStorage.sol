@@ -22,7 +22,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
      */
     uint216 private nextInvoiceNonce;
 
-    /// @notice Duration (in seconds) for which a payment remains valid.
+    /// @notice Window of time (in seconds) after invoice creation during which a buyer can pay.
     uint256 private paymentValidityDuration;
 
     /**

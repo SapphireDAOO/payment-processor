@@ -7,9 +7,6 @@ pragma solidity 0.8.28;
  * @dev Allows interaction with invoice data
  */
 interface IPaymentProcessorStorage {
-    /// @notice Thrown when a low-level external call fails.
-    error CallFailed();
-
     /// @notice Thrown when a caller attempts an action without the required authorization.
     error NotAuthorized();
 
@@ -22,7 +19,7 @@ interface IPaymentProcessorStorage {
     /// @notice Holds core configuration parameters for the contract.
     /// @param owner The address authorized to modify configuration parameters.
     /// @param feeRate Platform fee rate in basis points (BPS). i.e 100 BPS = 1%; 10,000 BPS = 100%.
-    /// @param feeReceiver Address that receives platform fees upon seller payout.
+    /// @param feeReceiver Address that receives platform fees.
     /// @param defaultHoldPeriod The default hold period for funds in escrow, measured in seconds.
     /// @param marketplace Address authorized to interact with invoice creation and specific management functions.
     /// @param gasThreshold The minimum amount of gas that must remain to continue processing tasks.
@@ -37,7 +34,8 @@ interface IPaymentProcessorStorage {
 
     /**
      * @notice Updates the invoice nonce counter.
-     * @dev Increments the internal nonce by the provided amount.
+     * @dev Only callable by authorized addresses (e.g., processor contracts). Increments
+     *      the internal nonce by the provided amount.
      * @param _by The amount to increment the invoice nonce by.
      * @return totalInvoices The updated total number of invoices created.
      */
@@ -53,7 +51,7 @@ interface IPaymentProcessorStorage {
 
     /**
      * @notice Updates the default hold period for all new invoices.
-     * @dev Only callable by the contract owner.
+     * @dev Only callable by the contract owner. Reverts with HoldPeriodCanNotBeZero if zero.
      * @param _newDefaultHoldPeriod The new default hold period in seconds.
      */
     function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) external;
@@ -81,16 +79,17 @@ interface IPaymentProcessorStorage {
 
     /**
      * @notice Updates the gas threshold used in automated upkeep logic.
-     * @dev Callable only by authorized roles (e.g., admin or owner).
-     * This threshold determines the minimum gas required to continue processing during `performUpkeep`.
+     * @dev Only callable by the contract owner. This threshold determines the minimum gas
+     *      required to continue processing during `performUpkeep`.
      * @param _newGasThreshold The new gas threshold value (in units of gas).
      */
     function setGasThreshold(uint256 _newGasThreshold) external;
 
     /**
-     * @notice Updates the payment validity duration.
-     * @dev Only callable by the contract owner.
-     * @param _newValidityDuration The new validity duration in seconds.
+     * @notice Updates the window of time after invoice creation during which a buyer can pay.
+     * @dev Only callable by the contract owner. Once this period elapses, the invoice is
+     *      considered expired and payment attempts will no longer be possible.
+     * @param _newValidityDuration The new validity window in seconds.
      */
     function setPaymentValidityDuration(uint256 _newValidityDuration) external;
 
@@ -107,8 +106,8 @@ interface IPaymentProcessorStorage {
     function totalInvoiceCreated() external view returns (uint216 totalInvoices);
 
     /**
-     * @notice Returns the duration for which a payment remains valid.
-     * @return validDuration The payment validity duration in seconds.
+     * @notice Returns the window of time after invoice creation during which a buyer can pay.
+     * @return validDuration The payment validity window in seconds.
      */
     function getPaymentValidityDuration() external view returns (uint256 validDuration);
 
@@ -131,7 +130,7 @@ interface IPaymentProcessorStorage {
     function getMarketplace() external view returns (address marketplace);
 
     /**
-     * @notice Gets the default hold period for invoices.
+     * @notice Returns the default hold period for invoices.
      * @return defaultHoldPeriod The default hold period in seconds.
      */
     function getDefaultHoldPeriod() external view returns (uint256 defaultHoldPeriod);
