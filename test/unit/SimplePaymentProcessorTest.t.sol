@@ -89,7 +89,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.cancelInvoice(invoiceId);
         vm.stopPrank();
 
-        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.CANCELLED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.CANCELED());
     }
 
     function test_payment() public {
@@ -530,7 +530,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.cancelInvoice(invoiceId);
 
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
-        assertEq(inv.state, simplePP.CANCELLED());
+        assertEq(inv.state, simplePP.CANCELED());
         assertEq(inv.escrow, address(0));
     }
 

@@ -53,7 +53,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
             uint216 invoiceId = sHandler.getInvoiceId(i);
             ISimplePaymentProcessor.Invoice memory inv = simplePaymentProcessor.getInvoiceData(invoiceId);
 
-            if (inv.state == simplePaymentProcessor.CREATED() || inv.state == simplePaymentProcessor.CANCELLED()) {
+            if (inv.state == simplePaymentProcessor.CREATED() || inv.state == simplePaymentProcessor.CANCELED()) {
                 assertEq(inv.balance, 0);
                 assertEq(inv.escrow, address(0));
                 assertEq(inv.buyer, address(0));
