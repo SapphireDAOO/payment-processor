@@ -22,21 +22,20 @@ interface IEscrowFactory {
     }
 
     /**
-     * @notice Predicts the address of a contract based on the provided salt.
-     * @dev Uses the CREATE2 opcode for deterministic contract deployment.
-     * This function allows pre-calculating the address before deployment.
+     * @notice Predicts the deterministic address of an escrow contract for a given salt.
+     * @dev Uses CREATE3 for address prediction, allowing the address to be known before deployment.
      * @param _salt The unique salt value used for the contract deployment.
      * @return predictedAddress The predicted escrow address.
      */
     function getPredictedAddress(bytes32 _salt) external view returns (address predictedAddress);
 
     /**
-     * @notice Computes a unique salt used for deterministic deployments (e.g., CREATE2/CREATE3).
-     * @dev This salt is used to deterministically deploy or reference an Escrow contract via CREATE2,
-     * ensuring uniqueness across both standard and meta-invoice deployments.
+     * @notice Computes a unique salt for deterministic escrow deployment via CREATE3.
+     * @dev The salt is derived from the seller, buyer, and invoice ID, ensuring each
+     *      escrow has a unique and reproducible address across all invoice types.
      * @param _seller The address of the invoice seller.
      * @param _buyer The address of the invoice buyer.
-     * @param _invoiceId A hash representing the invoice content or metadata.
+     * @param _invoiceId The unique nonce of the invoice.
      * @return salt The computed salt for the escrow deployment.
      */
     function computeSalt(address _seller, address _buyer, uint216 _invoiceId) external pure returns (bytes32 salt);

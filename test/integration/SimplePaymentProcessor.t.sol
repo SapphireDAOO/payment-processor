@@ -27,7 +27,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
 
-        assertEq(inv.status, simplePP.PAID());
+        assertEq(inv.state, simplePP.PAID());
         assertEq(inv.buyer, NATIVE_TOKEN_BUYER);
         assertEq(inv.escrow, escrow);
         assertEq(inv.balance, INVOICE_PRICE);
@@ -41,7 +41,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.cancelInvoice(invoiceId);
 
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.CANCELLED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.CANCELLED());
     }
 
     function test_rejectPayment() public {
@@ -56,7 +56,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.rejectPayment(invoiceId);
 
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.REJECTED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.REJECTED());
         assertEq(NATIVE_TOKEN_BUYER.balance, buyerBalanceBefore + INVOICE_PRICE);
     }
 
@@ -83,7 +83,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
 
-        assertEq(inv.status, simplePP.RELEASED());
+        assertEq(inv.state, simplePP.RELEASED());
         assertEq(inv.balance, 0);
         assertEq(inv.escrow.balance, 0);
         assertEq(sellerOne.balance, sellerBalanceBefore + (INVOICE_PRICE - expectedFee));
@@ -102,7 +102,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         vm.warp(uint256(inv.expiresAt) + 1);
         simplePP.refundBuyer(invoiceId);
 
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.REFUNDED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.REFUNDED());
         assertEq(NATIVE_TOKEN_BUYER.balance, buyerBalanceBefore + INVOICE_PRICE);
     }
 
@@ -126,7 +126,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
 
-        assertEq(inv.status, simplePP.RELEASED());
+        assertEq(inv.state, simplePP.RELEASED());
         assertEq(sellerOne.balance, sellerBalanceBefore + (INVOICE_PRICE - expectedFee));
     }
 
@@ -145,7 +145,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         vm.prank(admin);
         simplePP.performUpkeep("");
 
-        assertEq(simplePP.getInvoiceData(invoiceId).status, simplePP.REFUNDED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.REFUNDED());
         assertEq(NATIVE_TOKEN_BUYER.balance, buyerBalanceBefore + INVOICE_PRICE);
     }
 }

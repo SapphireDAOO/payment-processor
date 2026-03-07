@@ -2,20 +2,18 @@
 pragma solidity 0.8.28;
 
 /// @title INotes
-/// @notice Notes interface for encrypted, shareable order notes.
+/// @notice Notes interface for encrypted, shareable invoice notes.
 interface INotes {
     /// @notice Thrown when the caller is not authorized to access the note.
     error Unauthorized();
     /// @notice Thrown when creating a note with empty content.
     error EmptyContent();
-    /// @notice Thrown when content exceeds the maximum allowed size.
-    error ContentTooLarge();
     /// @notice Thrown when the requested note does not exist.
     error NoteNotFound();
 
     /// @notice Stored note data.
     /// @param author The note author.
-    /// @param share Whether the note is shared with non-authors.
+    /// @param share Whether the note is shared with the other party.
     /// @param exists Whether the note exists.
     /// @param version The note schema version.
     /// @param content The encrypted note content.
@@ -28,9 +26,10 @@ interface INotes {
     }
 
     /**
-     * @notice Create a note under an order.
-     * @dev Only authorized callers can create notes.
-     * @param _invoiceId Order identifier.
+     * @notice Create a note under an invoice.
+     * @dev Only authorized callers can create notes. The first note created for an invoice
+     *      (noteId 0) automatically marks the author as having opened it.
+     * @param _invoiceId Invoice identifier.
      * @param _author Note author.
      * @param _encryptedContent Encrypted note payload.
      * @param _share Whether the note is shared with non-authors.
@@ -42,8 +41,9 @@ interface INotes {
 
     /**
      * @notice Mark a note as opened or unopened for an account.
-     * @dev Only authorized callers can update opened state.
-     * @param _invoiceId Order identifier.
+     * @dev Only authorized callers can update opened state. Reverts with Unauthorized if
+     *      the note is not shared — opened state can only be tracked for shared notes.
+     * @param _invoiceId Invoice identifier.
      * @param _account Account whose opened state is updated.
      * @param _noteId Note identifier.
      * @param _open New opened state for the account.
@@ -51,15 +51,15 @@ interface INotes {
     function setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _open) external;
 
     /**
-     * @notice Get the total number of notes for an order.
-     * @param _invoiceId Order identifier.
-     * @return totalNotes Total number of notes created for the order.
+     * @notice Get the total number of notes for an invoice.
+     * @param _invoiceId Invoice identifier.
+     * @return totalNotes Total number of notes created for the invoice.
      */
     function getNoteCount(uint216 _invoiceId) external view returns (uint256 totalNotes);
 
     /**
      * @notice Check if a note is opened for a specific user.
-     * @param _invoiceId Order identifier.
+     * @param _invoiceId Invoice identifier.
      * @param _noteId Note identifier.
      * @param _user Address to check.
      * @return isOpen True if the note is opened for the user.
@@ -77,7 +77,10 @@ interface INotes {
 
     /**
      * @notice Get a single note if visible to the caller.
-     * @param _invoiceId Order identifier.
+     * @dev Reverts with Unauthorized if the caller is not the note author and the note is
+     *      not shared. Only the author can read a private note; shared notes are readable
+     *      by anyone.
+     * @param _invoiceId Invoice identifier.
      * @param _noteId Note identifier.
      * @return author Note author.
      * @return share Whether the note is shared.
