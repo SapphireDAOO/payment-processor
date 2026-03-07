@@ -271,16 +271,16 @@ interface IAdvancedPaymentProcessor {
     /**
      * @notice Retrieves the invoice data for a specific invoice ID.
      * @param _invoiceId The ID of the invoice.
-     * @return invoiceData The invoice data.
+     * @return i The invoice data.
      */
-    function getInvoice(uint216 _invoiceId) external view returns (Invoice memory invoiceData);
+    function getInvoice(uint216 _invoiceId) external view returns (Invoice memory i);
 
     /**
      * @notice Retrieves the meta-invoice data for a specific meta-invoice ID.
      * @param _metaInvoiceId The ID of the meta-invoice.
-     * @return metaInvoiceData The meta-invoice data.
+     * @return m The meta-invoice data.
      */
-    function getMetaInvoice(uint216 _metaInvoiceId) external view returns (MetaInvoice memory metaInvoiceData);
+    function getMetaInvoice(uint216 _metaInvoiceId) external view returns (MetaInvoice memory m);
 
     /**
      * @notice Returns the total number of unique invoices created.

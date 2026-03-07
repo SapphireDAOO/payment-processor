@@ -29,7 +29,7 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
      * @notice Tracks whether an address is authorized to perform restricted actions.
      *  @dev Maps an address to a boolean indicating its authorization status.
      */
-    mapping(address => bool) private isAuthorized;
+    mapping(address caller => bool state) private isAuthorized;
 
     /**
      * @notice Stores the configuration settings for the contract (e.g., default hold period, gas threshold).

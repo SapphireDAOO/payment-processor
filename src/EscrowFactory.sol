@@ -9,7 +9,7 @@ import { IEscrowFactory } from "./interface/IEscrowFactory.sol";
 /**
  * @title EscrowFactory
  * @notice Abstract factory for deploying Escrow contracts deterministically.
- * @dev Uses CREATE3 or CREATE2 to generate predictable addresses. Must be inherited by a processor contract.
+ * @dev Uses CREATE3 to generate predictable addresses. Must be inherited by a processor contract.
  */
 abstract contract EscrowFactory is IEscrowFactory {
     /// @inheritdoc IEscrowFactory
@@ -25,14 +25,10 @@ abstract contract EscrowFactory is IEscrowFactory {
     /**
      * @notice Deploys a new Escrow contract deterministically using CREATE3.
      * @dev Uses a unique salt derived from the seller, buyer, and invoice ID to ensure predictable address generation.
-     *      If the payment is in ERC20, no native ETH is sent during deployment. Constructor arguments include the invoice ID,
-     *      seller, buyer, and payment processor (this contract).
-     * @param _params Struct containing:
-     *  - seller: The address of the seller or invoice creator.
-     *  - buyer: The address of the payer (msg.sender).
-     *  - invoiceId: The unique identifier of the invoice.
-     *  - value: The value of the payment in wei (used only for native ETH payments).
-     *  - paymentToken: The token address used for payment; address(0) indicates native ETH.
+     *      The Escrow constructor receives only the invoice ID and the payment processor address (this contract);
+     *      seller and buyer are not passed as constructor args — they are used solely for salt derivation.
+     *      For ERC20 payments, `value` is forced to zero and tokens are transferred to the escrow separately.
+     * @param _params See {IEscrowFactory.EscrowCreationParams}.
      * @return escrow The address of the newly deployed Escrow contract.
      */
     function _create(EscrowCreationParams memory _params) internal returns (address escrow) {

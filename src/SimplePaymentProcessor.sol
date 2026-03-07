@@ -13,7 +13,7 @@ import { INotes } from "./interface/INotes.sol";
 /**
  * @title SimplePaymentProcessor
  * @notice Lightweight payment processor for single-invoice flows with native payments.
- * @dev Implements basic escrow release, refund, and dispute resolution. Compliant with ISimplePaymentProcessor.
+ * @dev Implements basic escrow release and refund. Compliant with ISimplePaymentProcessor.
  */
 contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatibleInterface {
     using SafeCastLib for uint256;
@@ -22,25 +22,25 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @notice Notes contract used for encrypted invoice notes.
     INotes private immutable notes;
 
-    /// @notice Status code representing that a payment or transaction has been created.
+    /// @notice Status code representing that an invoice has been created and is awaiting payment.
     uint8 public constant CREATED = 1;
 
-    /// @notice Status code representing that a payment has been completed.
+    /// @notice Status code representing that an invoice has been paid by the buyer.
     uint8 public constant PAID = CREATED + 1;
 
-    /// @notice Status code representing that a payment or transaction has been accepted.
+    /// @notice Status code representing that a payment has been accepted by the seller.
     uint8 public constant ACCEPTED = PAID + 1;
 
-    /// @notice Status code representing that a payment or transaction has been rejected.
+    /// @notice Status code representing that a payment has been rejected by the seller.
     uint8 public constant REJECTED = ACCEPTED + 1;
 
-    /// @notice Status code representing that a payment or transaction has been cancelled.
+    /// @notice Status code representing that an invoice has been cancelled by the seller.
     uint8 public constant CANCELLED = REJECTED + 1;
 
     /// @notice Status code representing that a payment has been refunded to the payer.
     uint8 public constant REFUNDED = CANCELLED + 1;
 
-    /// @notice Status code representing that a payment has been successfully released to the payee.
+    /// @notice Status code representing that a payment has been successfully released to the seller.
     uint8 public constant RELEASED = REFUNDED + 1;
 
     /// @notice Basis points denominator used for percentage calculations (1% = 100).
@@ -55,7 +55,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable ppStorage;
 
-    /// @notice The minimum allowed value (in wei) required to create a new i.
+    /// @notice The minimum allowed value (in wei) required to create a new invoice.
     uint256 private minimumInvoiceValue;
 
     /// @notice The window of time allowed for accepting a transaction after creation.
@@ -70,7 +70,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      *      is an `Invoice` struct that contains detailed information such as the
      *      creator, payer, status, amount, escrow address, timestamps, etc.
      */
-    mapping(uint216 invoiceId => Invoice invoiceData) private invoices;
+    mapping(uint216 invoiceId => Invoice data) private invoices;
 
     /**
      *  @notice Maps task or invoice ID to its 1-based index position in the heap.
@@ -89,7 +89,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
     /**
      * @notice Initializes the payment processor with owner, fee settings, and default hold period.
-     * @dev Sets the fee receiver address, the fee rate (in basis points), and the default escrow hold time.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      * @param _minimumInvoicePrice The new minimum default invoice value to set (in wei).
      * @param _notesAddress Address of the notes contract used for invoice notes.
@@ -132,54 +131,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         returns (address escrowAddress)
     {
         return _payWithValue(_invoiceId, _storageRef, _share, msg.value);
-    }
-
-    /**
-     * @notice Internal payment helper that allows specifying the ETH value.
-     * @param _invoiceId The ID of the invoice being paid.
-     * @param _storageRef A bytes-encoded reference to the caller's notes storage.
-     * @param _share Whether the note is shared with non-authors.
-     * @param _value The amount of ETH to use for payment.
-     * @return escrowAddress The address of the escrow contract created.
-     */
-    function _payWithValue(uint216 _invoiceId, bytes memory _storageRef, bool _share, uint256 _value)
-        internal
-        returns (address escrowAddress)
-    {
-        Invoice memory i = invoices[_invoiceId];
-
-        if (i.state != CREATED) {
-            revert InvalidInvoiceState(i.state);
-        }
-
-        if (i.seller == msg.sender) {
-            revert SellerCannotPayOwnedInvoice();
-        }
-
-        if (_value != i.price) {
-            revert IncorrectPaymentAmount(_value, i.price);
-        }
-
-        if (block.timestamp > i.invalidateAt) {
-            revert InvoiceIsNoLongerValid();
-        }
-
-        escrowAddress = address(new Escrow{ value: _value }(_invoiceId, address(this)));
-        uint40 expiresAt = (block.timestamp + decisionWindow).toUint40();
-
-        i.escrow = escrowAddress;
-        i.buyer = msg.sender;
-        i.state = PAID;
-        i.balance = _value;
-        i.paidAt = (block.timestamp).toUint32();
-        i.expiresAt = expiresAt;
-        invoices[_invoiceId] = i;
-
-        heap.insert(_invoiceId, expiresAt, index);
-        if (_storageRef.length != 0) notes.createNote(_invoiceId, msg.sender, _storageRef, _share);
-
-        emit InvoicePaid(_invoiceId, msg.sender, _value, expiresAt);
-        return escrowAddress;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -292,6 +243,54 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /**
+     * @notice Internal payment helper that allows specifying the ETH value.
+     * @param _invoiceId The ID of the invoice being paid.
+     * @param _storageRef A bytes-encoded reference to the caller's notes.
+     * @param _share Whether the note is shared with non-authors.
+     * @param _value The amount of ETH to use for payment.
+     * @return escrowAddress The address of the escrow contract created.
+     */
+    function _payWithValue(uint216 _invoiceId, bytes memory _storageRef, bool _share, uint256 _value)
+        internal
+        returns (address escrowAddress)
+    {
+        Invoice memory i = invoices[_invoiceId];
+
+        if (i.state != CREATED) {
+            revert InvalidInvoiceState(i.state);
+        }
+
+        if (i.seller == msg.sender) {
+            revert SellerCannotPayOwnedInvoice();
+        }
+
+        if (_value != i.price) {
+            revert IncorrectPaymentAmount(_value, i.price);
+        }
+
+        if (block.timestamp > i.invalidateAt) {
+            revert InvoiceIsNoLongerValid();
+        }
+
+        escrowAddress = address(new Escrow{ value: _value }(_invoiceId, address(this)));
+        uint40 expiresAt = (block.timestamp + decisionWindow).toUint40();
+
+        i.escrow = escrowAddress;
+        i.buyer = msg.sender;
+        i.state = PAID;
+        i.balance = _value;
+        i.paidAt = (block.timestamp).toUint32();
+        i.expiresAt = expiresAt;
+        invoices[_invoiceId] = i;
+
+        heap.insert(_invoiceId, expiresAt, index);
+        if (_storageRef.length != 0) notes.createNote(_invoiceId, msg.sender, _storageRef, _share);
+
+        emit InvoicePaid(_invoiceId, msg.sender, _value, expiresAt);
+        return escrowAddress;
+    }
+
+    /**
      * @notice Validates that the caller can accept or reject a payment.
      * @dev Ensures caller is the seller and invoice is within the decision window.
      * @param _i The invoice data to validate.
@@ -311,15 +310,15 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /**
-     * @notice Attempts to release the specified invoice if it is eligible.
-     * @dev This function performs all the checks required to determine whether
-     *      the invoice can be released, updates the invoice status, removes it
-     *      from the scheduling heap, and triggers the escrow payout.
+     * @notice Attempts to automatically release or refund the specified invoice when its heap task is due.
+     * @dev Called by `performUpkeep` via `processDueTask`. Returns a status code rather than reverting.
+     *      - If state is PAID (decision window elapsed): calls `refundBuyer` and returns SUCCESSFUL.
+     *      - If state is ACCEPTED (hold period elapsed): transitions to RELEASED, removes from heap,
+     *        and transfers funds to the seller.
+     *      - If state is anything else: returns NOT_ELIGIBLE_FOR_RELEASE.
+     *      - If heap position is invalid: returns ERROR.
      * @param _invoiceId The ID of the invoice to release.
-     * @return status A status code from TaskQueueLib indicating the outcome:
-     *         - SUCCESSFUL (3): Invoice was released and removed from heap.
-     *         - NOT_ELIGIBLE_FOR_RELEASE (1): Invoice not accepted or not yet due.
-     *         - ERROR (2): Invalid index or heap inconsistency.
+     * @return status `SUCCESSFUL`, `NOT_ELIGIBLE_FOR_RELEASE`, or `ERROR`.
      */
     function _release(uint216 _invoiceId) internal returns (uint256 status) {
         Invoice memory i = invoices[_invoiceId];
@@ -345,15 +344,14 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /**
-     * @notice Computes a unique order ID for an invoice using buyer, invoice ID, timestamp, and contract address.
-     * @dev This function ensures the order ID is non-deterministic, even for repeated inputs.
-     * @param _buyer The address of the buyer.
-     * @param _invoiceNonce The invoice identifier provided during creation.
-     * @return invoiceId The keccak256 hash representing the unique order ID.
+     * @notice Computes a unique invoice ID from the contract address, seller, and nonce.
+     * @param _seller The address of the invoice creator (seller).
+     * @param _invoiceNonce The unique nonce assigned to this invoice.
+     * @return invoiceId The 216-bit invoice ID.
      */
-    function _computeInvoiceId(address _buyer, uint256 _invoiceNonce) internal view returns (uint216 invoiceId) {
+    function _computeInvoiceId(address _seller, uint256 _invoiceNonce) internal view returns (uint216 invoiceId) {
         invoiceId =
-            (uint256(keccak256(abi.encode(address(this), _buyer, _invoiceNonce))) & ((1 << 216) - 1)).toUint216();
+            (uint256(keccak256(abi.encode(address(this), _seller, _invoiceNonce))) & ((1 << 216) - 1)).toUint216();
     }
 
     /**
@@ -366,9 +364,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /**
-     *  @notice Internal function to validate whether the caller is authorized.
-     *  @dev Reverts if the caller is not the contract owner or the PaymentProcessorStorage contract itself.
-     * Can only be called by either the owner of the PaymentProcessor contract or the storage contract address.
+     * @notice Validates that the caller is the contract owner or the PaymentProcessorStorage contract.
+     * @dev Reverts with NotAuthorized if neither condition is met.
      */
     function _isAuthorized() internal view {
         if (msg.sender != _owner() && msg.sender != address(ppStorage)) {
