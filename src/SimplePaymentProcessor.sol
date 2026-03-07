@@ -34,11 +34,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @notice Status code representing that a payment has been rejected by the seller.
     uint8 public constant REJECTED = ACCEPTED + 1;
 
-    /// @notice Status code representing that an invoice has been cancelled by the seller.
-    uint8 public constant CANCELLED = REJECTED + 1;
+    /// @notice Status code representing that an invoice has been canceled by the seller.
+    uint8 public constant CANCELED = REJECTED + 1;
 
     /// @notice Status code representing that a payment has been refunded to the payer.
-    uint8 public constant REFUNDED = CANCELLED + 1;
+    uint8 public constant REFUNDED = CANCELED + 1;
 
     /// @notice Status code representing that a payment has been successfully released to the seller.
     uint8 public constant RELEASED = REFUNDED + 1;
@@ -177,7 +177,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         if (i.state != CREATED) {
             revert InvalidInvoiceState(i.state);
         }
-        invoices[_invoiceId].state = CANCELLED;
+        invoices[_invoiceId].state = CANCELED;
         emit InvoiceCanceled(_invoiceId);
     }
 

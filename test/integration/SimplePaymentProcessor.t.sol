@@ -41,7 +41,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.cancelInvoice(invoiceId);
 
-        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.CANCELLED());
+        assertEq(simplePP.getInvoiceData(invoiceId).state, simplePP.CANCELED());
     }
 
     function test_rejectPayment() public {
