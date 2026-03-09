@@ -7,7 +7,7 @@ import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetU
 contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
     string MAINNET_RPC = vm.envString("MAINNET_RPC");
 
-    address constant NATIVE_TOKEN_BUYER = 0xF268e45E467a3A5AC265CFaeDA4443052BC31dD2;
+    address constant NATIVE_TOKEN_BUYER = 0xBefa750Ed568Cc84970eB4FD506aF4FF599c42D0;
 
     uint256 constant INVOICE_PRICE = 10 ether;
 

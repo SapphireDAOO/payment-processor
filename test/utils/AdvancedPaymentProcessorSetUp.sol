@@ -14,6 +14,7 @@ struct Addr {
     address usdcPriceFeed;
     address wbtcPriceFeed;
     address nativeTokenPriceFeed;
+    address sequencerUptimeFeed;
     address usdc;
     address wbtc;
 }
@@ -29,20 +30,20 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
 
     address constant FORWARDER = address(0xa0);
 
-    address constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-    address constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
+    address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address constant WBTC = 0x0555E30da8f98308EdB960aa94C0Db47230d2B9c;
 
-    address constant USDC_USD_PRICE_FEED = 0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3;
-    address constant WBTC_USD_PRICE_FEED = 0x6ce185860a4963106506C203335A2910413708e9;
-    address constant NATIVE_TOKEN_USD_PRICE_FEED = 0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612;
+    address constant USDC_USD_PRICE_FEED = 0x7e860098F58bBFC8648a4311b374B1D669a2bc6B;
+    address constant WBTC_USD_PRICE_FEED = 0x64c911996D3c6aC71f9b455B1E8E7266BcbD848F;
+    address constant NATIVE_TOKEN_USD_PRICE_FEED = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
+    address constant SEQUENCER_UPTIME_FEED = 0xBCF85224fc0756B9Fa45aA7892530B47e10b6433;
 
     uint256 constant LOCAL_CHAIN_ID = 31337;
-    uint256 constant MAINNET_CHAIN_ID = 42161;
+    uint256 constant MAINNET_CHAIN_ID = 8453;
 
-    // fork test
-    address constant WTBC_BUYER = 0x5d962D08Ecf162E6471D14D252462D9A165f1a59;
-    address constant USDC_BUYER = 0xfFbD3E51Ae0e2c4407434E157965C064F2A11628;
-    address constant NATIVE_TOKEN_BUYER = 0xF268e45E467a3A5AC265CFaeDA4443052BC31dD2;
+    address constant WTBC_BUYER = 0x03b69Ae9423DF674eAF396c157a03BE9349208f1;
+    address constant USDC_BUYER = 0x5b7AC4a00E5ABf254e5a7FD23c2ee2b34b6a50cE;
+    address constant NATIVE_TOKEN_BUYER = 0xBefa750Ed568Cc84970eB4FD506aF4FF599c42D0;
 
     /// @notice Initializes the base setup and deploys the advanced processor.
     function setUp() public virtual {
@@ -65,7 +66,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
         Addr memory addr = _setUp();
 
         vm.startPrank(admin);
-        advancedPP = new AdvancedPaymentProcessor(_storageAddress);
+        advancedPP = new AdvancedPaymentProcessor(_storageAddress, addr.sequencerUptimeFeed);
 
         PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(advancedPP), true);
 
@@ -106,7 +107,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
             vm.warp(2 hours);
 
             vm.mockCall(
-                0xFdB631F5EE196F0ed6FAa767959853A9F217697D,
+                SEQUENCER_UPTIME_FEED,
                 abi.encodeWithSignature("latestRoundData()"),
                 abi.encode(uint80(1), 0, 0, block.timestamp, uint80(1))
             );
@@ -122,6 +123,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
                 usdcPriceFeed: address(mockUsdcPriceFeed),
                 wbtcPriceFeed: address(mockWbtcPriceFeed),
                 nativeTokenPriceFeed: address(mockNativePriceFeed),
+                sequencerUptimeFeed: SEQUENCER_UPTIME_FEED,
                 usdc: address(mockUsdc),
                 wbtc: address(mockWBtc)
             });
@@ -133,6 +135,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
                 usdcPriceFeed: USDC_USD_PRICE_FEED,
                 wbtcPriceFeed: WBTC_USD_PRICE_FEED,
                 nativeTokenPriceFeed: NATIVE_TOKEN_USD_PRICE_FEED,
+                sequencerUptimeFeed: SEQUENCER_UPTIME_FEED,
                 usdc: USDC,
                 wbtc: WBTC
             });
