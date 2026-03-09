@@ -62,7 +62,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
     function test_setPriceFeed() public {
         vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
-        advancedPP.setPriceFeed(address(1), address(2));
+        advancedPP.setPriceFeed(
+            address(1), IAdvancedPaymentProcessor.PriceFeedConfig({ aggregator: address(2), heartbeat: 1 hours })
+        );
     }
 
     function test_singleInvoiceCreation() public {

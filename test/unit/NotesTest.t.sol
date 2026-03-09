@@ -22,27 +22,30 @@ contract NotesTest is NotesSetUp {
         assertEq(openedStatus, true);
         assertEq(version, notes.getCurrentVersion());
 
-        noteId = notes.createNote(invoiceId, address(this), "how is it going?", true);
+        noteId = notes.createNote(invoiceId, address(1), "how is it going?", true);
 
+        vm.prank(address(1));
         (author, share, content, openedStatus, version) = notes.getNote(invoiceId, noteId);
 
         assertEq(notes.getNoteCount(invoiceId), 2);
-        assertEq(author, address(this));
+        assertEq(author, address(1));
         assertEq(share, true);
         assertEq(content, bytes("how is it going?"));
-        assertEq(openedStatus, false);
+        assertEq(openedStatus, true);
         assertEq(version, notes.getCurrentVersion());
+
+        assertEq(notes.isOpened(invoiceId, noteId, address(this)), false);
     }
 
     function test_setOpened() public {
         uint216 invoiceId = 1;
 
         vm.expectRevert(INotes.NoteNotFound.selector);
-        notes.setOpened(invoiceId, address(this), 0, true);
+        notes.setOpened(invoiceId, address(this), 0);
 
         uint256 noteId = notes.createNote(invoiceId, address(this), "hello everyone", true);
 
-        notes.setOpened(invoiceId, address(this), noteId, true);
+        notes.setOpened(invoiceId, address(this), noteId);
 
         (address author, bool share, bytes memory content, bool openedStatus, uint8 version) =
             notes.getNote(invoiceId, noteId);
@@ -58,7 +61,7 @@ contract NotesTest is NotesSetUp {
         noteId = notes.createNote(invoiceId, address(this), "what is the result", false);
 
         vm.expectRevert(INotes.Unauthorized.selector);
-        notes.setOpened(invoiceId, address(this), noteId, true);
+        notes.setOpened(invoiceId, address(this), noteId);
     }
 
     function test_getNotes() public {

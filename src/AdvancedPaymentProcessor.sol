@@ -39,6 +39,10 @@ contract AdvancedPaymentProcessor is
     /// @notice Address of the forwarder contract responsible for calling performUpkeep.
     address private forwarder;
 
+    /// @notice Chainlink L2 sequencer uptime feed. Returns answer=0 when up, answer=1 when down.
+    /// @dev Set to address(0) to disable the sequencer check (e.g. on L1 or local testnets).
+    address private sequencerUptimeFeed;
+
     /// @notice Minimum USD price (8 decimals) an invoice must meet to be accepted by the processor.
     uint256 private minimumPrice;
 
@@ -87,6 +91,10 @@ contract AdvancedPaymentProcessor is
     /// @notice Minimum invoice price applied when none is explicitly set (1 USD in 8-decimal Chainlink format).
     uint256 public constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8;
 
+    /// @notice Minimum time (in seconds) to wait after the sequencer restarts before trusting price data.
+    /// @dev Protects against stale prices that accumulated while the sequencer was offline.
+    uint256 public constant SEQUENCER_GRACE_PERIOD = 1 hours;
+
     /**
      * @notice Mapping from unique invoice ID to its invoice data.
      * @dev Used for standalone invoices (not part of a meta-invoice).
@@ -104,7 +112,7 @@ contract AdvancedPaymentProcessor is
      * @notice Mapping of payment tokens to their Chainlink price feed aggregator.
      * @dev Used for converting USD prices to the appropriate payment token amounts.
      */
-    mapping(address token => address aggregator) private priceFeed;
+    mapping(address token => PriceFeedConfig config) private priceFeeds;
 
     /**
      *  @notice Maps task or invoice ID to its 1-based index position in the heap.
@@ -138,6 +146,7 @@ contract AdvancedPaymentProcessor is
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
         nextMetaInvoiceNonce = 1;
         minimumPrice = DEFAULT_MINIMUM_INVOICE_PRICE;
+        sequencerUptimeFeed = 0xFdB631F5EE196F0ed6FAa767959853A9F217697D;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -183,7 +192,7 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant {
-        if (address(priceFeed[_paymentToken]) == address(0)) revert UnsupportedToken();
+        if (priceFeeds[_paymentToken].aggregator == address(0)) revert UnsupportedToken();
 
         Invoice memory i = invoices[_invoiceId];
         uint256 priceInToken = getTokenValueFromUsd(_paymentToken, i.price);
@@ -204,7 +213,7 @@ contract AdvancedPaymentProcessor is
      * @param _invoiceId The meta-invoice ID to pay.
      */
     function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant {
-        if (address(priceFeed[address(0)]) == address(0)) revert UnsupportedToken();
+        if (priceFeeds[address(0)].aggregator == address(0)) revert UnsupportedToken();
 
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
@@ -224,7 +233,7 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant {
-        if (address(priceFeed[_paymentToken]) == address(0)) revert UnsupportedToken();
+        if (priceFeeds[_paymentToken].aggregator == address(0)) revert UnsupportedToken();
 
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
@@ -338,8 +347,8 @@ contract AdvancedPaymentProcessor is
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setPriceFeed(address _token, address _aggregator) external onlyOwner {
-        priceFeed[_token] = _aggregator;
+    function setPriceFeed(address _token, PriceFeedConfig memory _config) external onlyOwner {
+        priceFeeds[_token] = _config;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -369,6 +378,16 @@ contract AdvancedPaymentProcessor is
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
+    function setSequencerUptimeFeed(address _sequencerUptimeFeed) external onlyOwner {
+        sequencerUptimeFeed = _sequencerUptimeFeed;
+    }
+
+    /// @inheritdoc IAdvancedPaymentProcessor
+    function getSequencerUptimeFeed() external view returns (address feed) {
+        return sequencerUptimeFeed;
+    }
+
+    /// @inheritdoc IAdvancedPaymentProcessor
     function getForwarder() external view returns (address forwarderAddress) {
         return forwarder;
     }
@@ -383,16 +402,36 @@ contract AdvancedPaymentProcessor is
 
     /**
      * @notice Fetches the Chainlink USD price for a payment token and validates feed freshness.
+     * @dev Performs three layers of validation before returning the price:
+     *      1. Sequencer uptime: if `sequencerUptimeFeed` is set, checks that the L2 sequencer is up
+     *         (answer == 0) and that `SEQUENCER_GRACE_PERIOD` has elapsed since it last restarted.
+     *         A reverting or unavailable feed also reverts with `SequencerDown`.
+     *         Skipped when `sequencerUptimeFeed == address(0)` (L1 or local testnets).
+     *      2. Round completeness: reverts with `StalePrice` if `answeredInRound < roundId`.
+     *      3. Heartbeat: reverts with `StalePriceFeed` if the update is older than `config.heartbeat`.
      * @param _paymentToken The token address (address(0) for native ETH).
      * @return The token's USD price with 8 decimals as returned by the Chainlink aggregator.
      */
     function _usdPerToken(address _paymentToken) internal view returns (uint256) {
-        address aggregator = priceFeed[_paymentToken];
-        if (aggregator == address(0)) revert UnsupportedToken();
-        (, int256 answer,, uint256 updatedAt,) = AggregatorV3Interface(aggregator).latestRoundData();
-        if (answer <= 0) revert InvalidPrice();
+        PriceFeedConfig memory config = priceFeeds[_paymentToken];
+        if (config.aggregator == address(0)) revert UnsupportedToken();
 
-        if (block.timestamp > updatedAt + STALE_THRESHOLD) revert StalePriceFeed();
+        if (sequencerUptimeFeed != address(0)) {
+            try AggregatorV3Interface(sequencerUptimeFeed).latestRoundData() returns (
+                uint80, int256 seqAnswer, uint256 startedAt, uint256, uint80
+            ) {
+                if (seqAnswer != 0) revert SequencerDown();
+                if (block.timestamp < startedAt + SEQUENCER_GRACE_PERIOD) revert SequencerDown();
+            } catch {
+                revert SequencerDown();
+            }
+        }
+
+        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) =
+            AggregatorV3Interface(config.aggregator).latestRoundData();
+        if (answeredInRound < roundId) revert StalePrice();
+        if (answer <= 0) revert InvalidPrice();
+        if (block.timestamp > updatedAt + config.heartbeat) revert StalePriceFeed();
 
         return answer.toUint256(); // 8 decimals from Chainlink
     }

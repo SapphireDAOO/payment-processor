@@ -46,7 +46,6 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 
 | Id | Invariant Function | Property |
 | --- | --- | --- |
-| BAL-1 | `invariant_simpleProcessorNativeTokenBalanceIsAlwaysZero` | `address(advancedPaymentProcessor).balance == 0` |
+| BAL-1 | `invariant_simpleProcessorNativeTokenBalanceIsAlwaysZero` | `address(simplePaymentProcessor).balance == 0` |
 | BAL-2 | `invariant_advancedProcessorNativeTokenBalanceAlwaysZero` | `address(advancedPaymentProcessor).balance == 0` |
 
-Note: `BAL-1` currently checks `advancedPaymentProcessor` balance (same as `BAL-2`) in the test code.
