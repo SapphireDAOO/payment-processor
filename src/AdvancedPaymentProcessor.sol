@@ -138,12 +138,13 @@ contract AdvancedPaymentProcessor is
     /**
      * @notice Initializes the AdvancedPaymentProcessor contract with core configuration.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
+     * @param _sequencerUptimeFeed Address of the Chainlink sequencer uptime feed. Set to address(0) to disable the check.
      */
-    constructor(address _paymentProcessorStorageAddress) {
+    constructor(address _paymentProcessorStorageAddress, address _sequencerUptimeFeed) {
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
         nextMetaInvoiceNonce = 1;
         minimumPrice = DEFAULT_MINIMUM_INVOICE_PRICE;
-        sequencerUptimeFeed = 0xFdB631F5EE196F0ed6FAa767959853A9F217697D;
+        sequencerUptimeFeed = _sequencerUptimeFeed;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor

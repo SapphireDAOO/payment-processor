@@ -13,6 +13,7 @@ struct Addr {
     address usdcPriceFeed;
     address wbtcPriceFeed;
     address nativeTokenPriceFeed;
+    address sequencerUptimeFeed;
     address usdc;
     address wbtc;
 }
@@ -26,24 +27,25 @@ contract Deploy is Script {
     uint256 constant MINIMUM_INVOICE_VALUE = 0.005 ether;
     uint96 constant DEFAULT_GAS_THRESHOLD = 100_000;
 
-    // Arbitrum mainnet tokens
-    address constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-    address constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
+    // Base mainnet tokens
+    address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address constant WBTC = 0x0555E30da8f98308EdB960aa94C0Db47230d2B9c;
 
-    // Arbitrum mainnet Chainlink price feeds
-    address constant USDC_USD_PRICE_FEED = 0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3;
-    address constant WBTC_USD_PRICE_FEED = 0x6ce185860a4963106506C203335A2910413708e9;
-    address constant NATIVE_TOKEN_USD_PRICE_FEED = 0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612;
+    // Base mainnet Chainlink price feeds
+    address constant USDC_USD_PRICE_FEED = 0x7e860098F58bBFC8648a4311b374B1D669a2bc6B;
+    address constant WBTC_USD_PRICE_FEED = 0x64c911996D3c6aC71f9b455B1E8E7266BcbD848F;
+    address constant NATIVE_TOKEN_USD_PRICE_FEED = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
+    address constant MAINNET_SEQUENCER_UPTIME_FEED = 0xBCF85224fc0756B9Fa45aA7892530B47e10b6433;
 
-    // Arbitrum Sepolia testnet Chainlink price feeds
-    address constant TESTNET_USDC_PRICE_FEED = 0x0153002d20B96532C639313c2d54c3dA09109309;
-    address constant TESTNET_WBTC_PRICE_FEED = 0x56a43EB56Da12C0dc1D972ACb089c06a5dEF8e69;
-    address constant TESTNET_NATIVE_TOKEN_PRICE_FEED = 0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165;
+    // Base Sepolia testnet Chainlink price feeds
+    address constant TESTNET_USDC_PRICE_FEED = 0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165;
+    address constant TESTNET_WBTC_PRICE_FEED = 0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298;
+    address constant TESTNET_NATIVE_TOKEN_PRICE_FEED = 0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1;
 
     uint96 constant FEED_HEARTBEAT = 24 hours;
 
-    uint256 constant TESTNET_CHAIN_ID = 421614;
-    uint256 constant MAINNET_CHAIN_ID = 42161;
+    uint256 constant TESTNET_CHAIN_ID = 84532;
+    uint256 constant MAINNET_CHAIN_ID = 8453;
 
     function run() external {
         console.log("-----Deploying-----");
@@ -68,7 +70,7 @@ contract Deploy is Script {
         SimplePaymentProcessor simplePP =
             new SimplePaymentProcessor(address(ppStorage), MINIMUM_INVOICE_VALUE, address(notes));
 
-        AdvancedPaymentProcessor advancedPP = new AdvancedPaymentProcessor(address(ppStorage));
+        AdvancedPaymentProcessor advancedPP = new AdvancedPaymentProcessor(address(ppStorage), addr.sequencerUptimeFeed);
 
         notes.setAuthorized(msg.sender, true);
         notes.setAuthorized(address(simplePP), true);
@@ -111,6 +113,7 @@ contract Deploy is Script {
                 usdcPriceFeed: USDC_USD_PRICE_FEED,
                 wbtcPriceFeed: WBTC_USD_PRICE_FEED,
                 nativeTokenPriceFeed: NATIVE_TOKEN_USD_PRICE_FEED,
+                sequencerUptimeFeed: MAINNET_SEQUENCER_UPTIME_FEED,
                 usdc: USDC,
                 wbtc: WBTC
             });
@@ -122,6 +125,7 @@ contract Deploy is Script {
                 usdcPriceFeed: TESTNET_USDC_PRICE_FEED,
                 wbtcPriceFeed: TESTNET_WBTC_PRICE_FEED,
                 nativeTokenPriceFeed: TESTNET_NATIVE_TOKEN_PRICE_FEED,
+                sequencerUptimeFeed: address(0),
                 usdc: address(mockUsdc),
                 wbtc: address(mockWBtc)
             });
