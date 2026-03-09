@@ -105,7 +105,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         if (_price < minimumInvoiceValue) revert ValueIsTooLow();
         Invoice memory i;
         i.seller = msg.sender;
-        i.createdAt = (block.timestamp).toUint32();
+        i.createdAt = (block.timestamp).toUint40();
         i.price = _price;
         i.state = CREATED;
         i.invoiceNonce = ppStorage.updateInvoiceNonce(1);
@@ -279,7 +279,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         i.buyer = msg.sender;
         i.state = PAID;
         i.balance = _value;
-        i.paidAt = (block.timestamp).toUint32();
+        i.paidAt = (block.timestamp).toUint40();
         i.expiresAt = expiresAt;
         invoices[_invoiceId] = i;
 
@@ -378,13 +378,13 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         if (msg.sender != _owner()) revert NotAuthorized();
         Invoice memory i = invoices[_invoiceId];
 
-        if (i.state != ACCEPTED) {
+        if (i.state != ACCEPTED && i.state != CREATED) {
             revert InvalidInvoiceState(i.state);
         }
 
         uint256 newReleaseTime = block.timestamp + _holdPeriod;
 
-        invoices[_invoiceId].releaseAt = newReleaseTime.toUint32();
+        invoices[_invoiceId].releaseAt = newReleaseTime.toUint40();
         heap.reschedule(_invoiceId, newReleaseTime.toUint40(), index);
 
         emit UpdateHoldPeriod(_invoiceId, newReleaseTime);
