@@ -34,7 +34,7 @@ deploy-local:
 	--account sp-key --sender $(SENDER) --broadcast -vvv
 
 deploy-test:
-	@forge script script/Deploye.s.sol --rpc-url $(TEST_NET_RPC_URL) \
+	@forge script script/Deploy.s.sol --rpc-url $(TEST_NET_RPC_URL) \
 	--account sp-key --sender $(SENDER) --etherscan-api-key $(ETHERSCAN_API_KEY) \
 	--verify --broadcast -vvv
 

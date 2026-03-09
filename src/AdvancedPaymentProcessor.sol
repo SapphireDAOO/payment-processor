@@ -85,9 +85,6 @@ contract AdvancedPaymentProcessor is
     /// @notice Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 = 1.0)
     uint8 public constant DEFAULT_DECIMAL = 18;
 
-    /// @notice Maximum age allowed for Chainlink price data before it is considered stale.
-    uint256 public constant STALE_THRESHOLD = 1 hours;
-
     /// @notice Minimum invoice price applied when none is explicitly set (1 USD in 8-decimal Chainlink format).
     uint256 public constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8;
 
