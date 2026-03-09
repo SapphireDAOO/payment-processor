@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 import { AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
+import { IAdvancedPaymentProcessor } from "../../src/interface/IAdvancedPaymentProcessor.sol";
 import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
 import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -22,26 +23,26 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
     MockUsdc mockUsdc;
     MockWbtc mockWBtc;
 
-    int256 constant INITIAL_USDC_PRICE = 1e8;
-    int256 constant INITIAL_WBTC_PRICE = 90_000e8;
-    int256 constant INITIAL_POL_PRICE = 0.6e8;
+    int256 constant MOCK_USDC_PRICE = 1e8;
+    int256 constant MOCK_WBTC_PRICE = 90_000e8;
+    int256 constant MOCK_NATIVE_TOKEN_PRICE = 1960e8;
 
     address constant FORWARDER = address(0xa0);
 
-    address constant USDC = 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359;
-    address constant WBTC = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
+    address constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+    address constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
 
-    address constant USDC_USD_PRICE_FEED = 0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7;
-    address constant WBTC_USD_PRICE_FEED = 0xDE31F8bFBD8c84b5360CFACCa3539B938dd78ae6;
-    address constant POL_USD_PRICE_FEED = 0xAB594600376Ec9fD91F8e885dADF0CE036862dE0;
+    address constant USDC_USD_PRICE_FEED = 0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3;
+    address constant WBTC_USD_PRICE_FEED = 0x6ce185860a4963106506C203335A2910413708e9;
+    address constant NATIVE_TOKEN_USD_PRICE_FEED = 0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612;
 
     uint256 constant LOCAL_CHAIN_ID = 31337;
-    uint256 constant MAINNET_CHAIN_ID = 137;
+    uint256 constant MAINNET_CHAIN_ID = 42161;
 
     // fork test
-    address constant WTBC_BUYER = 0x0AFF6665bB45bF349489B20E225A6c5D78E2280F;
-    address constant USDC_BUYER = 0x166716C2838e182d64886135a96f1AABCA9A9756;
-    address constant NATIVE_TOKEN_BUYER = 0x5e86A14B06a4001cA83688cc06568A0c07425f63;
+    address constant WTBC_BUYER = 0x5d962D08Ecf162E6471D14D252462D9A165f1a59;
+    address constant USDC_BUYER = 0xfFbD3E51Ae0e2c4407434E157965C064F2A11628;
+    address constant NATIVE_TOKEN_BUYER = 0xF268e45E467a3A5AC265CFaeDA4443052BC31dD2;
 
     /// @notice Initializes the base setup and deploys the advanced processor.
     function setUp() public virtual {
@@ -68,9 +69,20 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
 
         PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(advancedPP), true);
 
-        advancedPP.setPriceFeed(address(addr.usdc), address(addr.usdcPriceFeed));
-        advancedPP.setPriceFeed(address(addr.wbtc), address(addr.wbtcPriceFeed));
-        advancedPP.setPriceFeed(address(0), address(addr.nativeTokenPriceFeed));
+        advancedPP.setPriceFeed(
+            address(addr.usdc),
+            IAdvancedPaymentProcessor.PriceFeedConfig({ aggregator: address(addr.usdcPriceFeed), heartbeat: 24 hours })
+        );
+        advancedPP.setPriceFeed(
+            address(addr.wbtc),
+            IAdvancedPaymentProcessor.PriceFeedConfig({ aggregator: address(addr.wbtcPriceFeed), heartbeat: 24 hours })
+        );
+        advancedPP.setPriceFeed(
+            address(0),
+            IAdvancedPaymentProcessor.PriceFeedConfig({
+                aggregator: address(addr.nativeTokenPriceFeed), heartbeat: 24 hours
+            })
+        );
         vm.stopPrank();
 
         _mintAndApproveTokens(address(advancedPP));
@@ -91,9 +103,17 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
      */
     function _setUp() internal returns (Addr memory addresses) {
         if (block.chainid == LOCAL_CHAIN_ID) {
-            MockV3Aggregator mockUsdcPriceFeed = new MockV3Aggregator(8, INITIAL_USDC_PRICE);
-            MockV3Aggregator mockWbtcPriceFeed = new MockV3Aggregator(8, INITIAL_WBTC_PRICE);
-            MockV3Aggregator mockNativePriceFeed = new MockV3Aggregator(8, INITIAL_POL_PRICE);
+            vm.warp(2 hours);
+
+            vm.mockCall(
+                0xFdB631F5EE196F0ed6FAa767959853A9F217697D,
+                abi.encodeWithSignature("latestRoundData()"),
+                abi.encode(uint80(1), 0, 0, block.timestamp, uint80(1))
+            );
+
+            MockV3Aggregator mockUsdcPriceFeed = new MockV3Aggregator(8, MOCK_USDC_PRICE);
+            MockV3Aggregator mockWbtcPriceFeed = new MockV3Aggregator(8, MOCK_WBTC_PRICE);
+            MockV3Aggregator mockNativePriceFeed = new MockV3Aggregator(8, MOCK_NATIVE_TOKEN_PRICE);
 
             mockUsdc = new MockUsdc("Mock Usdc", "mUsdc");
             mockWBtc = new MockWbtc("Mock WBtc", "mWBtc");
@@ -112,7 +132,7 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
             addresses = Addr({
                 usdcPriceFeed: USDC_USD_PRICE_FEED,
                 wbtcPriceFeed: WBTC_USD_PRICE_FEED,
-                nativeTokenPriceFeed: POL_USD_PRICE_FEED,
+                nativeTokenPriceFeed: NATIVE_TOKEN_USD_PRICE_FEED,
                 usdc: USDC,
                 wbtc: WBTC
             });

@@ -46,9 +46,8 @@ interface INotes {
      * @param _invoiceId Invoice identifier.
      * @param _account Account whose opened state is updated.
      * @param _noteId Note identifier.
-     * @param _open New opened state for the account.
      */
-    function setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _open) external;
+    function setOpened(uint216 _invoiceId, address _account, uint256 _noteId) external;
 
     /**
      * @notice Get the total number of notes for an invoice.

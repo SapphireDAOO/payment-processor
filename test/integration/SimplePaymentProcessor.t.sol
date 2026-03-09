@@ -5,15 +5,14 @@ import { ISimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
 
 contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
-    string POLYGON_MAINNET_RPC = vm.envString("MAINNET_RPC");
+    string MAINNET_RPC = vm.envString("MAINNET_RPC");
 
-    // Real Polygon mainnet address with native POL balance
-    address constant NATIVE_TOKEN_BUYER = 0x5e86A14B06a4001cA83688cc06568A0c07425f63;
+    address constant NATIVE_TOKEN_BUYER = 0xF268e45E467a3A5AC265CFaeDA4443052BC31dD2;
 
     uint256 constant INVOICE_PRICE = 10 ether;
 
     function setUp() public override {
-        uint256 fork = vm.createFork(POLYGON_MAINNET_RPC);
+        uint256 fork = vm.createFork(MAINNET_RPC);
         vm.selectFork(fork);
         super.setUp();
     }

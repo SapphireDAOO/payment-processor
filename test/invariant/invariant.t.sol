@@ -142,7 +142,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
     }
 
     function invariant_simpleProcessorNativeTokenBalanceIsAlwaysZero() external view {
-        assertEq(address(advancedPaymentProcessor).balance, 0);
+        assertEq(address(simplePaymentProcessor).balance, 0);
     }
 
     function invariant_advancedProcessorNativeTokenBalanceAlwaysZero() external view {

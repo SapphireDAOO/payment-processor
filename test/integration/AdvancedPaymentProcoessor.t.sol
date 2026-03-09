@@ -14,10 +14,10 @@ import {
 contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp {
     using { getEscrowAddress, applyBasisPoints } for AdvancedPaymentProcessor;
 
-    string POLYGON_MAINNET_RPC = vm.envString("MAINNET_RPC");
+    string MAINNET_RPC = vm.envString("MAINNET_RPC");
 
     function setUp() public override {
-        uint256 fork = vm.createFork(POLYGON_MAINNET_RPC);
+        uint256 fork = vm.createFork(MAINNET_RPC);
         vm.selectFork(fork);
         super.setUp();
     }
@@ -176,18 +176,19 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
 
         uint256 sellerPercentage = 9000;
 
+        uint256 feeReceiverBalanceBefore = IERC20(USDC).balanceOf(feeReceiver);
+
         advancedPP.handleDispute(invoiceId, settled, sellerPercentage);
 
         uint256 buyerShare = advancedPP.applyBasisPoints(tokenValue, advancedPP.BASIS_POINTS() - sellerPercentage);
 
         uint256 sellerShare = tokenValue - buyerShare;
-        //  advancedPP.applyBasisPoints(tokenValue, sellerPercentage);
         uint256 fee = advancedPP.applyBasisPoints(sellerShare, FEE_RATE);
 
         assertEq(advancedPP.getInvoice(invoiceId).state, advancedPP.DISPUTE_SETTLED());
         assertEq(IERC20(USDC).balanceOf(sellerOne), sellerBalanceBefore + sellerShare - fee);
         assertEq(IERC20(USDC).balanceOf(USDC_BUYER), buyerBalanceBefore + buyerShare);
-        assertEq(IERC20(USDC).balanceOf(feeReceiver), fee);
+        assertEq(IERC20(USDC).balanceOf(feeReceiver), feeReceiverBalanceBefore + fee);
     }
 
     function test_invoiceRelease() public {

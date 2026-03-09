@@ -56,7 +56,6 @@ contract Notes is INotes {
     /// @inheritdoc INotes
     function createNote(uint216 _invoiceId, address _author, bytes calldata _encryptedContent, bool _share)
         external
-        override
         onlyAuthorized
         returns (uint256 noteId)
     {
@@ -69,21 +68,19 @@ contract Notes is INotes {
 
         noteCount[_invoiceId] = noteId + 1;
 
-        if (noteId == 0) {
-            _setOpened(_invoiceId, _author, noteId, true);
-        }
+        _setOpened(_invoiceId, _author, noteId);
 
         emit NoteCreated(_invoiceId, noteId, _author, _share, _encryptedContent);
     }
 
     /// @inheritdoc INotes
-    function setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _open) external onlyAuthorized {
+    function setOpened(uint216 _invoiceId, address _account, uint256 _noteId) external onlyAuthorized {
         Note memory note = notes[_invoiceId][_noteId];
         if (!note.exists) revert NoteNotFound();
 
         if (!note.share) revert Unauthorized();
 
-        _setOpened(_invoiceId, _account, _noteId, _open);
+        _setOpened(_invoiceId, _account, _noteId);
     }
 
     /**
@@ -91,21 +88,20 @@ contract Notes is INotes {
      * @param _invoiceId Invoice identifier.
      * @param _account Account whose opened state is updated.
      * @param _noteId Note identifier.
-     * @param _open New opened state for the account.
      */
-    function _setOpened(uint216 _invoiceId, address _account, uint256 _noteId, bool _open) internal {
-        opened[_invoiceId][_noteId][_account] = _open;
+    function _setOpened(uint216 _invoiceId, address _account, uint256 _noteId) internal {
+        opened[_invoiceId][_noteId][_account] = true;
 
-        emit NoteStateChanged(_invoiceId, _noteId, _account, _open);
+        emit NoteStateChanged(_invoiceId, _noteId, _account, true);
     }
 
     /// @inheritdoc INotes
-    function getNoteCount(uint216 _invoiceId) external view override returns (uint256 totalNotes) {
+    function getNoteCount(uint216 _invoiceId) external view returns (uint256 totalNotes) {
         return noteCount[_invoiceId];
     }
 
     /// @inheritdoc INotes
-    function isOpened(uint216 _invoiceId, uint256 _noteId, address _user) external view override returns (bool isOpen) {
+    function isOpened(uint216 _invoiceId, uint256 _noteId, address _user) external view returns (bool isOpen) {
         return opened[_invoiceId][_noteId][_user];
     }
 
