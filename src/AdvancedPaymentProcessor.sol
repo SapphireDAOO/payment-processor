@@ -615,7 +615,7 @@ contract AdvancedPaymentProcessor is
 
         sellerReceivingValue = _i.balance - buyerReceivingValue;
         if (sellerReceivingValue != 0) {
-            _processSellerPayout(_i, sellerReceivingValue);
+            sellerReceivingValue = _processSellerPayout(_i, sellerReceivingValue);
         }
     }
 
