@@ -378,7 +378,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         if (msg.sender != _owner()) revert NotAuthorized();
         Invoice memory i = invoices[_invoiceId];
 
-        if (i.state != ACCEPTED && i.state != CREATED) {
+        if (i.state != ACCEPTED) {
             revert InvalidInvoiceState(i.state);
         }
 
