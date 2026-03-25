@@ -31,7 +31,7 @@ contract AdvancedPaymentProcessor is
     using { SafeTransferLib.safeTransferETH, SafeTransferLib.safeTransferFrom } for address;
     using { SafeCastLib.toUint40, SafeCastLib.toUint216 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
-    using { FixedPointMathLib.mulDiv } for uint256;
+    using { FixedPointMathLib.mulDiv, FixedPointMathLib.mulDivUp } for uint256;
 
     /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
     TaskQueueLib.Heap private heap;
@@ -217,7 +217,7 @@ contract AdvancedPaymentProcessor is
         if (m.price == 0) revert InvoiceDoesNotExist();
 
         uint256 usdPerToken = _usdPerToken(address(0));
-        uint256 priceInToken = m.price.mulDiv(10 ** DEFAULT_DECIMAL, usdPerToken);
+        uint256 priceInToken = m.price.mulDivUp(10 ** DEFAULT_DECIMAL, usdPerToken);
 
         if (priceInToken != msg.value) revert InvalidMetaInvoicePaymentAmount(msg.value, priceInToken);
 
@@ -395,7 +395,7 @@ contract AdvancedPaymentProcessor is
         uint256 usdPerToken = _usdPerToken(_paymentToken);
         uint8 tokenDecimals = _paymentToken == address(0) ? DEFAULT_DECIMAL : _getDecimals(_paymentToken);
 
-        tokenValue = _usdAmount.mulDiv(10 ** tokenDecimals, usdPerToken);
+        tokenValue = _usdAmount.mulDivUp(10 ** tokenDecimals, usdPerToken);
     }
 
     /**
