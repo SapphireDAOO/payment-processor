@@ -303,7 +303,7 @@ contract AdvancedPaymentProcessor is
         invoices[_invoiceId] = i;
 
         try IEscrow(i.escrow).withdraw(i.paymentToken, i.buyer, amount) { }
-            catch {
+        catch {
             emit TransferFailed(_invoiceId, i.buyer, amount);
         }
 
@@ -616,7 +616,7 @@ contract AdvancedPaymentProcessor is
             buyerReceivingValue = _applyBasisPoints(_i.balance, BASIS_POINTS - _sellerShare);
 
             try IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.buyer, buyerReceivingValue) { }
-                catch {
+            catch {
                 emit TransferFailed(_invoiceId, _i.buyer, buyerReceivingValue);
             }
         }
@@ -641,7 +641,7 @@ contract AdvancedPaymentProcessor is
         sellerNetAmount = _sellerReceivingValue - fee;
 
         try IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.seller, sellerNetAmount) { }
-            catch {
+        catch {
             emit TransferFailed(_invoiceId, _i.seller, sellerNetAmount);
         }
 
