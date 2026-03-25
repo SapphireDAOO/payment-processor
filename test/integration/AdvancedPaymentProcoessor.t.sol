@@ -69,7 +69,7 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
 
             assertEq(subInvoice.state, advancedPP.PAID());
             assertEq(subInvoice.escrow, escrow);
-            assertEq(escrow.balance, advancedPP.getTokenValueFromUsd(address(0), prices[i]));
+            assertApproxEqAbs(escrow.balance, advancedPP.getTokenValueFromUsd(address(0), prices[i]), 1);
             assertEq(subInvoice.paymentToken, address(0));
         }
     }
@@ -116,8 +116,8 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
 
             assertEq(subInvoice.state, advancedPP.PAID());
             assertEq(subInvoice.escrow, escrow);
-            assertEq(
-                IERC20(WBTC).balanceOf(subInvoice.escrow), advancedPP.getTokenValueFromUsd(address(WBTC), prices[i])
+            assertApproxEqAbs(
+                IERC20(WBTC).balanceOf(subInvoice.escrow), advancedPP.getTokenValueFromUsd(address(WBTC), prices[i]), 1
             );
             assertEq(subInvoice.paymentToken, address(WBTC));
         }

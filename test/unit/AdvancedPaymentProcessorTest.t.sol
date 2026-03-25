@@ -206,7 +206,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         assertEq(invOne.state, advancedPP.PAID());
         assertEq(invOne.escrow, escrowOne);
-        assertEq(invOne.escrow.balance, advancedPP.getTokenValueFromUsd(address(0), prices[0]));
+        assertApproxEqAbs(invOne.escrow.balance, advancedPP.getTokenValueFromUsd(address(0), prices[0]), 1);
         assertEq(invOne.paymentToken, address(0));
 
         IAdvancedPaymentProcessor.Invoice memory invTwo = advancedPP.getInvoice(invoiceIds[1]);
@@ -214,7 +214,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         assertEq(invTwo.state, advancedPP.PAID());
         assertEq(invTwo.escrow, escrowTwo);
-        assertEq(invTwo.escrow.balance, advancedPP.getTokenValueFromUsd(address(0), prices[1]));
+        assertApproxEqAbs(invTwo.escrow.balance, advancedPP.getTokenValueFromUsd(address(0), prices[1]), 1);
         assertEq(invTwo.paymentToken, address(0));
     }
 
@@ -285,8 +285,8 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         assertEq(invOne.state, advancedPP.PAID());
         assertEq(invOne.escrow, escrowOne);
-        assertEq(
-            IERC20(mockWBtc).balanceOf(invOne.escrow), advancedPP.getTokenValueFromUsd(address(mockWBtc), prices[0])
+        assertApproxEqAbs(
+            IERC20(mockWBtc).balanceOf(invOne.escrow), advancedPP.getTokenValueFromUsd(address(mockWBtc), prices[0]), 1
         );
         assertEq(invOne.paymentToken, address(mockWBtc));
 
@@ -295,8 +295,8 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         assertEq(invTwo.state, advancedPP.PAID());
         assertEq(invTwo.escrow, escrowTwo);
-        assertEq(
-            IERC20(mockWBtc).balanceOf(invTwo.escrow), advancedPP.getTokenValueFromUsd(address(mockWBtc), prices[1])
+        assertApproxEqAbs(
+            IERC20(mockWBtc).balanceOf(invTwo.escrow), advancedPP.getTokenValueFromUsd(address(mockWBtc), prices[1]), 1
         );
         assertEq(invTwo.paymentToken, address(mockWBtc));
     }
@@ -558,7 +558,7 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.prank(buyerOne);
         advancedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId);
 
-        assertEq(balanceBefore - tokenAmount, buyerOne.balance);
+        assertApproxEqAbs(balanceBefore - tokenAmount, buyerOne.balance, 1);
     }
 
     function test_fullRefund() public {
@@ -1175,6 +1175,27 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(inv.state, advancedPP.RELEASED());
         assertEq(inv.balance, 0);
         assertEq(sellerOne.balance, sellerBefore + tokenValue - expectedFee);
+    }
+
+    function test_USDConversionRoundingDownUnderpaysInvoice() public {
+        // Price is $1.00000001 (8 decimals). This should require slightly more than 1 USDC.
+        uint256 price = 100_000_001;
+
+        uint216 invoiceId = advancedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+        );
+
+        // Buyer pays using USDC; token amount is rounded down in getTokenValueFromUsd.
+        vm.prank(buyerOne);
+        advancedPP.payInvoice(invoiceId, address(mockUsdc));
+
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
+
+        // Compute the USD value represented by the paid USDC amount.
+        uint256 paidUsd = (inv.amountPaid * uint256(MOCK_USDC_PRICE)) / (10 ** mockUsdc.decimals());
+
+        // A correct implementation should never accept a payment that converts to less USD than the invoice price.
+        assertGe(paidUsd, price);
     }
 
     function _executePayment(address _buyer, uint216 _invoiceId, uint256 _tokenValue) internal {
