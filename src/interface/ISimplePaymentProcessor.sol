@@ -278,4 +278,14 @@ interface ISimplePaymentProcessor {
      * @param releaseDueTimestamp The new hold period expressed as a UNIX timestamp.
      */
     event UpdateHoldPeriod(uint216 indexed invoiceId, uint256 indexed releaseDueTimestamp);
+
+    /**
+     * @notice Emitted when an ETH transfer to a recipient fails during reject, refund, or release.
+     * @dev The invoice state and heap entry are already updated before this event; funds remain
+     *      in the escrow contract and can be recovered by the owner via IEscrow.withdraw directly.
+     * @param invoiceId The invoice whose transfer failed.
+     * @param recipient The intended ETH recipient (buyer or seller).
+     * @param amount The amount of ETH that could not be delivered.
+     */
+    event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
 }

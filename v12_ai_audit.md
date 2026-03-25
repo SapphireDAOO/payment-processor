@@ -626,3 +626,32 @@ Fixing head-of-line blocking safely requires removing or rescheduling the heap r
 ## Comments
 
 - Invalid. Every state transition that makes an invoice ineligible for release (REJECTED, CANCELED, REFUNDED, RELEASED) atomically removes it from the heap in the same transaction. A task cannot become permanently NOT_ELIGIBLE_FOR_RELEASE while still sitting in the heap — the state machine enforces removal at transition time. The PoC harness uses a synthetic callback that returns NOT_ELIGIBLE_FOR_RELEASE without removing the task, which has no analogue in the actual payment processor. *(Mar 23, 2026)*
+
+---
+
+# _paySubInvoices floor rounding allows zero-value sub-invoice payment
+**#12**
+- Severity: Low
+- Validity: Invalid
+
+## Targets
+- AdvancedPaymentProcessor.payMetaInvoice
+
+## Affected Locations
+- **AdvancedPaymentProcessor.payMetaInvoice**: Single finding location
+
+## Description
+
+`payInvoice` converts USD prices with `mulDivUp`, guaranteeing a non-zero token amount, but `payMetaInvoice` routes through `_paySubInvoices`, which uses `mulDiv` and rounds down each sub-invoice independently. The rounded-down value is passed into `_pay` without any minimum-amount check, so a sub-invoice can be marked PAID even when `_tokenPrice` becomes zero. Because `payMetaInvoice` only checks that the aggregate `amountPaid` is non-zero, the transaction succeeds as long as one sub-invoice yields a positive amount. This lets a buyer choose a supported low-decimal, high-price token so that small sub-invoices round to zero and are paid for free.
+
+## Root cause
+
+`_paySubInvoices` uses floor rounding (`mulDiv`) and `_pay` does not enforce `_tokenPrice > 0`, allowing sub-invoices to be marked paid with zero value while `payInvoice` uses rounding-up logic.
+
+## Impact
+
+A buyer can underpay or fully avoid payment for some sub-invoices in a meta invoice by selecting a supported token whose decimals and price make the per-invoice conversion round to zero.
+
+## Comments
+
+- Invalid. `minimumPrice` is denominated in USD (8 decimals) and defaults to $1. For any currently supported token, the zero-conversion threshold is far below $1: USDC threshold < $0.000001, WBTC threshold < $0.0009. No invoice can be created below `minimumPrice`, so no sub-invoice price can reach zero after conversion with current tokens. The attack would require registering a hypothetical token with ≤1 decimal and price > $100k — an operator misconfiguration, not an exploitable bug. The missing `_tokenPrice > 0` guard in `_pay` is a valid defense-in-depth concern but carries no present risk. *(Mar 25, 2026)*

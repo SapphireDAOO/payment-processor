@@ -37,7 +37,6 @@ contract Escrow is IEscrow {
      */
     constructor(uint216 _invoiceId, address _paymentProcessorAddress) payable {
         INVOICE_ID = _invoiceId;
-
         PAYMENT_PROCESSOR = _paymentProcessorAddress;
         emit FundsDeposited(_invoiceId, msg.value);
     }

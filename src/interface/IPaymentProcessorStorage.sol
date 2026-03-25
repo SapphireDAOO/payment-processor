@@ -54,7 +54,7 @@ interface IPaymentProcessorStorage {
      * @dev Only callable by the contract owner. Reverts with HoldPeriodCanNotBeZero if zero.
      * @param _newDefaultHoldPeriod The new default hold period in seconds.
      */
-    function setDefaultHoldPeriod(uint256 _newDefaultHoldPeriod) external;
+    function setDefaultHoldPeriod(uint96 _newDefaultHoldPeriod) external;
 
     /**
      * @notice Updates the marketplace address allowed to perform privileged operations.
@@ -75,7 +75,7 @@ interface IPaymentProcessorStorage {
      * @dev Callable only by the contract owner.
      * @param _feeRate The new fee rate in basis points (1% = 100 basis points).
      */
-    function setFeeRate(uint256 _feeRate) external;
+    function setFeeRate(uint96 _feeRate) external;
 
     /**
      * @notice Updates the gas threshold used in automated upkeep logic.
@@ -83,7 +83,7 @@ interface IPaymentProcessorStorage {
      *      required to continue processing during `performUpkeep`.
      * @param _newGasThreshold The new gas threshold value (in units of gas).
      */
-    function setGasThreshold(uint256 _newGasThreshold) external;
+    function setGasThreshold(uint96 _newGasThreshold) external;
 
     /**
      * @notice Updates the window of time after invoice creation during which a buyer can pay.
