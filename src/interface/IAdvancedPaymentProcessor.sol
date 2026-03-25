@@ -452,4 +452,14 @@ interface IAdvancedPaymentProcessor {
      * @param newHoldPeriod The updated escrow hold duration in seconds.
      */
     event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
+
+    /**
+     * @notice Emitted when an ETH transfer to a recipient fails during release, refund, or dispute settlement.
+     * @dev State and heap removal are already committed before this event; funds remain in the escrow
+     *      contract and can be recovered by the owner via IEscrow.withdraw directly.
+     * @param invoiceId The invoice whose transfer failed.
+     * @param recipient The intended ETH recipient (buyer or seller).
+     * @param amount The amount of ETH that could not be delivered.
+     */
+    event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
 }

@@ -274,7 +274,7 @@ contract AdvancedPaymentProcessor is
 
         if (_resolution == DISPUTE_SETTLED) {
             invoices[_invoiceId].balance = 0;
-            (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(i, _sellerShare);
+            (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(i, _sellerShare, _invoiceId);
             emit DisputeSettled(_invoiceId, sellerReceivingValue, buyerReceivingValue);
         }
     }
@@ -302,7 +302,11 @@ contract AdvancedPaymentProcessor is
         i.balance -= amount;
         invoices[_invoiceId] = i;
 
-        IEscrow(i.escrow).withdraw(i.paymentToken, i.buyer, amount);
+        try IEscrow(i.escrow).withdraw(i.paymentToken, i.buyer, amount) { }
+            catch {
+            emit TransferFailed(_invoiceId, i.buyer, amount);
+        }
+
         emit Refunded(_invoiceId, amount);
     }
 
@@ -469,7 +473,7 @@ contract AdvancedPaymentProcessor is
         invoices[_invoiceId].balance = 0;
 
         heap.removeAt(pos - 1, index);
-        uint256 sellerNetAmount = _processSellerPayout(i, i.balance);
+        uint256 sellerNetAmount = _processSellerPayout(i, i.balance, _invoiceId);
 
         emit PaymentReleased(_invoiceId, i.seller, i.paymentToken, sellerNetAmount);
         return TaskQueueLib.SUCCESSFUL;
@@ -604,18 +608,22 @@ contract AdvancedPaymentProcessor is
      * @return sellerReceivingValue The amount sent to the seller.
      * @return buyerReceivingValue The amount refunded to the buyer (zero if sellerShare == 10000).
      */
-    function _distributeFunds(Invoice memory _i, uint256 _sellerShare)
+    function _distributeFunds(Invoice memory _i, uint256 _sellerShare, uint216 _invoiceId)
         internal
         returns (uint256 sellerReceivingValue, uint256 buyerReceivingValue)
     {
         if (_sellerShare != BASIS_POINTS) {
             buyerReceivingValue = _applyBasisPoints(_i.balance, BASIS_POINTS - _sellerShare);
-            IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.buyer, buyerReceivingValue);
+
+            try IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.buyer, buyerReceivingValue) { }
+                catch {
+                emit TransferFailed(_invoiceId, _i.buyer, buyerReceivingValue);
+            }
         }
 
         sellerReceivingValue = _i.balance - buyerReceivingValue;
         if (sellerReceivingValue != 0) {
-            sellerReceivingValue = _processSellerPayout(_i, sellerReceivingValue);
+            sellerReceivingValue = _processSellerPayout(_i, sellerReceivingValue, _invoiceId);
         }
     }
 
@@ -625,13 +633,17 @@ contract AdvancedPaymentProcessor is
      * @param _sellerReceivingValue The gross amount owed to the seller before fees.
      * @return sellerNetAmount The amount the seller receives after fees are deducted.
      */
-    function _processSellerPayout(Invoice memory _i, uint256 _sellerReceivingValue)
+    function _processSellerPayout(Invoice memory _i, uint256 _sellerReceivingValue, uint216 _invoiceId)
         internal
         returns (uint256 sellerNetAmount)
     {
         uint256 fee = _applyBasisPoints(_sellerReceivingValue, ppStorage.getFeeRate());
         sellerNetAmount = _sellerReceivingValue - fee;
-        IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.seller, sellerNetAmount);
+
+        try IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.seller, sellerNetAmount) { }
+            catch {
+            emit TransferFailed(_invoiceId, _i.seller, sellerNetAmount);
+        }
 
         IEscrow(_i.escrow).withdraw(_i.paymentToken, ppStorage.getFeeReceiver(), fee);
         return sellerNetAmount;
