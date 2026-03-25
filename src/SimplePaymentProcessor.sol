@@ -163,10 +163,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         invoices[_invoiceId].balance = 0;
         heap.removeAt(index[_invoiceId] - 1, index);
 
-        try IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price) { }
-        catch {
-            emit TransferFailed(_invoiceId, i.buyer, i.price);
-        }
+        if (!IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price)) revert EscrowWithdrawFailed();
 
         emit InvoiceRejected(_invoiceId);
     }
@@ -204,7 +201,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         heap.removeAt(index[_invoiceId] - 1, index);
 
-        IEscrow(i.escrow).withdraw(address(0), msg.sender, i.balance);
+        if (!IEscrow(i.escrow).withdraw(address(0), msg.sender, i.balance)) revert EscrowWithdrawFailed();
         emit InvoiceReleased(_invoiceId);
     }
 
@@ -224,10 +221,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         invoices[_invoiceId].state = REFUNDED;
         invoices[_invoiceId].balance = 0;
 
-        try IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price) { }
-        catch {
-            emit TransferFailed(_invoiceId, i.buyer, i.price);
-        }
+        if (!IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price)) revert EscrowWithdrawFailed();
 
         emit InvoiceRefunded(_invoiceId);
     }
@@ -331,7 +325,17 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         Invoice memory i = invoices[_invoiceId];
 
         if (i.state == PAID) {
-            refundBuyer(_invoiceId);
+            uint256 paidPos = index[_invoiceId];
+            if (paidPos == 0 || paidPos > heap.data.length) return TaskQueueLib.ERROR;
+
+            heap.removeAt(paidPos - 1, index);
+            invoices[_invoiceId].state = REFUNDED;
+            invoices[_invoiceId].balance = 0;
+
+            if (!IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price)) {
+                emit TransferFailed(_invoiceId, i.buyer, i.price);
+            }
+            emit InvoiceRefunded(_invoiceId);
             return TaskQueueLib.SUCCESSFUL;
         }
 
@@ -345,8 +349,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         heap.removeAt(pos - 1, index);
 
-        try IEscrow(i.escrow).withdraw(address(0), i.seller, i.balance) { }
-        catch {
+        if (!IEscrow(i.escrow).withdraw(address(0), i.seller, i.balance)) {
             emit TransferFailed(_invoiceId, i.seller, i.balance);
         }
 

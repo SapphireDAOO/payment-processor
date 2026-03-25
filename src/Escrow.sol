@@ -2,7 +2,6 @@
 pragma solidity 0.8.28;
 
 import { IEscrow } from "./interface/IEscrow.sol";
-import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 
 /**
  * @title Escrow
@@ -10,8 +9,6 @@ import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
  * @dev Conforms to the IEscrow interface. Used by the payment processor for individual invoice escrow handling.
  */
 contract Escrow is IEscrow {
-    using { SafeTransferLib.safeTransferETH, SafeTransferLib.safeTransfer } for address;
-
     /// @notice The address of the payment processor.
     address public immutable PAYMENT_PROCESSOR;
 
@@ -42,11 +39,18 @@ contract Escrow is IEscrow {
     }
 
     /// @inheritdoc IEscrow
-    function withdraw(address _token, address _receiver, uint256 _amount) external onlyPaymentProcessor {
+    function withdraw(address _token, address _receiver, uint256 _amount)
+        external
+        onlyPaymentProcessor
+        returns (bool success)
+    {
         if (_token == address(0)) {
-            _receiver.safeTransferETH(_amount);
+            (success,) = _receiver.call{ value: _amount }("");
         } else {
-            _token.safeTransfer(_receiver, _amount);
+            bytes4 transferSelector = 0xa9059cbb;
+            bytes memory ret;
+            (success, ret) = _token.call(abi.encodeWithSelector(transferSelector, _receiver, _amount));
+            if (success && ret.length > 0) success = abi.decode(ret, (bool));
         }
     }
 

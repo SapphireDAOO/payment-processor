@@ -302,10 +302,7 @@ contract AdvancedPaymentProcessor is
         i.balance -= amount;
         invoices[_invoiceId] = i;
 
-        try IEscrow(i.escrow).withdraw(i.paymentToken, i.buyer, amount) { }
-        catch {
-            emit TransferFailed(_invoiceId, i.buyer, amount);
-        }
+        if (!IEscrow(i.escrow).withdraw(i.paymentToken, i.buyer, amount)) revert EscrowWithdrawFailed();
 
         emit Refunded(_invoiceId, amount);
     }
@@ -473,7 +470,7 @@ contract AdvancedPaymentProcessor is
         invoices[_invoiceId].balance = 0;
 
         heap.removeAt(pos - 1, index);
-        uint256 sellerNetAmount = _processSellerPayout(i, i.balance, _invoiceId);
+        uint256 sellerNetAmount = _processSellerPayout(i, i.balance, _invoiceId, false);
 
         emit PaymentReleased(_invoiceId, i.seller, i.paymentToken, sellerNetAmount);
         return TaskQueueLib.SUCCESSFUL;
@@ -615,15 +612,14 @@ contract AdvancedPaymentProcessor is
         if (_sellerShare != BASIS_POINTS) {
             buyerReceivingValue = _applyBasisPoints(_i.balance, BASIS_POINTS - _sellerShare);
 
-            try IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.buyer, buyerReceivingValue) { }
-            catch {
-                emit TransferFailed(_invoiceId, _i.buyer, buyerReceivingValue);
+            if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.buyer, buyerReceivingValue)) {
+                revert EscrowWithdrawFailed();
             }
         }
 
         sellerReceivingValue = _i.balance - buyerReceivingValue;
         if (sellerReceivingValue != 0) {
-            sellerReceivingValue = _processSellerPayout(_i, sellerReceivingValue, _invoiceId);
+            sellerReceivingValue = _processSellerPayout(_i, sellerReceivingValue, _invoiceId, true);
         }
     }
 
@@ -631,21 +627,28 @@ contract AdvancedPaymentProcessor is
      * @notice Distributes the seller's payout from the escrow, applying platform fees.
      * @param _i The invoice data containing escrow and recipient info.
      * @param _sellerReceivingValue The gross amount owed to the seller before fees.
+     * @param _revertOnFail If true, reverts on failed transfer (manual paths). If false, emits
+     *        TransferFailed instead (automation path, to prevent head-of-line DoS).
      * @return sellerNetAmount The amount the seller receives after fees are deducted.
      */
-    function _processSellerPayout(Invoice memory _i, uint256 _sellerReceivingValue, uint216 _invoiceId)
-        internal
-        returns (uint256 sellerNetAmount)
-    {
+    function _processSellerPayout(
+        Invoice memory _i,
+        uint256 _sellerReceivingValue,
+        uint216 _invoiceId,
+        bool _revertOnFail
+    ) internal returns (uint256 sellerNetAmount) {
         uint256 fee = _applyBasisPoints(_sellerReceivingValue, ppStorage.getFeeRate());
         sellerNetAmount = _sellerReceivingValue - fee;
 
-        try IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.seller, sellerNetAmount) { }
-        catch {
+        if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.seller, sellerNetAmount)) {
+            if (_revertOnFail) revert EscrowWithdrawFailed();
             emit TransferFailed(_invoiceId, _i.seller, sellerNetAmount);
         }
 
-        IEscrow(_i.escrow).withdraw(_i.paymentToken, ppStorage.getFeeReceiver(), fee);
+        if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, ppStorage.getFeeReceiver(), fee)) {
+            if (_revertOnFail) revert EscrowWithdrawFailed();
+            emit TransferFailed(_invoiceId, ppStorage.getFeeReceiver(), fee);
+        }
         return sellerNetAmount;
     }
 

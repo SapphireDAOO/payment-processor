@@ -49,6 +49,9 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when the hold period for an invoice has not yet been exceeded.
     error HoldPeriodHasNotBeenExceeded();
 
+    /// @notice Thrown when the escrow withdrawal fails during a manual release, reject, or refund.
+    error EscrowWithdrawFailed();
+
     // ================================================================
     //                              STRUCTS
     // ================================================================
