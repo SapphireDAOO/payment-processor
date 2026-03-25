@@ -164,7 +164,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         heap.removeAt(index[_invoiceId] - 1, index);
 
         try IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price) { }
-            catch {
+        catch {
             emit TransferFailed(_invoiceId, i.buyer, i.price);
         }
 
@@ -225,7 +225,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         invoices[_invoiceId].balance = 0;
 
         try IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price) { }
-            catch {
+        catch {
             emit TransferFailed(_invoiceId, i.buyer, i.price);
         }
 
@@ -346,7 +346,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         heap.removeAt(pos - 1, index);
 
         try IEscrow(i.escrow).withdraw(address(0), i.seller, i.balance) { }
-            catch {
+        catch {
             emit TransferFailed(_invoiceId, i.seller, i.balance);
         }
 
