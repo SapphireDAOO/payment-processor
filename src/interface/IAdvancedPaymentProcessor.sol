@@ -72,6 +72,9 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when the seller's payout share exceeds the allowed limit (10000 BPS).
     error InvalidSellersPayoutShare();
 
+    /// @notice Thrown when the escrow withdrawal fails during a manual refund.
+    error EscrowWithdrawFailed();
+
     // ================================================================
     //                              STRUCTS
     // ================================================================
