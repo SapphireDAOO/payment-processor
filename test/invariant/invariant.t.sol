@@ -67,8 +67,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
             }
 
             if (inv.state == simplePaymentProcessor.ACCEPTED()) {
-                uint256 fee = simplePaymentProcessor.calculateFee(inv.price);
-                assertEq(inv.balance, inv.price - fee);
+                assertEq(inv.balance, inv.price);
                 assertEq(inv.escrow.balance, inv.balance);
             }
 
@@ -80,6 +79,11 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
                 if (inv.escrow != address(0)) {
                     assertEq(inv.escrow.balance, 0);
                 }
+            }
+
+            if (inv.state == simplePaymentProcessor.LOCKED()) {
+                assertEq(inv.balance, 0);
+                assertEq(inv.escrow.balance, inv.price);
             }
         }
     }

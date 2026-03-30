@@ -64,6 +64,8 @@ interface ISimplePaymentProcessor {
     /// @param invalidateAt The timestamp after which the invoice is considered invalid if unpaid.
     /// @param expiresAt The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded.
     /// @param state The current state of the invoice.
+    /// @param withdrawalRetries Number of failed `IEscrow.withdraw` attempts by the automation path. Resets are not needed
+    ///        because an invoice follows only one terminal path. Packed with `state` in the same slot.
     /// @param seller The address of the seller of the invoice.
     /// @param buyer The address of the buyer of the invoice.
     /// @param escrow The address of the escrow contract managing the funds for this invoice.
@@ -77,6 +79,7 @@ interface ISimplePaymentProcessor {
         uint40 invalidateAt;
         uint40 expiresAt;
         uint8 state;
+        uint8 withdrawalRetries;
         address seller;
         address buyer;
         address escrow;
@@ -186,6 +189,20 @@ interface ISimplePaymentProcessor {
     function setDecisionWindow(uint256 _newDecisionWindow) external;
 
     /**
+     * @notice Recovers funds from a LOCKED invoice by withdrawing from its escrow to a specified recipient.
+     * @dev Only callable by the owner or storage contract. The invoice must be in LOCKED state —
+     *      meaning all automated withdrawal retries have been exhausted. Transitions the invoice to
+     *      RELEASED to prevent double-recovery. The caller is responsible for supplying the correct
+     *      `_amount`; use `getInvoiceData` to determine how much remains in escrow. In both PAID-locked
+     *      and ACCEPTED-locked cases the full `price` is in escrow, as the fee is only collected at
+     *      the point of successful release.
+     * @param _invoiceId The ID of the locked invoice.
+     * @param _recipient The address to send the recovered funds to.
+     * @param _amount The amount to withdraw from escrow.
+     */
+    function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external;
+
+    /**
      * @notice Returns the nonce that will be assigned to the next invoice.
      * @return nextInvoiceNonceValue The next invoice nonce value.
      */
@@ -285,10 +302,29 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Emitted when an ETH transfer to a recipient fails during reject, refund, or release.
      * @dev The invoice state and heap entry are already updated before this event; funds remain
-     *      in the escrow contract and can be recovered by the owner via IEscrow.withdraw directly.
+     *      in the escrow contract and can be recovered by the owner via `releaseLocked`.
      * @param invoiceId The invoice whose transfer failed.
      * @param recipient The intended ETH recipient (buyer or seller).
      * @param amount The amount of ETH that could not be delivered.
      */
     event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+
+    /**
+     * @notice Emitted when an admin recovers funds from a LOCKED invoice.
+     * @param invoiceId The invoice from which funds were recovered.
+     * @param recipient The address that received the recovered funds.
+     * @param amount The amount of ETH recovered from escrow.
+     */
+    event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+
+    /**
+     * @notice Emitted when an automated withdrawal fails and the invoice is rescheduled for a retry.
+     * @dev The invoice remains in its current state and the heap entry is rescheduled by RETRY_DELAY.
+     *      After MAX_WITHDRAWAL_RETRIES attempts, the processor falls back to a buyer refund instead.
+     * @param invoiceId The invoice being retried.
+     * @param recipient The intended recipient (seller for ACCEPTED, buyer for PAID).
+     * @param amount The amount that could not be delivered.
+     * @param attempt The retry attempt number (1 through MAX_WITHDRAWAL_RETRIES).
+     */
+    event WithdrawalRetried(uint216 indexed invoiceId, address indexed recipient, uint256 amount, uint8 attempt);
 }

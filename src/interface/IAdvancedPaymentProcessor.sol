@@ -86,6 +86,7 @@ interface IAdvancedPaymentProcessor {
     /// @param releaseAt The timestamp when funds in escrow can be released to the seller.
     /// @param expiresAt The timestamp after which the invoice is no longer payable.
     /// @param state Current state of the invoice.
+    /// @param withdrawalRetries Number of failed `IEscrow.withdraw` attempts by the automation path. Packed with `state`.
     /// @param escrowHoldPeriod Custom hold duration (in seconds) between payment and release, set at invoice creation. When non-zero, it overrides the storage default.
     /// @param metaInvoiceId Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.
     /// @param buyer Address of the buyer.
@@ -102,6 +103,7 @@ interface IAdvancedPaymentProcessor {
         uint40 releaseAt;
         uint40 expiresAt;
         uint8 state;
+        uint8 withdrawalRetries;
         uint32 escrowHoldPeriod;
         uint216 metaInvoiceId;
         address buyer;
@@ -255,6 +257,17 @@ interface IAdvancedPaymentProcessor {
      * @param _invoiceId The ID of the invoice.
      */
     function release(uint216 _invoiceId) external;
+
+    /**
+     * @notice Recovers funds from a LOCKED invoice by withdrawing from its escrow to a specified recipient.
+     * @dev Only callable by the owner. The invoice must be in LOCKED state — meaning all automated
+     *      withdrawal retries (seller + buyer fallback) have been exhausted. Transitions to RELEASED
+     *      to prevent double-recovery. The token used is taken from the invoice's stored `paymentToken`.
+     * @param _invoiceId The ID of the locked invoice.
+     * @param _recipient The address to send the recovered funds to.
+     * @param _amount The amount to withdraw from escrow.
+     */
+    function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external;
 
     /**
      * @notice Sets the Chainlink price feed configuration for a specific payment token.
@@ -457,12 +470,32 @@ interface IAdvancedPaymentProcessor {
     event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 
     /**
-     * @notice Emitted when an ETH transfer to a recipient fails during release, refund, or dispute settlement.
+     * @notice Emitted when a transfer to a recipient fails during release, refund, or dispute settlement.
      * @dev State and heap removal are already committed before this event; funds remain in the escrow
-     *      contract and can be recovered by the owner via IEscrow.withdraw directly.
+     *      contract and can be recovered by the owner via `releaseLocked`.
      * @param invoiceId The invoice whose transfer failed.
-     * @param recipient The intended ETH recipient (buyer or seller).
-     * @param amount The amount of ETH that could not be delivered.
+     * @param recipient The intended recipient (buyer or seller).
+     * @param amount The amount that could not be delivered.
      */
     event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+
+    /**
+     * @notice Emitted when an automated withdrawal fails and the invoice is queued for retry.
+     * @dev The invoice remains on the heap for the next upkeep cycle. Seller attempts are numbered
+     *      1–MAX_WITHDRAWAL_RETRIES; buyer fallback attempts continue from MAX_WITHDRAWAL_RETRIES+1
+     *      up to 2×MAX_WITHDRAWAL_RETRIES. After all retries the invoice transitions to LOCKED.
+     * @param invoiceId The invoice being retried.
+     * @param recipient The intended recipient (seller for release phase, buyer for fallback phase).
+     * @param amount The amount that could not be delivered.
+     * @param attempt The cumulative retry attempt number (1 through 2×MAX_WITHDRAWAL_RETRIES).
+     */
+    event WithdrawalRetried(uint216 indexed invoiceId, address indexed recipient, uint256 amount, uint8 attempt);
+
+    /**
+     * @notice Emitted when an admin recovers funds from a LOCKED invoice.
+     * @param invoiceId The invoice from which funds were recovered.
+     * @param recipient The address that received the recovered funds.
+     * @param amount The amount recovered from escrow.
+     */
+    event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
 }
