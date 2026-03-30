@@ -163,9 +163,8 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.acceptPayment(invoiceId);
         ISimplePaymentProcessor.Invoice memory i = simplePP.getInvoiceData(invoiceId);
-        uint256 fee = simplePP.calculateFee(i.price);
+
         assertEq(i.state, simplePP.ACCEPTED());
-        assertEq(ppStorage.getFeeReceiver().balance, fee);
     }
 
     function test_paymentAcceptanceAfterDecisionWindow() public {
@@ -486,7 +485,6 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.acceptPayment(invoiceId);
 
         uint256 expectedFee = simplePP.calculateFee(_invoicePrice);
-        assertEq(feeReceiver.balance, feeReceiverBefore + expectedFee);
 
         vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
 

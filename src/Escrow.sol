@@ -44,13 +44,15 @@ contract Escrow is IEscrow {
         onlyPaymentProcessor
         returns (bool success)
     {
-        if (_token == address(0)) {
-            (success,) = _receiver.call{ value: _amount }("");
-        } else {
-            bytes4 transferSelector = 0xa9059cbb;
-            bytes memory ret;
-            (success, ret) = _token.call(abi.encodeWithSelector(transferSelector, _receiver, _amount));
-            if (success && ret.length > 0) success = abi.decode(ret, (bool));
+        if (_amount > 0) {
+            if (_token == address(0)) {
+                (success,) = _receiver.call{ value: _amount }("");
+            } else {
+                bytes4 transferSelector = 0xa9059cbb;
+                bytes memory ret;
+                (success, ret) = _token.call(abi.encodeWithSelector(transferSelector, _receiver, _amount));
+                if (success && ret.length > 0) success = abi.decode(ret, (bool));
+            }
         }
     }
 

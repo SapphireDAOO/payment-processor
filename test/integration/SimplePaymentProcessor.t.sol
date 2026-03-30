@@ -73,8 +73,6 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.acceptPayment(invoiceId);
 
-        assertEq(feeReceiver.balance, feeReceiverBefore + expectedFee);
-
         vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
 
         vm.prank(sellerOne);
@@ -85,6 +83,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         assertEq(inv.state, simplePP.RELEASED());
         assertEq(inv.balance, 0);
         assertEq(inv.escrow.balance, 0);
+        assertEq(feeReceiver.balance, feeReceiverBefore + expectedFee);
         assertEq(sellerOne.balance, sellerBalanceBefore + (INVOICE_PRICE - expectedFee));
     }
 

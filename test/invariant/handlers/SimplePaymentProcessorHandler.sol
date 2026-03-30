@@ -136,6 +136,15 @@ contract SimplePaymentProcessorHandler is Test {
         pp.performUpkeep("");
     }
 
+    function releaseLocked(uint256 _index) public invoiceExists {
+        _index = _bound(_index);
+        uint216 invoiceId = invoiceIds[_index];
+        ISimplePaymentProcessor.Invoice memory inv = pp.getInvoiceData(invoiceId);
+        if (inv.state != pp.LOCKED()) return;
+        vm.prank(admin);
+        pp.releaseLocked(invoiceId, inv.buyer, inv.price);
+    }
+
     /// @notice Returns the total number of invoices created by the handler.
     function getTotalInvoiceCreated() external view returns (uint256 totalInvoices) {
         return totalInvoiceCreated;

@@ -43,11 +43,17 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @notice Status code representing that a payment has been successfully released to the seller.
     uint8 public constant RELEASED = REFUNDED + 1;
 
+    /// @notice Status code representing that an invoice is permanently locked after all automated withdrawal retries failed.
+    uint8 public constant LOCKED = RELEASED + 1;
+
     /// @notice Basis points denominator used for percentage calculations (1% = 100).
     uint256 public constant BASIS_POINTS = 10_000;
 
     /// @notice Default decision period for the seller after an invoice is paid.
     uint256 public constant DEFAULT_SELLER_DECISION_WINDOW = 6 hours;
+
+    /// @notice Maximum number of automated withdrawal retry attempts before falling back.
+    uint8 public constant MAX_WITHDRAWAL_RETRIES = 3;
 
     /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
     TaskQueueLib.Heap private heap;
@@ -144,12 +150,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             heap.reschedule(_invoiceId, i.releaseAt, index);
         }
 
-        uint256 feeValue = calculateFee(i.price);
-        i.balance -= feeValue;
-
         invoices[_invoiceId] = i;
-
-        IEscrow(i.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), feeValue);
 
         emit InvoiceAccepted(_invoiceId);
     }
@@ -196,12 +197,14 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             revert HoldPeriodHasNotBeenExceeded();
         }
 
+        uint256 fee = calculateFee(i.price);
         invoices[_invoiceId].state = RELEASED;
         invoices[_invoiceId].balance = 0;
 
         heap.removeAt(index[_invoiceId] - 1, index);
 
-        if (!IEscrow(i.escrow).withdraw(address(0), msg.sender, i.balance)) revert EscrowWithdrawFailed();
+        if (!IEscrow(i.escrow).withdraw(address(0), msg.sender, i.price - fee)) revert EscrowWithdrawFailed();
+        IEscrow(i.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), fee);
         emit InvoiceReleased(_invoiceId);
     }
 
@@ -224,6 +227,18 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         if (!IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price)) revert EscrowWithdrawFailed();
 
         emit InvoiceRefunded(_invoiceId);
+    }
+
+    /// @inheritdoc ISimplePaymentProcessor
+    function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external onlyAuthorized {
+        Invoice storage inv = invoices[_invoiceId];
+        if (inv.state != LOCKED) revert InvalidInvoiceState(inv.state);
+
+        inv.state = RELEASED;
+
+        if (!IEscrow(inv.escrow).withdraw(address(0), _recipient, _amount)) revert EscrowWithdrawFailed();
+
+        emit LockedPaymentRecovered(_invoiceId, _recipient, _amount);
     }
 
     /// @inheritdoc AutomationCompatibleInterface
@@ -313,45 +328,91 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /**
      * @notice Attempts to automatically release or refund the specified invoice when its heap task is due.
      * @dev Called by `performUpkeep` via `processDueTask`. Returns a status code rather than reverting.
-     *      - If state is PAID (decision window elapsed): calls `refundBuyer` and returns SUCCESSFUL.
-     *      - If state is ACCEPTED (hold period elapsed): transitions to RELEASED, removes from heap,
-     *        and transfers funds to the seller.
-     *      - If state is anything else: returns NOT_ELIGIBLE_FOR_RELEASE.
-     *      - If heap position is invalid: returns ERROR.
+     *      Only PAID or ACCEPTED invoices are ever placed on the heap, so no other states are handled.
+     *      PAID path: retries buyer refund up to MAX_WITHDRAWAL_RETRIES times. On each failure the retry
+     *        counter is incremented and the invoice remains on the heap for the next upkeep cycle.
+     *        Transitions to REFUNDED on success or LOCKED once the ceiling is reached.
+     *      ACCEPTED path: retries seller release up to MAX_WITHDRAWAL_RETRIES times, then falls back to
+     *        buyer refund for another MAX_WITHDRAWAL_RETRIES attempts, using the same counter across both
+     *        phases. Buyer fallback begins once the counter reaches MAX_WITHDRAWAL_RETRIES.
+     *        Transitions to RELEASED, REFUNDED, or LOCKED accordingly.
+     *      Invalid heap position: returns ERROR.
      * @param _invoiceId The ID of the invoice to release.
-     * @return status `SUCCESSFUL`, `NOT_ELIGIBLE_FOR_RELEASE`, or `ERROR`.
+     * @return status `SUCCESSFUL` or `ERROR`.
      */
     function _release(uint216 _invoiceId) internal returns (uint256 status) {
         Invoice memory i = invoices[_invoiceId];
 
-        if (i.state == PAID) {
-            uint256 paidPos = index[_invoiceId];
-            if (paidPos == 0 || paidPos > heap.data.length) return TaskQueueLib.ERROR;
-
-            heap.removeAt(paidPos - 1, index);
-            invoices[_invoiceId].state = REFUNDED;
-            invoices[_invoiceId].balance = 0;
-
-            if (!IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price)) {
-                emit TransferFailed(_invoiceId, i.buyer, i.price);
-            }
-            emit InvoiceRefunded(_invoiceId);
-            return TaskQueueLib.SUCCESSFUL;
-        }
-
-        if (i.state != ACCEPTED) return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
-
         uint256 pos = index[_invoiceId];
         if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
 
+        if (i.state == PAID) return _autoRefund(_invoiceId, pos, i, MAX_WITHDRAWAL_RETRIES);
+        if (i.withdrawalRetries < MAX_WITHDRAWAL_RETRIES) {
+            return _autoRelease(_invoiceId, pos, i);
+        }
+        return _autoRefund(_invoiceId, pos, i, 2 * MAX_WITHDRAWAL_RETRIES);
+    }
+
+    /**
+     * @notice Executes an automated buyer refund with retry logic.
+     * @dev Attempts to withdraw `_i.price` to `_i.buyer`. On failure the retry counter is incremented
+     *      and the invoice remains on the heap for the next upkeep cycle. Transitions to REFUNDED on
+     *      success or LOCKED once `withdrawalRetries` reaches `_withdrawRetries`.
+     * @param _invoiceId The invoice to refund.
+     * @param _pos The invoice's 1-based heap position.
+     * @param _i In-memory snapshot of the invoice.
+     * @param _withdrawRetries Retry ceiling; invoice is LOCKED when `withdrawalRetries` reaches this value.
+     * @return status `SUCCESSFUL`.
+     */
+    function _autoRefund(uint216 _invoiceId, uint256 _pos, Invoice memory _i, uint8 _withdrawRetries)
+        internal
+        returns (uint256 status)
+    {
+        if (!IEscrow(_i.escrow).withdraw(address(0), _i.buyer, _i.price)) {
+            if (_i.withdrawalRetries < _withdrawRetries) {
+                invoices[_invoiceId].withdrawalRetries = _i.withdrawalRetries + 1;
+                emit WithdrawalRetried(_invoiceId, _i.buyer, _i.price, _i.withdrawalRetries + 1);
+                return TaskQueueLib.SUCCESSFUL;
+            }
+            // Max retries exhausted: lock the invoice, funds remain in escrow.
+            heap.removeAt(_pos - 1, index);
+            invoices[_invoiceId].state = LOCKED;
+            invoices[_invoiceId].balance = 0;
+            emit TransferFailed(_invoiceId, _i.buyer, _i.price);
+            return TaskQueueLib.SUCCESSFUL;
+        }
+
+        heap.removeAt(_pos - 1, index);
+        invoices[_invoiceId].state = REFUNDED;
+        invoices[_invoiceId].balance = 0;
+        emit InvoiceRefunded(_invoiceId);
+        return TaskQueueLib.SUCCESSFUL;
+    }
+
+    /**
+     * @notice Executes an automated seller release with retry logic.
+     * @dev Computes the platform fee, then attempts to withdraw the net seller amount from escrow.
+     *      On failure the retry counter is incremented and the invoice remains on the heap for the
+     *      next upkeep cycle. On success, the fee is collected best-effort (failure emits TransferFailed).
+     *      Transitions to RELEASED on success. Once `withdrawalRetries` reaches MAX_WITHDRAWAL_RETRIES,
+     *      `_release` routes to `_autoRefund` for buyer fallback instead of calling this function again.
+     * @param _invoiceId The invoice to release.
+     * @param _pos The invoice's 1-based heap position.
+     * @param _i In-memory snapshot of the invoice.
+     * @return status `SUCCESSFUL`.
+     */
+    function _autoRelease(uint216 _invoiceId, uint256 _pos, Invoice memory _i) internal returns (uint256 status) {
+        uint256 fee = calculateFee(_i.price);
+        uint256 sellerAmount = _i.price - fee;
+        if (!IEscrow(_i.escrow).withdraw(address(0), _i.seller, sellerAmount)) {
+            invoices[_invoiceId].withdrawalRetries = _i.withdrawalRetries + 1;
+            emit WithdrawalRetried(_invoiceId, _i.seller, sellerAmount, _i.withdrawalRetries + 1);
+            return TaskQueueLib.SUCCESSFUL;
+        }
         invoices[_invoiceId].state = RELEASED;
         invoices[_invoiceId].balance = 0;
-
-        heap.removeAt(pos - 1, index);
-
-        if (!IEscrow(i.escrow).withdraw(address(0), i.seller, i.balance)) {
-            emit TransferFailed(_invoiceId, i.seller, i.balance);
-        }
+        heap.removeAt(_pos - 1, index);
+        IEscrow(_i.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), fee);
 
         emit InvoiceReleased(_invoiceId);
         return TaskQueueLib.SUCCESSFUL;
