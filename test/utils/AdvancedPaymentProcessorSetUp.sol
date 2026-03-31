@@ -3,7 +3,8 @@ pragma solidity 0.8.28;
 
 import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 import { AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
-import { IAdvancedPaymentProcessor } from "../../src/interface/IAdvancedPaymentProcessor.sol";
+import { OracleManager } from "../../src/OracleManager.sol";
+import { IOracleManager } from "../../src/interface/IOracleManager.sol";
 import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
 import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -21,6 +22,7 @@ struct Addr {
 
 abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
     AdvancedPaymentProcessor advancedPP;
+    OracleManager oracle;
     MockUsdc mockUsdc;
     MockWbtc mockWBtc;
 
@@ -65,25 +67,25 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
     {
         Addr memory addr = _setUp();
 
+        oracle = new OracleManager();
+        oracle.setSequencerUptimeFeed(addr.sequencerUptimeFeed);
+        oracle.setPriceFeed(
+            address(addr.usdc),
+            IOracleManager.PriceFeedConfig({ aggregator: address(addr.usdcPriceFeed), heartbeat: 24 hours })
+        );
+        oracle.setPriceFeed(
+            address(addr.wbtc),
+            IOracleManager.PriceFeedConfig({ aggregator: address(addr.wbtcPriceFeed), heartbeat: 24 hours })
+        );
+        oracle.setPriceFeed(
+            address(0),
+            IOracleManager.PriceFeedConfig({ aggregator: address(addr.nativeTokenPriceFeed), heartbeat: 24 hours })
+        );
+
         vm.startPrank(admin);
-        advancedPP = new AdvancedPaymentProcessor(_storageAddress, addr.sequencerUptimeFeed);
+        advancedPP = new AdvancedPaymentProcessor(_storageAddress, address(oracle));
 
         PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(advancedPP), true);
-
-        advancedPP.setPriceFeed(
-            address(addr.usdc),
-            IAdvancedPaymentProcessor.PriceFeedConfig({ aggregator: address(addr.usdcPriceFeed), heartbeat: 24 hours })
-        );
-        advancedPP.setPriceFeed(
-            address(addr.wbtc),
-            IAdvancedPaymentProcessor.PriceFeedConfig({ aggregator: address(addr.wbtcPriceFeed), heartbeat: 24 hours })
-        );
-        advancedPP.setPriceFeed(
-            address(0),
-            IAdvancedPaymentProcessor.PriceFeedConfig({
-                aggregator: address(addr.nativeTokenPriceFeed), heartbeat: 24 hours
-            })
-        );
         vm.stopPrank();
 
         _mintAndApproveTokens(address(advancedPP));

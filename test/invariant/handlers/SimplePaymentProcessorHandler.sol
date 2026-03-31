@@ -4,6 +4,8 @@ pragma solidity 0.8.28;
 import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../../src/SimplePaymentProcessor.sol";
 import { Test } from "forge-std/Test.sol";
 
+import { CREATED, PAID, ACCEPTED, LOCKED } from "src/constants/Simple.sol";
+
 contract SimplePaymentProcessorHandler is Test {
     SimplePaymentProcessor public pp;
 
@@ -49,7 +51,7 @@ contract SimplePaymentProcessorHandler is Test {
     function cancelInvoice(uint256 _index) public invoiceExists {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
-        if (pp.getInvoiceData(invoiceId).state != pp.CREATED()) return;
+        if (pp.getInvoiceData(invoiceId).state != CREATED) return;
         vm.prank(seller);
         pp.cancelInvoice(invoiceId);
     }
@@ -58,7 +60,7 @@ contract SimplePaymentProcessorHandler is Test {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory inv = pp.getInvoiceData(invoiceId);
-        if (inv.state != pp.CREATED()) return;
+        if (inv.state != CREATED) return;
         if (block.timestamp > inv.invalidateAt) return;
         _value = bound(_value, inv.price, inv.price);
 
@@ -70,7 +72,7 @@ contract SimplePaymentProcessorHandler is Test {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(invoiceId);
-        if (i.state != pp.PAID()) return;
+        if (i.state != PAID) return;
         if (block.timestamp > i.expiresAt) return;
         vm.prank(seller);
         pp.acceptPayment(invoiceId);
@@ -80,7 +82,7 @@ contract SimplePaymentProcessorHandler is Test {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(invoiceId);
-        if (i.state != pp.PAID()) return;
+        if (i.state != PAID) return;
         if (block.timestamp > i.expiresAt) return;
         vm.prank(seller);
         pp.rejectPayment(invoiceId);
@@ -90,7 +92,7 @@ contract SimplePaymentProcessorHandler is Test {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
 
-        if (pp.getInvoiceData(invoiceId).state != pp.ACCEPTED()) return;
+        if (pp.getInvoiceData(invoiceId).state != ACCEPTED) return;
 
         uint256 eligibleAt = uint256(pp.getInvoiceData(invoiceId).releaseAt);
         if (block.timestamp <= eligibleAt) {
@@ -104,7 +106,7 @@ contract SimplePaymentProcessorHandler is Test {
     function setInvoiceReleaseTime(uint256 _index, uint32 _holdPeriod) public invoiceExists {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
-        if (pp.getInvoiceData(invoiceId).state != pp.ACCEPTED()) return;
+        if (pp.getInvoiceData(invoiceId).state != ACCEPTED) return;
         _holdPeriod = uint32(bound(uint256(_holdPeriod), 1 hours, 30 days));
         vm.prank(admin);
         pp.setInvoiceReleaseTime(invoiceId, _holdPeriod);
@@ -126,7 +128,7 @@ contract SimplePaymentProcessorHandler is Test {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory inv = pp.getInvoiceData(invoiceId);
-        if (inv.state != pp.PAID()) return;
+        if (inv.state != PAID) return;
         if (block.timestamp < inv.expiresAt) vm.warp(uint256(inv.expiresAt) + 1);
         pp.refundBuyer(invoiceId);
     }
@@ -140,7 +142,7 @@ contract SimplePaymentProcessorHandler is Test {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory inv = pp.getInvoiceData(invoiceId);
-        if (inv.state != pp.LOCKED()) return;
+        if (inv.state != LOCKED) return;
         vm.prank(admin);
         pp.releaseLocked(invoiceId, inv.buyer, inv.price);
     }

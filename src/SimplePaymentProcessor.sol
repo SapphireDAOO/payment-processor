@@ -10,6 +10,20 @@ import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
 import { INotes } from "./interface/INotes.sol";
 
+import {
+    CREATED,
+    PAID,
+    ACCEPTED,
+    REJECTED,
+    CANCELED,
+    REFUNDED,
+    RELEASED,
+    LOCKED,
+    BASIS_POINTS,
+    SELLER_DEFAULT_DECISION_WINDOW,
+    MAX_WITHDRAWAL_RETRIES
+} from "./constants/Simple.sol";
+
 /**
  * @title SimplePaymentProcessor
  * @notice Lightweight payment processor for single-invoice flows with native payments.
@@ -21,39 +35,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
     /// @notice Notes contract used for encrypted invoice notes.
     INotes private immutable notes;
-
-    /// @notice Status code representing that an invoice has been created and is awaiting payment.
-    uint8 public constant CREATED = 1;
-
-    /// @notice Status code representing that an invoice has been paid by the buyer.
-    uint8 public constant PAID = CREATED + 1;
-
-    /// @notice Status code representing that a payment has been accepted by the seller.
-    uint8 public constant ACCEPTED = PAID + 1;
-
-    /// @notice Status code representing that a payment has been rejected by the seller.
-    uint8 public constant REJECTED = ACCEPTED + 1;
-
-    /// @notice Status code representing that an invoice has been canceled by the seller.
-    uint8 public constant CANCELED = REJECTED + 1;
-
-    /// @notice Status code representing that a payment has been refunded to the payer.
-    uint8 public constant REFUNDED = CANCELED + 1;
-
-    /// @notice Status code representing that a payment has been successfully released to the seller.
-    uint8 public constant RELEASED = REFUNDED + 1;
-
-    /// @notice Status code representing that an invoice is permanently locked after all automated withdrawal retries failed.
-    uint8 public constant LOCKED = RELEASED + 1;
-
-    /// @notice Basis points denominator used for percentage calculations (1% = 100).
-    uint256 public constant BASIS_POINTS = 10_000;
-
-    /// @notice Default decision period for the seller after an invoice is paid.
-    uint256 public constant DEFAULT_SELLER_DECISION_WINDOW = 6 hours;
-
-    /// @notice Maximum number of automated withdrawal retry attempts before falling back.
-    uint8 public constant MAX_WITHDRAWAL_RETRIES = 3;
 
     /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
     TaskQueueLib.Heap private heap;
@@ -102,7 +83,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePrice, address _notesAddress) {
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
         notes = INotes(_notesAddress);
-        decisionWindow = DEFAULT_SELLER_DECISION_WINDOW;
+        decisionWindow = SELLER_DEFAULT_DECISION_WINDOW;
         setMinimumInvoiceValue(_minimumInvoicePrice);
     }
 

@@ -15,6 +15,26 @@ import { ISimplePaymentProcessor } from "../../src/interface/ISimplePaymentProce
 import { IAdvancedPaymentProcessor } from "../../src/interface/IAdvancedPaymentProcessor.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import {
+    CREATED,
+    PAID,
+    CANCELED,
+    DISPUTED,
+    DISPUTE_RESOLVED,
+    DISPUTE_DISMISSED,
+    RELEASED
+} from "src/constants/Advanced.sol";
+
+import {
+    CREATED as SIMPLE_CREATED,
+    PAID as SIMPLE_PAID,
+    ACCEPTED,
+    REJECTED,
+    CANCELED as SIMPLE_CANCELED,
+    REFUNDED,
+    LOCKED
+} from "src/constants/Simple.sol";
+
 contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp, AdvancedPaymentProcessorSetUp {
     SimplePaymentProcessorHandler sHandler;
     AdvancedPaymentProcessorHandler aHandler;
@@ -53,35 +73,32 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
             uint216 invoiceId = sHandler.getInvoiceId(i);
             ISimplePaymentProcessor.Invoice memory inv = simplePaymentProcessor.getInvoiceData(invoiceId);
 
-            if (inv.state == simplePaymentProcessor.CREATED() || inv.state == simplePaymentProcessor.CANCELED()) {
+            if (inv.state == SIMPLE_CREATED || inv.state == SIMPLE_CANCELED) {
                 assertEq(inv.balance, 0);
                 assertEq(inv.escrow, address(0));
                 assertEq(inv.buyer, address(0));
             }
 
-            if (inv.state == simplePaymentProcessor.PAID()) {
+            if (inv.state == SIMPLE_PAID) {
                 assertTrue(inv.escrow != address(0));
                 assertEq(inv.balance, inv.price);
                 assertTrue(inv.buyer != address(0));
                 assertEq(inv.escrow.balance, inv.balance);
             }
 
-            if (inv.state == simplePaymentProcessor.ACCEPTED()) {
+            if (inv.state == ACCEPTED) {
                 assertEq(inv.balance, inv.price);
                 assertEq(inv.escrow.balance, inv.balance);
             }
 
-            if (
-                inv.state == simplePaymentProcessor.REJECTED() || inv.state == simplePaymentProcessor.REFUNDED()
-                    || inv.state == simplePaymentProcessor.RELEASED()
-            ) {
+            if (inv.state == REJECTED || inv.state == REFUNDED || inv.state == RELEASED) {
                 assertEq(inv.balance, 0);
                 if (inv.escrow != address(0)) {
                     assertEq(inv.escrow.balance, 0);
                 }
             }
 
-            if (inv.state == simplePaymentProcessor.LOCKED()) {
+            if (inv.state == LOCKED) {
                 assertEq(inv.balance, 0);
                 assertEq(inv.escrow.balance, inv.price);
             }
@@ -94,7 +111,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
             uint216 invoiceId = aHandler.getInvoiceId(i);
             IAdvancedPaymentProcessor.Invoice memory inv = advancedPaymentProcessor.getInvoice(invoiceId);
 
-            if (inv.state == advancedPaymentProcessor.CREATED() || inv.state == advancedPaymentProcessor.CANCELED()) {
+            if (inv.state == CREATED || inv.state == CANCELED) {
                 assertEq(inv.balance, 0);
                 assertEq(inv.amountPaid, 0);
                 assertEq(inv.escrow, address(0));
@@ -107,14 +124,13 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
             assertTrue(inv.buyer != address(0));
             assertLe(inv.balance, inv.amountPaid);
 
-            if (inv.state == advancedPaymentProcessor.RELEASED()) {
+            if (inv.state == RELEASED) {
                 assertEq(inv.balance, 0);
             }
 
             if (
-                inv.state == advancedPaymentProcessor.PAID() || inv.state == advancedPaymentProcessor.DISPUTED()
-                    || inv.state == advancedPaymentProcessor.DISPUTE_RESOLVED()
-                    || inv.state == advancedPaymentProcessor.DISPUTE_DISMISSED()
+                inv.state == PAID || inv.state == DISPUTED || inv.state == DISPUTE_RESOLVED
+                    || inv.state == DISPUTE_DISMISSED
             ) {
                 if (inv.paymentToken == address(0)) {
                     assertEq(inv.escrow.balance, inv.balance);
@@ -137,7 +153,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
             for (uint256 j = 0; j < subCount; j++) {
                 uint216 subId = aHandler.getSubInvoiceId(metaInvoiceId, j);
                 IAdvancedPaymentProcessor.Invoice memory sub = advancedPaymentProcessor.getInvoice(subId);
-                if (sub.state != advancedPaymentProcessor.CANCELED()) {
+                if (sub.state != CANCELED) {
                     sum += sub.price;
                 }
             }
