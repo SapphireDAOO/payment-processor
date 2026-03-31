@@ -74,13 +74,16 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
     }
 
     function test_setPriceFeed() public {
-        vm.expectRevert(IOracleManager.UnsupportedToken.selector);
-        advancedPP.oracle().getUsdPerToken(address(1));
+        IOracleManager oracleManager = advancedPP.oracle();
 
+        vm.expectRevert(IOracleManager.UnsupportedToken.selector);
+        oracleManager.getUsdPerToken(address(1));
+
+        vm.prank(admin);
         oracle.setPriceFeed(address(1), IOracleManager.PriceFeedConfig({ aggregator: address(2), heartbeat: 1 hours }));
-        // Token is now registered — revert is no longer UnsupportedToken
-        vm.expectRevert();
-        advancedPP.oracle().getUsdPerToken(address(1));
+
+        vm.expectRevert(IOracleManager.UnsupportedToken.selector);
+        oracleManager.getUsdPerToken(address(2));
     }
 
     function test_singleInvoiceCreation() public {

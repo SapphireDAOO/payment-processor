@@ -2,6 +2,9 @@
 pragma solidity 0.8.28;
 
 interface IOracleManager {
+    /// @notice Thrown when a caller attempts an owner-only oracle configuration update.
+    error NotAuthorized();
+
     /// @notice Thrown when a payment is attempted with a token that is not supported by the processor.
     error UnsupportedToken();
 
@@ -26,6 +29,18 @@ interface IOracleManager {
         uint96 heartbeat;
     }
 
+    /**
+     * @notice Fetches the Chainlink USD price for a payment token and validates feed freshness.
+     * @dev Performs three layers of validation before returning the price:
+     *      1. Sequencer uptime: if `sequencerUptimeFeed` is set, checks that the L2 sequencer is up
+     *         (answer == 0) and that `SEQUENCER_GRACE_PERIOD` has elapsed since it last restarted.
+     *         A reverting or unavailable feed also reverts with `SequencerDown`.
+     *         Skipped when `sequencerUptimeFeed == address(0)` (L1 or local testnets).
+     *      2. Round completeness: reverts with `StalePrice` if `answeredInRound < roundId`.
+     *      3. Heartbeat: reverts with `StalePriceFeed` if the update is older than `config.heartbeat`.
+     * @param _paymentToken The token address (address(0) for native ETH).
+     * @return The token's USD price with 8 decimals as returned by the Chainlink aggregator.
+     */
     function getUsdPerToken(address _paymentToken) external view returns (uint256);
 
     /**
