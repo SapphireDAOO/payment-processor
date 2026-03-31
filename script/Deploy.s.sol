@@ -71,8 +71,7 @@ contract Deploy is Script {
         SimplePaymentProcessor simplePP =
             new SimplePaymentProcessor(address(ppStorage), MINIMUM_INVOICE_VALUE, address(notes));
 
-        OracleManager oracle = new OracleManager();
-        oracle.setSequencerUptimeFeed(addr.sequencerUptimeFeed);
+        OracleManager oracle = new OracleManager(address(ppStorage), addr.sequencerUptimeFeed);
 
         AdvancedPaymentProcessor advancedPP = new AdvancedPaymentProcessor(address(ppStorage), address(oracle));
 

@@ -67,8 +67,8 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
     {
         Addr memory addr = _setUp();
 
-        oracle = new OracleManager();
-        oracle.setSequencerUptimeFeed(addr.sequencerUptimeFeed);
+        oracle = new OracleManager(_storageAddress, addr.sequencerUptimeFeed);
+        vm.startPrank(admin);
         oracle.setPriceFeed(
             address(addr.usdc),
             IOracleManager.PriceFeedConfig({ aggregator: address(addr.usdcPriceFeed), heartbeat: 24 hours })
@@ -82,7 +82,6 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
             IOracleManager.PriceFeedConfig({ aggregator: address(addr.nativeTokenPriceFeed), heartbeat: 24 hours })
         );
 
-        vm.startPrank(admin);
         advancedPP = new AdvancedPaymentProcessor(_storageAddress, address(oracle));
 
         PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(advancedPP), true);

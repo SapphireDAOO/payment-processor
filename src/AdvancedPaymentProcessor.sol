@@ -106,7 +106,7 @@ contract AdvancedPaymentProcessor is
     /**
      * @notice Initializes the AdvancedPaymentProcessor contract with core configuration.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
-     * @param _oracle oracle
+     * @param _oracle The address of the deployed OracleManager contract used for token price conversions.
      */
     constructor(address _paymentProcessorStorageAddress, address _oracle) {
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
@@ -158,8 +158,6 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant {
-        // if (priceFeeds[_paymentToken].aggregator == address(0)) revert UnsupportedToken();
-
         Invoice memory i = invoices[_invoiceId];
         uint256 priceInToken = getTokenValueFromUsd(_paymentToken, i.price);
 
@@ -179,8 +177,6 @@ contract AdvancedPaymentProcessor is
      * @param _invoiceId The meta-invoice ID to pay.
      */
     function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant {
-        // if (priceFeeds[address(0)].aggregator == address(0)) revert UnsupportedToken();
-
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
 
@@ -199,8 +195,6 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant {
-        // if (priceFeeds[_paymentToken].aggregator == address(0)) revert UnsupportedToken();
-
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
 
