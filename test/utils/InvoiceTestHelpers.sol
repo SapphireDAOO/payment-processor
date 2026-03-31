@@ -5,6 +5,8 @@ import { LibString } from "solady/utils/LibString.sol";
 import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 
+import { BASIS_POINTS } from "src/constants/Advanced.sol";
+
 /**
  * @notice Builds a single invoice creation parameter struct.
  * @param _invoiceNonce The invoice nonce used as a string identifier.
@@ -46,16 +48,12 @@ function getInvoiceCreationParams(uint256 _invoiceNonce, address[] memory _selle
 
 /**
  * @notice Applies basis points to an amount using the processor's BASIS_POINTS constant.
- * @param _pp The advanced payment processor instance.
  * @param _amount The base amount to apply the percentage to.
  * @param _basisPoints The basis points value to apply.
  * @return appliedAmount The amount after applying the basis points.
  */
-function applyBasisPoints(AdvancedPaymentProcessor _pp, uint256 _amount, uint256 _basisPoints)
-    view
-    returns (uint256 appliedAmount)
-{
-    appliedAmount = (_amount * _basisPoints) / _pp.BASIS_POINTS();
+function applyBasisPoints(uint256 _amount, uint256 _basisPoints) pure returns (uint256 appliedAmount) {
+    appliedAmount = (_amount * _basisPoints) / BASIS_POINTS;
 }
 
 /**

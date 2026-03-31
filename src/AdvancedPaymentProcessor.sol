@@ -2,9 +2,8 @@
 pragma solidity 0.8.28;
 
 import { EscrowFactory } from "./EscrowFactory.sol";
-import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";
-
 import { IEscrow } from "./interface/IEscrow.sol";
+import { IOracleManager } from "./interface/IOracleManager.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { IAdvancedPaymentProcessor } from "./interface/IAdvancedPaymentProcessor.sol";
 import { AutomationCompatibleInterface } from "./interface/AutomationCompatibleInterface.sol";
@@ -14,6 +13,23 @@ import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
 import { ReentrancyGuard } from "solady/utils/ReentrancyGuard.sol";
+
+import {
+    CREATED,
+    PAID,
+    REFUNDED,
+    CANCELED,
+    DISPUTED,
+    DISPUTE_RESOLVED,
+    DISPUTE_DISMISSED,
+    DISPUTE_SETTLED,
+    RELEASED,
+    LOCKED,
+    BASIS_POINTS,
+    DEFAULT_DECIMAL,
+    DEFAULT_MINIMUM_INVOICE_PRICE,
+    MAX_WITHDRAWAL_RETRIES
+} from "./constants/Advanced.sol";
 
 /**
  * @title AdvancedPaymentProcessor
@@ -39,64 +55,16 @@ contract AdvancedPaymentProcessor is
     /// @notice Address of the forwarder contract responsible for calling performUpkeep.
     address private forwarder;
 
-    /// @notice Chainlink L2 sequencer uptime feed. Returns answer=0 when up, answer=1 when down.
-    /// @dev Set to address(0) to disable the sequencer check (e.g. on L1 or local testnets).
-    address private sequencerUptimeFeed;
-
     /// @notice Minimum USD price (8 decimals) an invoice must meet to be accepted by the processor.
     uint256 private minimumPrice;
 
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable ppStorage;
 
+    IOracleManager public immutable oracle;
+
     /// @notice The next available meta-invoice ID to be assigned.
     uint216 private nextMetaInvoiceNonce;
-
-    /// @notice Invoice has been created but no payment has been made yet.
-    uint8 public constant CREATED = 1;
-
-    /// @notice Invoice has been paid by the buyer.
-    uint8 public constant PAID = CREATED + 1;
-
-    /// @notice Invoice has been refunded to the buyer.
-    uint8 public constant REFUNDED = PAID + 1;
-
-    /// @notice Seller has canceled the invoice.
-    uint8 public constant CANCELED = REFUNDED + 1;
-
-    /// @notice Buyer has raised a dispute.
-    uint8 public constant DISPUTED = CANCELED + 1;
-
-    /// @notice Dispute has been resolved in full favor of both parties.
-    uint8 public constant DISPUTE_RESOLVED = DISPUTED + 1;
-
-    /// @notice Dispute has been dismissed without changes to payouts.
-    uint8 public constant DISPUTE_DISMISSED = DISPUTE_RESOLVED + 1;
-
-    /// @notice Dispute has been settled with a split payout.
-    uint8 public constant DISPUTE_SETTLED = DISPUTE_DISMISSED + 1;
-
-    /// @notice Payment has been released to the seller after acceptance or resolution.
-    uint8 public constant RELEASED = DISPUTE_SETTLED + 1;
-
-    /// @notice Invoice is permanently locked after all automated withdrawal retries (seller + buyer) failed.
-    uint8 public constant LOCKED = RELEASED + 1;
-
-    /// @notice Total basis points used for percentage calculations. 10_000 = 100%.
-    uint256 public constant BASIS_POINTS = 10_000;
-
-    /// @notice Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 = 1.0)
-    uint8 public constant DEFAULT_DECIMAL = 18;
-
-    /// @notice Minimum invoice price applied when none is explicitly set (1 USD in 8-decimal Chainlink format).
-    uint256 public constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8;
-
-    /// @notice Minimum time (in seconds) to wait after the sequencer restarts before trusting price data.
-    /// @dev Protects against stale prices that accumulated while the sequencer was offline.
-    uint256 public constant SEQUENCER_GRACE_PERIOD = 1 hours;
-
-    /// @notice Maximum number of automated seller-payout retry attempts before falling back to a buyer refund.
-    uint8 public constant MAX_WITHDRAWAL_RETRIES = 3;
 
     /**
      * @notice Mapping from unique invoice ID to its invoice data.
@@ -110,12 +78,6 @@ contract AdvancedPaymentProcessor is
      *      Each MetaInvoice contains the total price and all associated sub-invoice IDs.
      */
     mapping(uint216 metaInvoiceId => MetaInvoice invoice) private metaInvoices;
-
-    /**
-     * @notice Mapping of payment tokens to their Chainlink price feed aggregator.
-     * @dev Used for converting USD prices to the appropriate payment token amounts.
-     */
-    mapping(address token => PriceFeedConfig config) private priceFeeds;
 
     /**
      *  @notice Maps task or invoice ID to its 1-based index position in the heap.
@@ -144,13 +106,13 @@ contract AdvancedPaymentProcessor is
     /**
      * @notice Initializes the AdvancedPaymentProcessor contract with core configuration.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
-     * @param _sequencerUptimeFeed Address of the Chainlink sequencer uptime feed. Set to address(0) to disable the check.
+     * @param _oracle oracle
      */
-    constructor(address _paymentProcessorStorageAddress, address _sequencerUptimeFeed) {
+    constructor(address _paymentProcessorStorageAddress, address _oracle) {
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
+        oracle = IOracleManager(_oracle);
         nextMetaInvoiceNonce = 1;
         minimumPrice = DEFAULT_MINIMUM_INVOICE_PRICE;
-        sequencerUptimeFeed = _sequencerUptimeFeed;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -196,7 +158,7 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant {
-        if (priceFeeds[_paymentToken].aggregator == address(0)) revert UnsupportedToken();
+        // if (priceFeeds[_paymentToken].aggregator == address(0)) revert UnsupportedToken();
 
         Invoice memory i = invoices[_invoiceId];
         uint256 priceInToken = getTokenValueFromUsd(_paymentToken, i.price);
@@ -217,7 +179,7 @@ contract AdvancedPaymentProcessor is
      * @param _invoiceId The meta-invoice ID to pay.
      */
     function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant {
-        if (priceFeeds[address(0)].aggregator == address(0)) revert UnsupportedToken();
+        // if (priceFeeds[address(0)].aggregator == address(0)) revert UnsupportedToken();
 
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
@@ -237,7 +199,7 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant {
-        if (priceFeeds[_paymentToken].aggregator == address(0)) revert UnsupportedToken();
+        // if (priceFeeds[_paymentToken].aggregator == address(0)) revert UnsupportedToken();
 
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
@@ -364,11 +326,6 @@ contract AdvancedPaymentProcessor is
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
-    function setPriceFeed(address _token, PriceFeedConfig memory _config) external onlyOwner {
-        priceFeeds[_token] = _config;
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
     function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external onlyOwner {
         Invoice memory i = invoices[_invoiceId];
 
@@ -392,16 +349,6 @@ contract AdvancedPaymentProcessor is
     /// @inheritdoc IAdvancedPaymentProcessor
     function setMinimumPrice(uint256 _newMinimumPrice) external onlyOwner {
         minimumPrice = _newMinimumPrice;
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function setSequencerUptimeFeed(address _sequencerUptimeFeed) external onlyOwner {
-        sequencerUptimeFeed = _sequencerUptimeFeed;
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function getSequencerUptimeFeed() external view returns (address feed) {
-        return sequencerUptimeFeed;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -430,27 +377,7 @@ contract AdvancedPaymentProcessor is
      * @return The token's USD price with 8 decimals as returned by the Chainlink aggregator.
      */
     function _usdPerToken(address _paymentToken) internal view returns (uint256) {
-        PriceFeedConfig memory config = priceFeeds[_paymentToken];
-        if (config.aggregator == address(0)) revert UnsupportedToken();
-
-        if (sequencerUptimeFeed != address(0)) {
-            try AggregatorV3Interface(sequencerUptimeFeed).latestRoundData() returns (
-                uint80, int256 seqAnswer, uint256 startedAt, uint256, uint80
-            ) {
-                if (seqAnswer != 0) revert SequencerDown();
-                if (block.timestamp < startedAt + SEQUENCER_GRACE_PERIOD) revert SequencerDown();
-            } catch {
-                revert SequencerDown();
-            }
-        }
-
-        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) =
-            AggregatorV3Interface(config.aggregator).latestRoundData();
-        if (answeredInRound < roundId) revert StalePrice();
-        if (answer <= 0) revert InvalidPrice();
-        if (block.timestamp > updatedAt + config.heartbeat) revert StalePriceFeed();
-
-        return answer.toUint256(); // 8 decimals from Chainlink
+        return oracle.getUsdPerToken(_paymentToken);
     }
 
     /**

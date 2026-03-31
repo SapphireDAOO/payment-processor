@@ -5,7 +5,8 @@ import { Script, console } from "forge-std/Script.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../src/PaymentProcessorStorage.sol";
 import { SimplePaymentProcessor } from "../src/SimplePaymentProcessor.sol";
 import { AdvancedPaymentProcessor } from "../src/AdvancedPaymentProcessor.sol";
-import { IAdvancedPaymentProcessor } from "../src/interface/IAdvancedPaymentProcessor.sol";
+import { OracleManager } from "../src/OracleManager.sol";
+import { IOracleManager } from "../src/interface/IOracleManager.sol";
 import { MockUsdc, MockWbtc } from "../test/mock/mERC20.sol";
 import { Notes } from "../src/Notes.sol";
 
@@ -70,7 +71,10 @@ contract Deploy is Script {
         SimplePaymentProcessor simplePP =
             new SimplePaymentProcessor(address(ppStorage), MINIMUM_INVOICE_VALUE, address(notes));
 
-        AdvancedPaymentProcessor advancedPP = new AdvancedPaymentProcessor(address(ppStorage), addr.sequencerUptimeFeed);
+        OracleManager oracle = new OracleManager();
+        oracle.setSequencerUptimeFeed(addr.sequencerUptimeFeed);
+
+        AdvancedPaymentProcessor advancedPP = new AdvancedPaymentProcessor(address(ppStorage), address(oracle));
 
         notes.setAuthorized(msg.sender, true);
         notes.setAuthorized(address(simplePP), true);
@@ -79,19 +83,15 @@ contract Deploy is Script {
         ppStorage.setAuthorizedAddress(address(simplePP), true);
         ppStorage.setAuthorizedAddress(address(advancedPP), true);
 
-        advancedPP.setPriceFeed(
+        oracle.setPriceFeed(
             address(0),
-            IAdvancedPaymentProcessor.PriceFeedConfig({
-                aggregator: addr.nativeTokenPriceFeed, heartbeat: FEED_HEARTBEAT
-            })
+            IOracleManager.PriceFeedConfig({ aggregator: addr.nativeTokenPriceFeed, heartbeat: FEED_HEARTBEAT })
         );
-        advancedPP.setPriceFeed(
-            addr.usdc,
-            IAdvancedPaymentProcessor.PriceFeedConfig({ aggregator: addr.usdcPriceFeed, heartbeat: FEED_HEARTBEAT })
+        oracle.setPriceFeed(
+            addr.usdc, IOracleManager.PriceFeedConfig({ aggregator: addr.usdcPriceFeed, heartbeat: FEED_HEARTBEAT })
         );
-        advancedPP.setPriceFeed(
-            addr.wbtc,
-            IAdvancedPaymentProcessor.PriceFeedConfig({ aggregator: addr.wbtcPriceFeed, heartbeat: FEED_HEARTBEAT })
+        oracle.setPriceFeed(
+            addr.wbtc, IOracleManager.PriceFeedConfig({ aggregator: addr.wbtcPriceFeed, heartbeat: FEED_HEARTBEAT })
         );
 
         vm.stopBroadcast();

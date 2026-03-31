@@ -11,8 +11,10 @@ import {
     applyBasisPoints
 } from "../utils/InvoiceTestHelpers.sol";
 
+import { PAID, CANCELED, DISPUTE_SETTLED, RELEASED, BASIS_POINTS } from "src/constants/Advanced.sol";
+
 contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp {
-    using { getEscrowAddress, applyBasisPoints } for AdvancedPaymentProcessor;
+    using { getEscrowAddress } for AdvancedPaymentProcessor;
 
     string MAINNET_RPC = vm.envString("MAINNET_RPC");
 
@@ -36,7 +38,7 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
 
         assertEq(inv.escrow.balance, amountInToken);
         assertEq(inv.paymentToken, address(0));
-        assertEq(inv.state, advancedPP.PAID());
+        assertEq(inv.state, PAID);
     }
 
     function test_nativeTokenPaymentForMetaInvoice() public {
@@ -67,7 +69,7 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
             IAdvancedPaymentProcessor.Invoice memory subInvoice = advancedPP.getInvoice(invoiceIds[i]);
             address escrow = advancedPP.getEscrowAddress(subInvoice.seller, subInvoice.buyer, invoiceIds[i]);
 
-            assertEq(subInvoice.state, advancedPP.PAID());
+            assertEq(subInvoice.state, PAID);
             assertEq(subInvoice.escrow, escrow);
             assertApproxEqAbs(escrow.balance, advancedPP.getTokenValueFromUsd(address(0), prices[i]), 1);
             assertEq(subInvoice.paymentToken, address(0));
@@ -88,7 +90,7 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
 
         assertEq(IERC20(USDC).balanceOf(inv.escrow), tokenValue);
         assertEq(inv.paymentToken, address(USDC));
-        assertEq(inv.state, advancedPP.PAID());
+        assertEq(inv.state, PAID);
     }
 
     function test_erc20PaymentForMetaInvoice() public {
@@ -114,7 +116,7 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
             IAdvancedPaymentProcessor.Invoice memory subInvoice = advancedPP.getInvoice(invoiceIds[i]);
             address escrow = advancedPP.getEscrowAddress(subInvoice.seller, subInvoice.buyer, invoiceIds[i]);
 
-            assertEq(subInvoice.state, advancedPP.PAID());
+            assertEq(subInvoice.state, PAID);
             assertEq(subInvoice.escrow, escrow);
             assertApproxEqAbs(
                 IERC20(WBTC).balanceOf(subInvoice.escrow), advancedPP.getTokenValueFromUsd(address(WBTC), prices[i]), 1
@@ -132,7 +134,7 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
         advancedPP.cancelInvoice(invoiceId);
 
         IAdvancedPaymentProcessor.Invoice memory invOne = advancedPP.getInvoice(invoiceId);
-        assertEq(invOne.state, advancedPP.CANCELED());
+        assertEq(invOne.state, CANCELED);
 
         // meta invoice
 
@@ -153,7 +155,7 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
 
         for (uint256 i = 0; i < invoiceIds.length; i++) {
             advancedPP.cancelInvoice(invoiceIds[i]);
-            assertEq(advancedPP.getInvoice(invoiceIds[i]).state, advancedPP.CANCELED());
+            assertEq(advancedPP.getInvoice(invoiceIds[i]).state, CANCELED);
         }
     }
 
@@ -167,8 +169,6 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
         vm.prank(USDC_BUYER);
         advancedPP.payInvoice(invoiceId, address(USDC));
 
-        uint8 settled = advancedPP.DISPUTE_SETTLED();
-
         advancedPP.createDispute(invoiceId);
 
         uint256 buyerBalanceBefore = IERC20(USDC).balanceOf(USDC_BUYER);
@@ -178,14 +178,14 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
 
         uint256 feeReceiverBalanceBefore = IERC20(USDC).balanceOf(feeReceiver);
 
-        advancedPP.handleDispute(invoiceId, settled, sellerPercentage);
+        advancedPP.handleDispute(invoiceId, DISPUTE_SETTLED, sellerPercentage);
 
-        uint256 buyerShare = advancedPP.applyBasisPoints(tokenValue, advancedPP.BASIS_POINTS() - sellerPercentage);
+        uint256 buyerShare = applyBasisPoints(tokenValue, BASIS_POINTS - sellerPercentage);
 
         uint256 sellerShare = tokenValue - buyerShare;
-        uint256 fee = advancedPP.applyBasisPoints(sellerShare, FEE_RATE);
+        uint256 fee = applyBasisPoints(sellerShare, FEE_RATE);
 
-        assertEq(advancedPP.getInvoice(invoiceId).state, advancedPP.DISPUTE_SETTLED());
+        assertEq(advancedPP.getInvoice(invoiceId).state, DISPUTE_SETTLED);
         assertEq(IERC20(USDC).balanceOf(sellerOne), sellerBalanceBefore + sellerShare - fee);
         assertEq(IERC20(USDC).balanceOf(USDC_BUYER), buyerBalanceBefore + buyerShare);
         assertEq(IERC20(USDC).balanceOf(feeReceiver), feeReceiverBalanceBefore + fee);
@@ -200,7 +200,7 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
         uint256 buyerBalanceBefore = IERC20(WBTC).balanceOf(WTBC_BUYER);
         uint256 sellerBalanceBefore = IERC20(WBTC).balanceOf(sellerOne);
 
-        uint256 fee = advancedPP.applyBasisPoints(tokenValue, FEE_RATE);
+        uint256 fee = applyBasisPoints(tokenValue, FEE_RATE);
 
         vm.prank(WTBC_BUYER);
         advancedPP.payInvoice(invoiceId, WBTC);
@@ -213,6 +213,6 @@ contract AdvancedPaymentProcoessorInteractions is AdvancedPaymentProcessorSetUp 
 
         assertEq(buyerBalanceAfter, buyerBalanceBefore - tokenValue);
         assertEq(sellerBalanceAfter, sellerBalanceBefore + tokenValue - fee);
-        assertEq(advancedPP.getInvoice(invoiceId).state, advancedPP.RELEASED());
+        assertEq(advancedPP.getInvoice(invoiceId).state, RELEASED);
     }
 }

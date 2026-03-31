@@ -7,6 +7,16 @@ import { getInvoiceCreationParam, getInvoiceCreationParams } from "../../utils/I
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { LibString } from "solady/utils/LibString.sol";
 
+import {
+    CREATED,
+    PAID,
+    DISPUTED,
+    DISPUTE_RESOLVED,
+    DISPUTE_DISMISSED,
+    DISPUTE_SETTLED,
+    BASIS_POINTS
+} from "src/constants/Advanced.sol";
+
 contract AdvancedPaymentProcessorHandler is Test {
     using SafeCastLib for uint256;
     using LibString for uint256;
@@ -101,7 +111,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         uint216 invoiceId = singleInvoiceIds[_index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
 
-        if (inv.state != advancedPP.CREATED()) return;
+        if (inv.state != CREATED) return;
         if (block.timestamp > inv.expiresAt) return;
 
         uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), inv.price);
@@ -126,7 +136,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         bool paid;
         for (uint256 i; i < ids.length; i++) {
             IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(ids[i]);
-            if (inv.state == advancedPP.CREATED() && block.timestamp <= inv.expiresAt) hasPayable = true;
+            if (inv.state == CREATED && block.timestamp <= inv.expiresAt) hasPayable = true;
             if (inv.balance != 0) paid = true;
         }
         if (!hasPayable || paid || metaInv.price == 0) return;
@@ -140,7 +150,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         _index = bound(_index, 0, singleInvoiceIds.length - 1);
         uint216 invoiceId = singleInvoiceIds[_index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-        if (inv.state != advancedPP.CREATED()) return;
+        if (inv.state != CREATED) return;
 
         vm.prank(advancedPP.ppStorage().getMarketplace());
         advancedPP.cancelInvoice(invoiceId);
@@ -151,7 +161,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         _index = bound(_index, 0, singleInvoiceIds.length - 1);
         uint216 invoiceId = singleInvoiceIds[_index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-        if (inv.state != advancedPP.PAID()) return;
+        if (inv.state != PAID) return;
 
         vm.prank(advancedPP.ppStorage().getMarketplace());
         advancedPP.createDispute(invoiceId);
@@ -161,10 +171,10 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (singleInvoiceIds.length == 0) return;
         _index = bound(_index, 0, singleInvoiceIds.length - 1);
         uint216 invoiceId = singleInvoiceIds[_index];
-        _resolution = bound(_resolution, advancedPP.DISPUTE_DISMISSED(), advancedPP.DISPUTE_SETTLED());
-        _sellerShare = bound(_sellerShare, 0, advancedPP.BASIS_POINTS());
+        _resolution = bound(_resolution, DISPUTE_DISMISSED, DISPUTE_SETTLED);
+        _sellerShare = bound(_sellerShare, 0, BASIS_POINTS);
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-        if (inv.state != advancedPP.DISPUTED()) return;
+        if (inv.state != DISPUTED) return;
 
         vm.prank(advancedPP.ppStorage().getMarketplace());
         advancedPP.handleDispute(invoiceId, _resolution.toUint8(), _sellerShare);
@@ -177,7 +187,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         uint216 invoiceId = singleInvoiceIds[_index];
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-        if (inv.state != advancedPP.PAID()) return;
+        if (inv.state != PAID) return;
         if (inv.balance == 0) return;
 
         console.log("share", _share);
@@ -192,7 +202,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         _sellerShare = bound(_sellerShare, 100, 10_000);
         uint216 invoiceId = singleInvoiceIds[_index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-        if (inv.state != advancedPP.PAID()) return;
+        if (inv.state != PAID) return;
         if (block.timestamp <= inv.releaseAt) {
             vm.warp(inv.releaseAt + 1);
         }
@@ -208,7 +218,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         uint216 invoiceId = singleInvoiceIds[_index];
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-        if (inv.state != advancedPP.DISPUTED()) return;
+        if (inv.state != DISPUTED) return;
 
         vm.prank(advancedPP.ppStorage().getMarketplace());
         advancedPP.resolveDispute(invoiceId);
@@ -219,10 +229,7 @@ contract AdvancedPaymentProcessorHandler is Test {
         _index = bound(_index, 0, singleAndSubInvoice.length - 1);
         uint216 invoiceId = singleAndSubInvoice[_index];
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-        if (
-            inv.state != advancedPP.PAID() && inv.state != advancedPP.DISPUTE_RESOLVED()
-                && inv.state != advancedPP.DISPUTE_DISMISSED()
-        ) return;
+        if (inv.state != PAID && inv.state != DISPUTE_RESOLVED && inv.state != DISPUTE_DISMISSED) return;
         _holdPeriod = bound(_holdPeriod, 1 hours, 30 days);
         vm.prank(admin);
         advancedPP.setInvoiceReleaseTime(invoiceId, _holdPeriod);
