@@ -249,6 +249,7 @@ contract AdvancedPaymentProcessor is
     function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external onlyOwner {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != LOCKED) revert InvalidInvoiceState();
+        if (_amount > i.balance) revert InsufficientBalance();
 
         i.state = RELEASED;
         i.balance -= _amount;
@@ -561,6 +562,7 @@ contract AdvancedPaymentProcessor is
         internal
         returns (uint216 invoiceId)
     {
+        if (_param.seller == address(0)) revert InvalidSeller();
         if (_param.price == 0) revert PriceCannotBeZero();
         if (_param.price < minimumPrice) revert PriceIsTooLow();
         Invoice memory i;

@@ -9,6 +9,7 @@ import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
 import { INotes } from "./interface/INotes.sol";
+import { ReentrancyGuard } from "solady/utils/ReentrancyGuard.sol";
 
 import {
     CREATED,
@@ -29,7 +30,7 @@ import {
  * @notice Lightweight payment processor for single-invoice flows with native payments.
  * @dev Implements basic escrow release and refund. Compliant with ISimplePaymentProcessor.
  */
-contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatibleInterface {
+contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatibleInterface, ReentrancyGuard {
     using SafeCastLib for uint256;
     using TaskQueueLib for TaskQueueLib.Heap;
 
@@ -190,7 +191,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function refundBuyer(uint216 _invoiceId) public {
+    function refundBuyer(uint216 _invoiceId) public nonReentrant {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != PAID || block.timestamp < i.expiresAt) {
             revert InvoiceNotEligibleForRefund();
@@ -219,12 +220,15 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
     /// @inheritdoc ISimplePaymentProcessor
     function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external onlyAuthorized {
-        Invoice storage inv = invoices[_invoiceId];
-        if (inv.state != LOCKED) revert InvalidInvoiceState(inv.state);
+        Invoice memory i = invoices[_invoiceId];
+        if (i.state != LOCKED) revert InvalidInvoiceState(i.state);
 
-        inv.state = RELEASED;
+        i.state = RELEASED;
+        i.balance = 0;
 
-        if (!IEscrow(inv.escrow).withdraw(address(0), _recipient, _amount)) revert EscrowWithdrawFailed();
+        invoices[_invoiceId] = i;
+
+        if (!IEscrow(i.escrow).withdraw(address(0), _recipient, _amount)) revert EscrowWithdrawFailed();
 
         emit LockedPaymentRecovered(_invoiceId, _recipient, _amount);
     }
