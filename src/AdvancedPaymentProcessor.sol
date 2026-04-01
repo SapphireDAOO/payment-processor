@@ -319,7 +319,7 @@ contract AdvancedPaymentProcessor is
         }
 
         uint256 gasThreshold = ppStorage.getGasThreshold();
-        heap.processDueTask(_release, gasThreshold);
+        heap.processDueTask(index, _release, gasThreshold);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -433,7 +433,9 @@ contract AdvancedPaymentProcessor is
         invoices[_invoiceId].state = RELEASED;
         invoices[_invoiceId].balance = 0;
         heap.removeAt(_pos - 1, index);
-        IEscrow(_i.escrow).withdraw(_i.paymentToken, ppStorage.getFeeReceiver(), fee);
+        if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, ppStorage.getFeeReceiver(), fee)) {
+            emit TransferFailed(_invoiceId, ppStorage.getFeeReceiver(), fee);
+        }
 
         emit PaymentReleased(_invoiceId, _i.seller, _i.paymentToken, sellerNetAmount);
         return TaskQueueLib.SUCCESSFUL;
@@ -545,6 +547,7 @@ contract AdvancedPaymentProcessor is
             Invoice memory i = invoices[subInvoiceId];
             if (i.state == CREATED) {
                 uint256 price = i.price.mulDiv(10 ** _decimals, _tokenUsdPrice);
+                if (price == 0) revert PriceCannotBeZero();
                 amountPaid += _pay(i, subInvoiceId, _paymentToken, price);
                 invoices[subInvoiceId] = i;
             }

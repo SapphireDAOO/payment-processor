@@ -20,6 +20,9 @@ interface IOracleManager {
     /// @notice Thrown when the Chainlink price feed returns a zero or negative answer.
     error InvalidPrice();
 
+    /// @notice Thrown when a price feed heartbeat of zero is supplied to setPriceFeed.
+    error InvalidHeartbeat();
+
     /// @notice Configuration for a Chainlink price feed associated with a payment token.
     /// @param aggregator Address of the Chainlink AggregatorV3 contract. address(0) disables the token.
     /// @param heartbeat Maximum acceptable age (in seconds) of a price update before it is considered stale.

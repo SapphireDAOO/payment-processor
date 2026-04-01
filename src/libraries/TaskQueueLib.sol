@@ -110,14 +110,16 @@ library TaskQueueLib {
      *      guarantees all remaining tasks are also not yet due. Otherwise, `_callback` is
      *      invoked with the task ID and the result determines control flow:
      *      - `SUCCESSFUL`: Task released and removed from heap; continues to next task.
-     *      - `NOT_ELIGIBLE_FOR_RELEASE`: Aborts the loop.
-     *      - `ERROR`: Aborts the loop.
+     *      - `NOT_ELIGIBLE_FOR_RELEASE`: Stale entry — removed and loop continues.
+     *      - `ERROR`: Stale entry — removed and loop continues.
      * @param _heap The heap data structure storing encoded tasks.
+     * @param _index Mapping from task ID to 1-based heap position, used to remove stale entries.
      * @param _callback A function that attempts to release or refund a task by ID, returning a status code.
      * @param _gasThreshold The minimum remaining gas required to continue processing.
      */
     function processDueTask(
         Heap storage _heap,
+        mapping(uint216 => uint256) storage _index,
         function(uint216) internal returns (uint256) _callback,
         uint256 _gasThreshold
     ) internal {
@@ -129,8 +131,11 @@ library TaskQueueLib {
             uint256 result = _callback(id);
 
             if (result == SUCCESSFUL) continue;
-            if (result == NOT_ELIGIBLE_FOR_RELEASE) break;
-            if (result == ERROR) break;
+            if (result == NOT_ELIGIBLE_FOR_RELEASE || result == ERROR) {
+                // Stale heap entry: remove it so subsequent tasks can be processed.
+                removeAt(_heap, 0, _index);
+                continue;
+            }
         }
     }
 
@@ -236,36 +241,18 @@ library TaskQueueLib {
     }
 
     /**
-     * @notice Returns the task IDs sorted by due time (earliest first).
-     * @dev Copies heap keys into memory and insertion-sorts them. Since `dueAt` occupies the
-     *      high 40 bits of each encoded key, a numeric sort on the keys is equivalent to sorting
-     *      by `dueAt` ascending. This is a view function intended for off-chain use.
+     * @notice Returns the task IDs in heap storage order.
+     * @dev Linear pass over the heap array. Intended for off-chain use only.
+     *      Items are not sorted; callers should sort by due time off-chain if needed.
      * @param _heap The heap storage struct.
-     * @return items Array of task IDs ordered from earliest to latest due time.
+     * @return items Array of task IDs in heap order.
      */
     function getItems(Heap storage _heap) internal view returns (uint216[] memory items) {
         uint256 size = _heap.data.length;
         if (size == 0) return new uint216[](0);
-
-        uint256[] memory keys = new uint256[](size);
-        for (uint256 i = 0; i < size; i++) {
-            keys[i] = _heap.data[i];
-        }
-
-        for (uint256 i = 1; i < size; i++) {
-            uint256 key = keys[i];
-            uint256 j = i;
-            while (j > 0 && keys[j - 1] > key) {
-                keys[j] = keys[j - 1];
-                j--;
-            }
-            keys[j] = key;
-        }
-
         items = new uint216[](size);
         for (uint256 i = 0; i < size; i++) {
-            (uint216 id,) = _decode(keys[i]);
-            items[i] = id;
+            items[i] = uint216(_heap.data[i]);
         }
     }
 }

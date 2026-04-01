@@ -176,14 +176,16 @@ contract TaskQueueLibTest is Test {
         assertTrue(h.due());
     }
 
-    function test_processDueTasksBreaksOnError() public {
+    function test_processDueTasksRemovesStaleOnError() public {
         uint40 rn = uint40(block.timestamp);
         h.insert(1, rn);
+        h.insert(2, rn);
         h.setCallbackOverride(1, ERROR);
 
         h.processDueTasks(0);
 
-        assertEq(h.size(), 1);
+        // Stale entry (id=1) removed; id=2 processed successfully — heap empty.
+        assertEq(h.size(), 0);
     }
 
     function test_processDueTasksSkipsFutureTasks() public {

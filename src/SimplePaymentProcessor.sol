@@ -186,7 +186,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         heap.removeAt(index[_invoiceId] - 1, index);
 
         if (!IEscrow(i.escrow).withdraw(address(0), msg.sender, i.price - fee)) revert EscrowWithdrawFailed();
-        IEscrow(i.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), fee);
+        if (!IEscrow(i.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), fee)) revert EscrowWithdrawFailed();
         emit InvoiceReleased(_invoiceId);
     }
 
@@ -198,6 +198,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         }
 
         if (i.withdrawalRetries + 1 > MAX_WITHDRAWAL_RETRIES) {
+            uint256 pos = index[_invoiceId];
+            if (pos > 0 && pos <= heap.data.length) heap.removeAt(pos - 1, index);
             invoices[_invoiceId].state = LOCKED;
             return;
         }
@@ -247,7 +249,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         uint256 gasThreshold = ppStorage.getGasThreshold();
 
-        heap.processDueTask(_release, gasThreshold);
+        heap.processDueTask(index, _release, gasThreshold);
     }
 
     /**
@@ -404,7 +406,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         invoices[_invoiceId].state = RELEASED;
         invoices[_invoiceId].balance = 0;
         heap.removeAt(_pos - 1, index);
-        IEscrow(_i.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), fee);
+        if (!IEscrow(_i.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), fee)) {
+            emit TransferFailed(_invoiceId, ppStorage.getFeeReceiver(), fee);
+        }
 
         emit InvoiceReleased(_invoiceId);
         return TaskQueueLib.SUCCESSFUL;
