@@ -196,18 +196,25 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             revert InvoiceNotEligibleForRefund();
         }
 
-        uint256 pos = index[_invoiceId];
+        if (i.withdrawalRetries + 1 > MAX_WITHDRAWAL_RETRIES) {
+            invoices[_invoiceId].state = LOCKED;
+            return;
+        }
 
-        if (pos == 0 || pos > heap.data.length) revert InvalidHeapPosition();
+        bool success = IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price);
 
-        heap.removeAt(pos - 1, index);
-
-        invoices[_invoiceId].state = REFUNDED;
-        invoices[_invoiceId].balance = 0;
-
-        if (!IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price)) revert EscrowWithdrawFailed();
-
-        emit InvoiceRefunded(_invoiceId);
+        if (!success) {
+            invoices[_invoiceId].state = PAID;
+            invoices[_invoiceId].balance = i.price;
+            invoices[_invoiceId].withdrawalRetries += 1;
+        } else {
+            uint256 pos = index[_invoiceId];
+            if (pos == 0 || pos > heap.data.length) revert InvalidHeapPosition();
+            heap.removeAt(pos - 1, index);
+            invoices[_invoiceId].state = REFUNDED;
+            invoices[_invoiceId].balance = 0;
+            emit InvoiceRefunded(_invoiceId);
+        }
     }
 
     /// @inheritdoc ISimplePaymentProcessor
