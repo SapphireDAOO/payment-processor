@@ -1005,3 +1005,303 @@ Load the invoice into a storage reference and apply all state updates directly t
 ## Comments
 
 - In Solidity, `memory` structs are passed to internal functions by reference (the stack holds a pointer to the memory allocation, not a copy). Modifications to `_i` inside `_pay` are directly visible via the caller's `i` variable after the call returns. Both callers of `_pay` — `payInvoice` and `_paySubInvoices` — explicitly commit the mutated struct with `invoices[id] = i` immediately after the call. There is no path where the state mutations are lost or left uncommitted. _(Mar 26, 2026, 02:23 PM)_
+
+---
+
+# Shared notes are publicly readable
+
+**#7 (Run 06)**
+
+- Severity: Critical
+- Validity: Invalid
+
+## Targets
+
+- getNote (Notes)
+
+## Affected Locations
+
+- **Notes.getNote**: Single finding location
+
+## Description
+
+`getNote` does not consult the `opened` mapping for shared notes; it only checks whether `share` is true and returns content to any caller. The finding claims this bypasses the access-control state maintained by `setOpened`.
+
+## Root cause
+
+`getNote` fails to enforce per-account `opened` access control for shared notes and only checks the `share` flag.
+
+## Impact
+
+Any user can retrieve the content of every note marked as shared, even if they were never explicitly granted access via `setOpened`.
+
+## Remediation
+
+**Status:** Invalid
+
+### Explanation
+
+By design, a note with `share = true` is readable by any caller. The `opened` mapping is a read-tracking mechanism (has this user opened the note), not an access-control allowlist. `setOpened` marks a note as "seen" by a specific account so the `openedStatus` return field reflects that state — it does not gate content access. The note content is encrypted ciphertext; on-chain readability of ciphertext is intentional and carries no confidentiality risk.
+
+## Comments
+
+- The `opened` mapping tracks whether an account has viewed a note, not whether it is allowed to. `getNote` correctly returns content to anyone when `share = true`, mirroring the intended sharing model. The finding conflates a read-tracking field with an access allowlist. _(Apr 1, 2026)_
+
+---
+
+# Meta-invoice rounding inconsistencies
+
+**#2 (Run 06)**
+
+- Severity: High
+- Validity: Invalid
+
+## Targets
+
+- \_paySubInvoices (AdvancedPaymentProcessor)
+- payMetaInvoiceWithValue (AdvancedPaymentProcessor)
+- payInvoice (AdvancedPaymentProcessor)
+
+## Affected Locations
+
+- **AdvancedPaymentProcessor.\_paySubInvoices**: Per-sub-invoice floor rounding can produce a different amount than the single-invoice `mulDivUp` path for the same USD price.
+- **AdvancedPaymentProcessor.payMetaInvoiceWithValue**: The aggregate `mulDivUp` total can disagree with the sum of per-sub-invoice `mulDiv` amounts, causing reverts on exact-value native payments.
+- **AdvancedPaymentProcessor.payInvoice**: Uses `mulDivUp`; differs from the meta-invoice sub-invoice computation.
+
+## Description
+
+Different payment paths apply rounding at different stages and in different directions. The meta-invoice per-sub-invoice conversion rounds down (`mulDiv`), while the single-invoice path rounds up (`mulDivUp`), allowing the same invoice to be paid for 1 token unit less when routed through a meta-invoice.
+
+## Root cause
+
+Inconsistent rounding direction between single-invoice and meta-invoice sub-invoice conversion paths.
+
+## Impact
+
+Rounding difference is at most 1 token unit per sub-invoice. The zero-payment edge case (price rounds to 0) is already blocked by the `if (price == 0) revert PriceCannotBeZero()` guard added during remediation of Run 05 #4. Remaining discrepancy is economically negligible.
+
+## Remediation
+
+**Status:** Invalid
+
+### Explanation
+
+The critical zero-payment case is fully mitigated by the existing guard. The residual 1-unit rounding difference per sub-invoice is below any practical economic threshold and does not warrant further changes.
+
+## Comments
+
+- Zero-amount sub-invoice payments are blocked by `if (price == 0) revert PriceCannotBeZero()` in `_paySubInvoices`. The at-most-1-unit rounding difference for non-zero amounts is negligible. _(Apr 1, 2026)_
+
+---
+
+# Fee transfer failure leaves fees locked
+
+**#3 (Run 06)**
+
+- Severity: High
+- Validity: Invalid
+
+## Targets
+
+- \_autoRelease (AdvancedPaymentProcessor)
+
+## Affected Locations
+
+- **AdvancedPaymentProcessor.\_autoRelease**: Fee withdrawal failure is logged with `TransferFailed` but the fee remains in the escrow with no recovery path after finalization.
+
+## Description
+
+`_autoRelease` pays the seller, finalizes the invoice (`RELEASED`, balance=0, heap removal), and then attempts the fee withdrawal. A failed fee transfer is logged via `TransferFailed` but the invoice is already finalized and the fee is permanently stranded in the escrow.
+
+## Root cause
+
+Fee withdrawal failure after invoice finalization leaves no recovery path for the unpaid protocol fee.
+
+## Impact
+
+Protocol fees can remain in escrow if the fee receiver cannot accept a token transfer.
+
+## Remediation
+
+**Status:** Invalid
+
+### Explanation
+
+The fee receiver address is set by an admin (`ppStorage.setFeeReceiver`). It is the protocol operator's responsibility to ensure the fee receiver can accept all supported payment tokens. A correctly configured fee receiver eliminates the failure scenario. No code change is warranted.
+
+## Comments
+
+- The fee receiver is an admin-controlled address. If it cannot receive a given token, that is a deployment misconfiguration, not a contract vulnerability. _(Apr 1, 2026)_
+
+---
+
+# Reentrancy from external escrow interactions
+
+**#6 (Run 06)**
+
+- Severity: High
+- Validity: Invalid
+
+## Targets
+
+- \_payWithValue (SimplePaymentProcessor)
+- \_autoRelease (SimplePaymentProcessor)
+- \_autoRelease (AdvancedPaymentProcessor)
+- \_autoRefund (AdvancedPaymentProcessor)
+- \_distributeFunds (AdvancedPaymentProcessor)
+
+## Description
+
+Multiple payment and settlement paths perform external interactions before committing state. The finding claims reentrancy during escrow creation or withdrawal can allow double-processing, fee diversion, or heap corruption.
+
+## Root cause
+
+External calls before state finalization without reentrancy guards.
+
+## Impact
+
+Claimed: duplicate withdrawals, invoice marked paid while unfunded, heap corruption.
+
+## Remediation
+
+**Status:** Invalid
+
+### Explanation
+
+All public entry points that reach these paths are protected: `payInvoice`, `payMetaInvoice`, and `payMetaInvoiceWithValue` are `nonReentrant`. `performUpkeep` (which reaches `_autoRelease`/`_autoRefund`) is `nonReentrant`. `handleDispute` (which reaches `_distributeFunds`) is `onlyMarketplace`-gated. `new Escrow{value:...}` runs a known minimal constructor with no attacker-controlled callbacks. No exploitable reentrancy path exists.
+
+## Comments
+
+- All external-facing functions reaching escrow interactions carry either `nonReentrant` or strict caller-gating (`onlyMarketplace`, `onlyOwner`). The constructor-based escrow creation is non-reentrant by nature. _(Apr 1, 2026)_
+
+---
+
+# Fee-on-transfer underpays invoices
+
+**#1 (Run 06)**
+
+- Severity: Low
+- Validity: Unreviewed
+
+## Targets
+
+- \_pay (AdvancedPaymentProcessor)
+- payInvoice (AdvancedPaymentProcessor)
+- \_paySubInvoices (AdvancedPaymentProcessor)
+
+## Description
+
+Invoice accounting records `_tokenPrice` as paid without verifying the escrow's actual received balance delta. For fee-on-transfer tokens, `safeTransferFrom` may deliver fewer tokens than requested while still succeeding, creating a mismatch between recorded balance and escrow holdings.
+
+## Root cause
+
+No pre/post balance reconciliation on ERC20 transfers into escrow.
+
+## Impact
+
+Sellers may receive less than the invoiced amount; release/refund operations may revert due to insufficient escrow balance.
+
+## Comments
+
+- Valid in principle but exploitability depends entirely on which tokens are whitelisted in OracleManager. Standard ERC20s (USDC, WBTC, WETH) do not take fees on transfer. A protocol-level policy of only registering non-rebasing, non-fee-on-transfer tokens in `setPriceFeed` fully mitigates this. _(Apr 1, 2026)_
+
+---
+
+# Accepted invoices not rescheduled in heap
+
+**#4 (Run 06)**
+
+- Severity: Low
+- Validity: Invalid
+
+## Targets
+
+- pay (SimplePaymentProcessor)
+- performUpkeep (AdvancedPaymentProcessor)
+
+## Description
+
+`acceptPayment` only calls `heap.reschedule` when `releaseAt == 0`. Invoices with a pre-set `releaseAt` retain the old `expiresAt`-keyed heap entry, causing automation to attempt release at the wrong time.
+
+## Root cause
+
+`acceptPayment` skips `reschedule` when `releaseAt` is already set.
+
+## Remediation
+
+**Status:** Invalid
+
+### Explanation
+
+In SimplePaymentProcessor, `releaseAt` is always 0 when an invoice is first paid — the hold period is only applied at `acceptPayment` time. The conditional `reschedule` is therefore always executed in practice. AdvancedPaymentProcessor does not expose `acceptPayment` to external callers; release is fully automated. The described scenario cannot occur with the current architecture.
+
+## Comments
+
+- `_payWithValue` in SimplePaymentProcessor never sets `releaseAt` before payment. The `if (i.releaseAt == 0)` branch in `acceptPayment` is always taken. _(Apr 1, 2026)_
+
+---
+
+# Manual release does not clear heap index
+
+**#5 (Run 06)**
+
+- Severity: Low
+- Validity: Invalid
+
+## Targets
+
+- release (AdvancedPaymentProcessor)
+- performUpkeep (AdvancedPaymentProcessor)
+
+## Description
+
+The manual `release` function calls `_release` without removing the invoice from the heap or clearing `index`, leaving a stale heap entry that automation could re-process.
+
+## Root cause
+
+Manual release path does not synchronize heap bookkeeping.
+
+## Remediation
+
+**Status:** Invalid
+
+### Explanation
+
+`AdvancedPaymentProcessor.release()` calls `_release()`, which calls either `_autoRelease()` or `_autoRefund()`. Both of those functions call `heap.removeAt(_pos - 1, index)` before returning. The heap IS cleaned up on every successful release path. The finding describes a gap that does not exist.
+
+## Comments
+
+- `_autoRelease` and `_autoRefund` both call `heap.removeAt` as part of their normal execution. The heap and index are consistent after every manual or automated release. _(Apr 1, 2026)_
+
+---
+
+# Uninitialized meta-invoice nonce underflows count
+
+**#8 (Run 06)**
+
+- Severity: Low
+- Validity: Invalid
+
+## Targets
+
+- createMetaInvoice (AdvancedPaymentProcessor)
+
+## Description
+
+`nextMetaInvoiceNonce` is never initialized, so `totalMetaInvoiceCreated()` which returns `nextMetaInvoiceNonce - 1` would underflow on a freshly deployed contract.
+
+## Root cause
+
+Nonce not initialized to 1 in constructor.
+
+## Remediation
+
+**Status:** Invalid
+
+### Explanation
+
+The constructor explicitly sets `nextMetaInvoiceNonce = 1`. `totalMetaInvoiceCreated()` correctly returns 0 before any meta-invoice is created (`1 - 1 = 0`). No underflow exists.
+
+## Comments
+
+- `nextMetaInvoiceNonce = 1` is set in the constructor. The finding does not reflect the actual code. _(Apr 1, 2026)_

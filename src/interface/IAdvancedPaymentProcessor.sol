@@ -458,4 +458,12 @@ interface IAdvancedPaymentProcessor {
      * @param amount The amount recovered from escrow.
      */
     event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+
+    /**
+     * @notice Emitted when a best-effort fee or payout transfer fails in an automated release path.
+     * @param invoiceId The invoice whose fee transfer failed.
+     * @param recipient The intended recipient of the failed transfer.
+     * @param amount The amount that could not be transferred.
+     */
+    event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
 }

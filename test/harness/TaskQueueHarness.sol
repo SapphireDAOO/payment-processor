@@ -22,7 +22,7 @@ contract TaskQueueHarness {
     }
 
     function processDueTasks(uint256 gasThreshold) external {
-        TaskQueueLib.processDueTask(heap, _callback, gasThreshold);
+        TaskQueueLib.processDueTask(heap, idx, _callback, gasThreshold);
     }
 
     function due() external view returns (bool) {
