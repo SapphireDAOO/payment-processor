@@ -13,6 +13,8 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when a payment is attempted with a token that is not supported by the processor.
     error UnsupportedToken();
 
+    error InvalidSeller();
+
     /// @notice Thrown when a payment is attempted on an invoice that has passed its expiry timestamp.
     error InvoiceExpired();
 
