@@ -27,7 +27,8 @@ import {
     DISPUTE_DISMISSED,
     DISPUTE_SETTLED,
     RELEASED,
-    BASIS_POINTS
+    BASIS_POINTS,
+    DEFAULT_DECIMAL
 } from "src/constants/Advanced.sol";
 
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
@@ -69,6 +70,30 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(20_000, ppStorage.getGasThreshold());
         assertEq(1 days, ppStorage.getDefaultHoldPeriod());
         assertEq(address(0xb0), ppStorage.getMarketplace());
+    }
+
+    function test_setForwarderOwnerCanSet() public {
+        address newForwarder = address(0xcafe);
+        vm.prank(admin);
+        advancedPP.setForwarderAddress(newForwarder);
+
+        assertEq(advancedPP.getForwarder(), newForwarder);
+    }
+
+    function test_setMinimumPrice() public {
+        vm.prank(buyerOne);
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.setMinimumPrice(200e8);
+
+        uint256 newMin = 200e8;
+        vm.prank(admin);
+        advancedPP.setMinimumPrice(newMin);
+
+        uint256 nextNonce = ppStorage.getNextInvoiceNonce();
+        vm.expectRevert(IAdvancedPaymentProcessor.PriceIsTooLow.selector);
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(nextNonce, sellerOne, 100e8));
+
+        advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, newMin));
     }
 
     function test_updateInvoiceNonce() public {
@@ -347,6 +372,10 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         uint216 invoiceId =
             advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
 
+        vm.prank(buyerOne);
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.cancelInvoice(invoiceId);
+
         advancedPP.cancelInvoice(invoiceId);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
@@ -498,6 +527,10 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         advancedPP.createDispute(invoiceId);
 
+        vm.prank(buyerOne);
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.resolveDispute(invoiceId);
+
         advancedPP.resolveDispute(invoiceId);
     }
 
@@ -514,6 +547,11 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
 
         vm.warp(block.timestamp + 1 days);
+
+        vm.prank(buyerOne);
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.release(invoiceId);
+
         advancedPP.release(invoiceId);
 
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
@@ -622,12 +660,67 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         vm.expectRevert(IAdvancedPaymentProcessor.InvalidSellersPayoutShare.selector);
         advancedPP.refund(invoiceId, refundShare + 1);
 
+        vm.prank(buyerOne);
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.refund(invoiceId, BASIS_POINTS);
+
         advancedPP.refund(invoiceId, refundShare);
 
         IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
         assertEq(inv.balance, 0);
 
         assertEq(buyerOne.balance, buyerBalance + tokenValue);
+    }
+
+    function test_partialRefundErc20ThenRelease() public {
+        uint256 price = 100e8;
+        uint216 invoiceId =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
+
+        vm.prank(buyerOne);
+        advancedPP.payInvoice(invoiceId, address(mockUsdc));
+
+        uint256 tokenValue = advancedPP.getInvoice(invoiceId).balance;
+        uint256 refundShare = 3000;
+        uint256 refundAmount = (tokenValue * refundShare) / BASIS_POINTS;
+        uint256 remaining = tokenValue - refundAmount;
+
+        uint256 buyerUsdcBefore = mockUsdc.balanceOf(buyerOne);
+
+        advancedPP.refund(invoiceId, refundShare);
+
+        assertEq(mockUsdc.balanceOf(buyerOne), buyerUsdcBefore + refundAmount);
+        assertEq(advancedPP.getInvoice(invoiceId).balance, remaining);
+        assertEq(advancedPP.getInvoice(invoiceId).state, PAID);
+
+        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
+
+        uint256 sellerUsdcBefore = mockUsdc.balanceOf(sellerOne);
+        uint256 expectedFee = (remaining * FEE_RATE) / BASIS_POINTS;
+
+        advancedPP.release(invoiceId);
+
+        assertEq(advancedPP.getInvoice(invoiceId).state, RELEASED);
+        assertEq(mockUsdc.balanceOf(sellerOne), sellerUsdcBefore + remaining - expectedFee);
+        assertEq(mockUsdc.balanceOf(feeReceiver), expectedFee);
+    }
+
+    function test_fullRefundErc20() public {
+        uint256 price = 100e8;
+        uint216 invoiceId =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
+
+        vm.prank(buyerOne);
+        advancedPP.payInvoice(invoiceId, address(mockUsdc));
+
+        uint256 tokenValue = advancedPP.getInvoice(invoiceId).balance;
+        uint256 buyerUsdcBefore = mockUsdc.balanceOf(buyerOne);
+
+        advancedPP.refund(invoiceId, BASIS_POINTS);
+
+        assertEq(advancedPP.getInvoice(invoiceId).state, REFUNDED);
+        assertEq(advancedPP.getInvoice(invoiceId).balance, 0);
+        assertEq(mockUsdc.balanceOf(buyerOne), buyerUsdcBefore + tokenValue);
     }
 
     function test_refundAndRelease() public {
@@ -966,15 +1059,99 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         uint256 balanceBefore = thisReceiver.balance;
 
-        vm.startPrank(admin);
-
+        vm.prank(admin);
         vm.expectRevert(IAdvancedPaymentProcessor.EscrowWithdrawFailed.selector);
         advancedPP.releaseLocked(invoiceId, thisSeller, inv.balance);
 
+        vm.prank(buyerOne);
+        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
+        advancedPP.releaseLocked(invoiceId, buyerOne, amountInToken);
+
+        vm.prank(admin);
         advancedPP.releaseLocked(invoiceId, thisReceiver, inv.balance);
-        vm.stopPrank();
+
         assertEq(thisReceiver.balance, balanceBefore + amountInToken);
         assertEq(advancedPP.getInvoice(invoiceId).balance, 0);
+    }
+
+    function test_USDConversionRoundingDownUnderpaysInvoice() public {
+        // Price is $1.00000001 (8 decimals). This should require slightly more than 1 USDC.
+        uint256 price = 100_000_001;
+
+        uint216 invoiceId = advancedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+        );
+
+        // Buyer pays using USDC; token amount is rounded down in getTokenValueFromUsd.
+        vm.prank(buyerOne);
+        advancedPP.payInvoice(invoiceId, address(mockUsdc));
+
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
+
+        // Compute the USD value represented by the paid USDC amount.
+        uint256 paidUsd = (inv.amountPaid * uint256(MOCK_USDC_PRICE)) / (10 ** mockUsdc.decimals());
+
+        // A correct implementation should never accept a payment that converts to less USD than the invoice price.
+        assertGe(paidUsd, price);
+    }
+
+    function test_performUpkeepForwarderCanCall() public {
+        uint256 price = 100e8;
+        uint216 invoiceId =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
+        uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
+
+        vm.prank(buyerOne);
+        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+
+        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
+
+        vm.prank(FORWARDER);
+        advancedPP.performUpkeep("");
+
+        assertEq(advancedPP.getInvoice(invoiceId).state, RELEASED);
+    }
+
+    function test_setInvoiceReleaseTimeOnDisputeResolved() public {
+        uint256 price = 100e8;
+        uint216 invoiceId =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
+        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
+
+        vm.prank(buyerOne);
+        advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+
+        advancedPP.createDispute(invoiceId);
+        advancedPP.resolveDispute(invoiceId);
+
+        assertEq(advancedPP.getInvoice(invoiceId).state, DISPUTE_RESOLVED);
+
+        uint256 newHold = 5 days;
+        vm.prank(admin);
+        advancedPP.setInvoiceReleaseTime(invoiceId, newHold);
+
+        assertEq(advancedPP.getInvoice(invoiceId).releaseAt, block.timestamp + newHold);
+    }
+
+    function test_setInvoiceReleaseTimeOnDisputeDismissed() public {
+        uint256 price = 100e8;
+        uint216 invoiceId =
+            advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
+        uint256 tokenValue = advancedPP.getTokenValueFromUsd(address(0), price);
+
+        vm.prank(buyerOne);
+        advancedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+
+        advancedPP.createDispute(invoiceId);
+        advancedPP.handleDispute(invoiceId, DISPUTE_DISMISSED, 0);
+
+        assertEq(advancedPP.getInvoice(invoiceId).state, DISPUTE_DISMISSED);
+
+        uint256 newHold = 5 days;
+        vm.prank(admin);
+        advancedPP.setInvoiceReleaseTime(invoiceId, newHold);
+
+        assertEq(advancedPP.getInvoice(invoiceId).releaseAt, block.timestamp + newHold);
     }
 
     function test_createSingleInvoice(uint256 _price) public {
@@ -1305,25 +1482,9 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(sellerOne.balance, sellerBefore + tokenValue - expectedFee);
     }
 
-    function test_USDConversionRoundingDownUnderpaysInvoice() public {
-        // Price is $1.00000001 (8 decimals). This should require slightly more than 1 USDC.
-        uint256 price = 100_000_001;
-
-        uint216 invoiceId = advancedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
-        );
-
-        // Buyer pays using USDC; token amount is rounded down in getTokenValueFromUsd.
-        vm.prank(buyerOne);
-        advancedPP.payInvoice(invoiceId, address(mockUsdc));
-
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-
-        // Compute the USD value represented by the paid USDC amount.
-        uint256 paidUsd = (inv.amountPaid * uint256(MOCK_USDC_PRICE)) / (10 ** mockUsdc.decimals());
-
-        // A correct implementation should never accept a payment that converts to less USD than the invoice price.
-        assertGe(paidUsd, price);
+    function test_decimal() public view {
+        uint8 decimal = advancedPP._getDecimals(address(0));
+        assertEq(decimal, DEFAULT_DECIMAL);
     }
 
     function _executePayment(address _buyer, uint216 _invoiceId, uint256 _tokenValue) internal {

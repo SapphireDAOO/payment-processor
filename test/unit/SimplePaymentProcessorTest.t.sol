@@ -15,6 +15,7 @@ import {
     CANCELED,
     REFUNDED,
     RELEASED,
+    LOCKED,
     BASIS_POINTS
 } from "src/constants/Simple.sol";
 
@@ -38,6 +39,39 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_setMinimumInvoiceValue() public {
         vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
         simplePP.setMinimumInvoiceValue(1 ether);
+    }
+
+    function test_setForwarderAuthorizedCanSet() public {
+        address newForwarder = address(0xcafe);
+        vm.prank(admin);
+        simplePP.setForwarderAddress(newForwarder);
+
+        assertEq(simplePP.getForwarder(), newForwarder);
+    }
+
+    function test_setMinimumInvoiceValueAuthorizedCanSet() public {
+        vm.prank(admin);
+        simplePP.setMinimumInvoiceValue(2 ether);
+
+        assertEq(simplePP.getMinimumInvoiceValue(), 2 ether);
+
+        vm.prank(sellerOne);
+        vm.expectRevert(ISimplePaymentProcessor.ValueIsTooLow.selector);
+        simplePP.createInvoice(1 ether, "", false);
+    }
+
+    function test_setDecisionWindow() public {
+        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
+        simplePP.setDecisionWindow(1 days);
+
+        vm.startPrank(admin);
+        vm.expectRevert(ISimplePaymentProcessor.InvalidDecisionWindow.selector);
+        simplePP.setDecisionWindow(0);
+
+        simplePP.setDecisionWindow(1 days);
+        vm.stopPrank();
+
+        assertEq(simplePP.decisionWindow(), 1 days);
     }
 
     function test_invoiceCreation() public {
@@ -107,7 +141,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_payment() public {
         // CREATE INVOICE
         uint256 invoicePrice = 100 ether;
-        deal(sellerOne, 1);
+        vm.deal(sellerOne, 1);
         vm.startPrank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
@@ -198,10 +232,9 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         // 10000
         uint256 balanceBeforePayment = buyerOne.balance;
-        vm.prank(buyerOne);
+        vm.startPrank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
-        vm.startPrank(buyerOne);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceNotEligibleForRefund.selector);
         simplePP.refundBuyer(invoiceId);
 
@@ -213,6 +246,30 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
         assertEq(balanceBeforePayment, balanceAfterRefund);
+    }
+
+    function test_refundMaliciousBuyer() public {
+        NoReceiveEther a = new NoReceiveEther{ value: 100 ether }();
+        address thisBuyer = address(a);
+        uint256 invoicePrice = 100 ether;
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+
+        vm.startPrank(thisBuyer);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+        vm.warp(block.timestamp + simplePP.decisionWindow() + 1);
+        simplePP.refundBuyer(invoiceId);
+
+        assertEq(simplePP.getInvoiceData(invoiceId).withdrawalRetries, 1);
+
+        simplePP.refundBuyer(invoiceId);
+        simplePP.refundBuyer(invoiceId);
+        simplePP.refundBuyer(invoiceId);
+
+        vm.stopPrank();
+
+        assertEq(simplePP.getInvoiceData(invoiceId).state, LOCKED);
     }
 
     function test_paymentRejection() public {
@@ -441,6 +498,163 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         IEscrow(escrow).withdraw(address(0), address(this), escrow.balance);
     }
 
+    function test_checkUpkeepReturnsFalseWhenEmpty() public view {
+        (bool upkeepNeeded,) = simplePP.checkUpkeep("");
+        assertFalse(upkeepNeeded);
+    }
+
+    function test_performUpkeepForwarderCanCall() public {
+        uint256 invoicePrice = 10 ether;
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        vm.warp(block.timestamp + simplePP.decisionWindow() + 1);
+
+        vm.prank(FORWARDER_TWO);
+        simplePP.performUpkeep("");
+
+        assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
+    }
+
+    function test_rejectPaymentRevertsAfterWindowExpires() public {
+        uint256 invoicePrice = 10 ether;
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        vm.warp(block.timestamp + simplePP.decisionWindow() + 1);
+
+        vm.prank(sellerOne);
+        vm.expectRevert(ISimplePaymentProcessor.AcceptanceWindowExceeded.selector);
+        simplePP.rejectPayment(invoiceId);
+    }
+
+    function test_releaseLocked_revertsIfNotLocked() public {
+        uint256 invoicePrice = 10 ether;
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        uint256 paidState = simplePP.getInvoiceData(invoiceId).state;
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(ISimplePaymentProcessor.InvalidInvoiceState.selector, paidState));
+        simplePP.releaseLocked(invoiceId, admin, invoicePrice);
+    }
+
+    function test_releaseLocked() public {
+        uint256 invoicePrice = 10 ether;
+        uint216 invoiceId = _getLockedInvoice(invoicePrice);
+
+        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
+        simplePP.releaseLocked(invoiceId, buyerOne, 10 ether);
+
+        assertEq(simplePP.getInvoiceData(invoiceId).state, LOCKED);
+
+        uint256 adminBalanceBefore = admin.balance;
+
+        vm.prank(admin);
+        simplePP.releaseLocked(invoiceId, admin, invoicePrice);
+
+        assertEq(simplePP.getInvoiceData(invoiceId).state, RELEASED);
+        assertEq(admin.balance, adminBalanceBefore + invoicePrice);
+    }
+
+    function test_releaseLockedPartialAmount() public {
+        uint256 invoicePrice = 10 ether;
+        uint216 invoiceId = _getLockedInvoice(invoicePrice);
+
+        uint256 partialAmount = invoicePrice / 2;
+        uint256 adminBefore = admin.balance;
+
+        vm.prank(admin);
+        simplePP.releaseLocked(invoiceId, admin, partialAmount);
+
+        assertEq(simplePP.getInvoiceData(invoiceId).state, RELEASED);
+        assertEq(admin.balance, adminBefore + partialAmount);
+    }
+
+    function test_releaseLockedEscrowWithdrawFails() public {
+        uint256 invoicePrice = 10 ether;
+        uint216 invoiceId = _getLockedInvoice(invoicePrice);
+
+        NoReceiveEther noReceiveRecipient = new NoReceiveEther();
+
+        vm.prank(admin);
+        vm.expectRevert(ISimplePaymentProcessor.EscrowWithdrawFailed.selector);
+        simplePP.releaseLocked(invoiceId, address(noReceiveRecipient), invoicePrice);
+    }
+
+    function test_releaseLockedPpStorageCanCall() public {
+        uint256 invoicePrice = 10 ether;
+        uint216 invoiceId = _getLockedInvoice(invoicePrice);
+
+        vm.prank(address(ppStorage));
+        simplePP.releaseLocked(invoiceId, admin, invoicePrice);
+
+        assertEq(simplePP.getInvoiceData(invoiceId).state, RELEASED);
+    }
+
+    function test_automatedSellerReleaseRetry() public {
+        uint256 invoicePrice = 10 ether;
+        NoReceiveEther noReceiveSeller = new NoReceiveEther();
+
+        vm.prank(address(noReceiveSeller));
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        vm.prank(address(noReceiveSeller));
+        simplePP.acceptPayment(invoiceId);
+
+        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
+
+        uint256 buyerBefore = buyerOne.balance;
+        vm.prank(admin);
+        simplePP.performUpkeep("");
+
+        assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
+        assertEq(simplePP.getInvoiceData(invoiceId).withdrawalRetries, 3);
+        assertEq(buyerOne.balance, buyerBefore + invoicePrice);
+    }
+
+    function test_automatedLockedFromAcceptedInvoice() public {
+        // processDueTask loops: 3 seller retries + 3 buyer retries all fail → LOCKED
+        // in a single performUpkeep call (task stays at heap top until removed).
+        uint256 invoicePrice = 10 ether;
+        NoReceiveEther noReceiveSeller = new NoReceiveEther();
+        NoReceiveEther noReceiveBuyer = new NoReceiveEther();
+
+        vm.prank(address(noReceiveSeller));
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+
+        vm.deal(address(noReceiveBuyer), invoicePrice);
+        vm.prank(address(noReceiveBuyer));
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        vm.prank(address(noReceiveSeller));
+        simplePP.acceptPayment(invoiceId);
+
+        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
+
+        vm.prank(admin);
+        simplePP.performUpkeep("");
+
+        assertEq(simplePP.getInvoiceData(invoiceId).state, LOCKED);
+        assertEq(simplePP.getInvoiceData(invoiceId).withdrawalRetries, 6);
+    }
+
     function test_invoiceCreation(uint256 _amount) public {
         _amount = bound(_amount, 1 ether, 1000 ether);
         vm.prank(sellerOne);
@@ -547,5 +761,28 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         uint256 expected = (_amount * FEE_RATE) / BASIS_POINTS;
 
         assertEq(fee, expected);
+    }
+
+    // Helper: drive a buyer-locked invoice by exhausting manual refundBuyer retries.
+    // Uses a NoReceiveEther buyer so every withdraw attempt fails.
+    function _getLockedInvoice(uint256 _price) internal returns (uint216 invoiceId) {
+        NoReceiveEther noReceiveBuyer = new NoReceiveEther{ value: _price }();
+
+        vm.prank(sellerOne);
+        invoiceId = simplePP.createInvoice(_price, "", false);
+
+        vm.deal(address(noReceiveBuyer), _price);
+        vm.prank(address(noReceiveBuyer));
+        simplePP.pay{ value: _price }(invoiceId, "", false);
+
+        vm.warp(block.timestamp + simplePP.decisionWindow() + 1);
+
+        // 4 calls: retries 0 -> 1, 1 -> 2, 2 -> 3, then 3+1 > MAX_WITHDRAWAL_RETRIES -> LOCKED
+        vm.startPrank(address(noReceiveBuyer));
+        simplePP.refundBuyer(invoiceId);
+        simplePP.refundBuyer(invoiceId);
+        simplePP.refundBuyer(invoiceId);
+        simplePP.refundBuyer(invoiceId);
+        vm.stopPrank();
     }
 }
