@@ -201,8 +201,7 @@ contract AdvancedPaymentProcessor is
         uint256 usdPerToken = _usdPerToken(_paymentToken);
         uint8 decimals = _getDecimals(_paymentToken);
 
-        uint256 amountPaid = _paySubInvoices(m.subInvoiceIds, _paymentToken, usdPerToken, decimals);
-        if (amountPaid == 0) revert InvalidInvoiceState();
+        _paySubInvoices(m.subInvoiceIds, _paymentToken, usdPerToken, decimals);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -236,7 +235,7 @@ contract AdvancedPaymentProcessor is
 
         if (_resolution == DISPUTE_SETTLED) {
             invoices[_invoiceId].balance = 0;
-            (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(i, _sellerShare, _invoiceId);
+            (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(i, _sellerShare);
             emit DisputeSettled(_invoiceId, sellerReceivingValue, buyerReceivingValue);
         }
     }
@@ -248,12 +247,15 @@ contract AdvancedPaymentProcessor is
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external onlyOwner {
-        Invoice storage inv = invoices[_invoiceId];
-        if (inv.state != LOCKED) revert InvalidInvoiceState();
+        Invoice memory i = invoices[_invoiceId];
+        if (i.state != LOCKED) revert InvalidInvoiceState();
 
-        inv.state = RELEASED;
+        i.state = RELEASED;
+        i.balance -= _amount;
 
-        if (!IEscrow(inv.escrow).withdraw(inv.paymentToken, _recipient, _amount)) revert EscrowWithdrawFailed();
+        invoices[_invoiceId] = i;
+
+        if (!IEscrow(i.escrow).withdraw(i.paymentToken, _recipient, _amount)) revert EscrowWithdrawFailed();
 
         emit LockedPaymentRecovered(_invoiceId, _recipient, _amount);
     }
@@ -460,8 +462,6 @@ contract AdvancedPaymentProcessor is
 
             heap.removeAt(_pos - 1, index);
             invoices[_invoiceId].state = LOCKED;
-            invoices[_invoiceId].balance = 0;
-            emit TransferFailed(_invoiceId, _i.buyer, _i.balance);
             return TaskQueueLib.SUCCESSFUL;
         }
 
@@ -601,7 +601,7 @@ contract AdvancedPaymentProcessor is
      * @return sellerReceivingValue The amount sent to the seller.
      * @return buyerReceivingValue The amount refunded to the buyer (zero if sellerShare == 10000).
      */
-    function _distributeFunds(Invoice memory _i, uint256 _sellerShare, uint216 _invoiceId)
+    function _distributeFunds(Invoice memory _i, uint256 _sellerShare)
         internal
         returns (uint256 sellerReceivingValue, uint256 buyerReceivingValue)
     {
@@ -615,7 +615,7 @@ contract AdvancedPaymentProcessor is
 
         sellerReceivingValue = _i.balance - buyerReceivingValue;
         if (sellerReceivingValue != 0) {
-            sellerReceivingValue = _processSellerPayout(_i, sellerReceivingValue, _invoiceId, true);
+            sellerReceivingValue = _processSellerPayout(_i, sellerReceivingValue, true);
         }
     }
 
@@ -627,24 +627,21 @@ contract AdvancedPaymentProcessor is
      *        TransferFailed instead (automation path, to prevent head-of-line DoS).
      * @return sellerNetAmount The amount the seller receives after fees are deducted.
      */
-    function _processSellerPayout(
-        Invoice memory _i,
-        uint256 _sellerReceivingValue,
-        uint216 _invoiceId,
-        bool _revertOnFail
-    ) internal returns (uint256 sellerNetAmount) {
+    function _processSellerPayout(Invoice memory _i, uint256 _sellerReceivingValue, bool _revertOnFail)
+        internal
+        returns (uint256 sellerNetAmount)
+    {
         uint256 fee = _applyBasisPoints(_sellerReceivingValue, ppStorage.getFeeRate());
         sellerNetAmount = _sellerReceivingValue - fee;
 
         if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.seller, sellerNetAmount)) {
             if (_revertOnFail) revert EscrowWithdrawFailed();
-            emit TransferFailed(_invoiceId, _i.seller, sellerNetAmount);
         }
 
         if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, ppStorage.getFeeReceiver(), fee)) {
             if (_revertOnFail) revert EscrowWithdrawFailed();
-            emit TransferFailed(_invoiceId, ppStorage.getFeeReceiver(), fee);
         }
+
         return sellerNetAmount;
     }
 

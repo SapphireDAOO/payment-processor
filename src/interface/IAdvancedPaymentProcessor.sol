@@ -438,16 +438,6 @@ interface IAdvancedPaymentProcessor {
     event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 
     /**
-     * @notice Emitted when a transfer to a recipient fails during release, refund, or dispute settlement.
-     * @dev State and heap removal are already committed before this event; funds remain in the escrow
-     *      contract and can be recovered by the owner via `releaseLocked`.
-     * @param invoiceId The invoice whose transfer failed.
-     * @param recipient The intended recipient (buyer or seller).
-     * @param amount The amount that could not be delivered.
-     */
-    event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
-
-    /**
      * @notice Emitted when an automated withdrawal fails and the invoice is queued for retry.
      * @dev The invoice remains on the heap for the next upkeep cycle. Seller attempts are numbered
      *      1–MAX_WITHDRAWAL_RETRIES; buyer fallback attempts continue from MAX_WITHDRAWAL_RETRIES+1
