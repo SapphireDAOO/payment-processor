@@ -547,7 +547,10 @@ contract AdvancedPaymentProcessor is
             Invoice memory i = invoices[subInvoiceId];
             if (i.state == CREATED) {
                 uint256 price = i.price.mulDiv(10 ** _decimals, _tokenUsdPrice);
-                if (price == 0) revert PriceCannotBeZero();
+                if (price == 0) {
+                    i.state = CANCELED;
+                    continue;
+                }
                 amountPaid += _pay(i, subInvoiceId, _paymentToken, price);
                 invoices[subInvoiceId] = i;
             }
