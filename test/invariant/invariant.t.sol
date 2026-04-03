@@ -22,7 +22,10 @@ import {
     DISPUTED,
     DISPUTE_RESOLVED,
     DISPUTE_DISMISSED,
-    RELEASED
+    DISPUTE_SETTLED,
+    RELEASED,
+    REFUNDED as ADV_REFUNDED,
+    LOCKED as ADV_LOCKED
 } from "src/constants/Advanced.sol";
 
 import {
@@ -32,6 +35,7 @@ import {
     REJECTED,
     CANCELED as SIMPLE_CANCELED,
     REFUNDED,
+    RELEASED as SIMPLE_RELEASED,
     LOCKED
 } from "src/constants/Simple.sol";
 
@@ -91,7 +95,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
                 assertEq(inv.escrow.balance, inv.balance);
             }
 
-            if (inv.state == REJECTED || inv.state == REFUNDED || inv.state == RELEASED) {
+            if (inv.state == REJECTED || inv.state == REFUNDED || inv.state == SIMPLE_RELEASED) {
                 assertEq(inv.balance, 0);
                 if (inv.escrow != address(0)) {
                     assertEq(inv.escrow.balance, 0);
@@ -99,7 +103,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
             }
 
             if (inv.state == LOCKED) {
-                assertEq(inv.balance, 0);
+                assertTrue(inv.escrow != address(0));
                 assertEq(inv.escrow.balance, inv.price);
             }
         }
@@ -124,13 +128,17 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
             assertTrue(inv.buyer != address(0));
             assertLe(inv.balance, inv.amountPaid);
 
-            if (inv.state == RELEASED) {
+            if (inv.state == RELEASED || inv.state == ADV_REFUNDED || inv.state == DISPUTE_SETTLED) {
                 assertEq(inv.balance, 0);
+            }
+
+            if (inv.state == ADV_LOCKED) {
+                assertTrue(inv.balance > 0);
             }
 
             if (
                 inv.state == PAID || inv.state == DISPUTED || inv.state == DISPUTE_RESOLVED
-                    || inv.state == DISPUTE_DISMISSED
+                    || inv.state == DISPUTE_DISMISSED || inv.state == ADV_LOCKED
             ) {
                 if (inv.paymentToken == address(0)) {
                     assertEq(inv.escrow.balance, inv.balance);

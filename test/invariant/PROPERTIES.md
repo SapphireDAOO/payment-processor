@@ -24,8 +24,9 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 | --- | --- | --- |
 | SIM-1 | `invariant_simpleInvoiceStateConsistency` | If `status` is `CREATED` or `CANCELLED`: `balance == 0`, `escrow == address(0)`, `buyer == address(0)` |
 | SIM-2 | `invariant_simpleInvoiceStateConsistency` | If `status` is `PAID`: escrow exists, buyer exists, `balance == price`, and `escrow.balance == balance` |
-| SIM-3 | `invariant_simpleInvoiceStateConsistency` | If `status` is `ACCEPTED`: `balance == price - fee(price)` and `escrow.balance == balance` |
+| SIM-3 | `invariant_simpleInvoiceStateConsistency` | If `status` is `ACCEPTED`: `balance == price` and `escrow.balance == balance` |
 | SIM-4 | `invariant_simpleInvoiceStateConsistency` | If `status` is `REJECTED`, `REFUNDED`, or `RELEASED`: `balance == 0` and escrow balance is zero when escrow exists |
+| SIM-5 | `invariant_simpleInvoiceStateConsistency` | If `status` is `LOCKED`: `escrow != address(0)` and `escrow.balance == price` |
 
 ## Advanced Processor State Invariants
 
@@ -33,8 +34,9 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 | --- | --- | --- |
 | ADV-1 | `invariant_advancedInvoiceStateConsistency` | If `state` is `CREATED` or `CANCELED`: `balance == 0`, `amountPaid == 0`, `escrow == address(0)`, `buyer == address(0)` |
 | ADV-2 | `invariant_advancedInvoiceStateConsistency` | For non-created/non-canceled invoices: escrow exists, buyer exists, `amountPaid > 0`, and `balance <= amountPaid` |
-| ADV-3 | `invariant_advancedInvoiceStateConsistency` | If `state` is `RELEASED`: `balance == 0` |
-| ADV-4 | `invariant_advancedInvoiceStateConsistency` | If `state` is `PAID`/`DISPUTED`/`DISPUTE_RESOLVED`/`DISPUTE_DISMISSED`: escrow asset balance equals invoice `balance` (ETH or ERC20) |
+| ADV-3 | `invariant_advancedInvoiceStateConsistency` | If `state` is `RELEASED`, `REFUNDED`, or `DISPUTE_SETTLED`: `balance == 0` |
+| ADV-4 | `invariant_advancedInvoiceStateConsistency` | If `state` is `PAID`/`DISPUTED`/`DISPUTE_RESOLVED`/`DISPUTE_DISMISSED`/`LOCKED`: escrow asset balance equals invoice `balance` (ETH or ERC20) |
+| ADV-5 | `invariant_advancedInvoiceStateConsistency` | If `state` is `LOCKED`: `balance > 0` (funds remain in escrow, not drained) |
 
 ## Meta-Invoice Invariants
 

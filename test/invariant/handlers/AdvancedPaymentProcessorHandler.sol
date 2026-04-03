@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../../src/AdvancedPaymentProcessor.sol";
-import { Test, console } from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 import { getInvoiceCreationParam, getInvoiceCreationParams } from "../../utils/InvoiceTestHelpers.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { LibString } from "solady/utils/LibString.sol";
@@ -14,7 +14,8 @@ import {
     DISPUTE_RESOLVED,
     DISPUTE_DISMISSED,
     DISPUTE_SETTLED,
-    BASIS_POINTS
+    BASIS_POINTS,
+    LOCKED as ADV_LOCKED
 } from "src/constants/Advanced.sol";
 
 contract AdvancedPaymentProcessorHandler is Test {
@@ -190,8 +191,6 @@ contract AdvancedPaymentProcessorHandler is Test {
         if (inv.state != PAID) return;
         if (inv.balance == 0) return;
 
-        console.log("share", _share);
-
         vm.prank(advancedPP.ppStorage().getMarketplace());
         advancedPP.refund(invoiceId, _share);
     }
@@ -244,6 +243,16 @@ contract AdvancedPaymentProcessorHandler is Test {
     function performUpkeep() public {
         vm.prank(admin);
         advancedPP.performUpkeep("");
+    }
+
+    function releaseLocked(uint256 _index) public onlyExistingInvoice {
+        if (singleAndSubInvoice.length == 0) return;
+        _index = bound(_index, 0, singleAndSubInvoice.length - 1);
+        uint216 invoiceId = singleAndSubInvoice[_index];
+        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
+        if (inv.state != ADV_LOCKED) return;
+        vm.prank(admin);
+        advancedPP.releaseLocked(invoiceId, inv.buyer, inv.balance);
     }
 
     /// @notice Returns the total number of single invoices created by the handler.
