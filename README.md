@@ -2,102 +2,148 @@
 
 Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flows. Two processors are provided:
 
-1. `SimplePaymentProcessor` for native ETH only.
-2. `AdvancedPaymentProcessor` for ERC20 + price-feed based USD pricing and disputes.
-
-This repo focuses on on-chain payment state, escrow, and automated release/refund scheduling.
+1. `SimplePaymentProcessor` — native ETH invoices with seller decision window.
+2. `AdvancedPaymentProcessor` — ERC20 + native payments, USD pricing via Chainlink, disputes, and meta-invoices.
 
 **Quick facts**
 
 - Solidity: `0.8.28`
-- Escrow model: one escrow per invoice
+- Escrow model: one escrow per invoice, deployed via CREATE3
 - Scheduler: min-heap (`TaskQueueLib`) with gas-aware processing
-- Automation: Chainlink Automation compatible (`checkUpkeep`/`performUpkeep`)
+- Automation: Chainlink Automation compatible (`checkUpkeep` / `performUpkeep`)
+- Oracle: standalone `OracleManager` with sequencer uptime and heartbeat validation
 
 ## Contract Map
 
 - `src/SimplePaymentProcessor.sol`
   - Native ETH invoices.
-  - Seller decision window and hold period with scheduled release/refund.
+  - Seller decision window; scheduled release/refund via heap.
+  - Manual `release` and `refundBuyer` paths.
+  - `releaseLocked` for admin recovery of stuck funds.
   - Optional encrypted notes via `Notes`.
 - `src/AdvancedPaymentProcessor.sol`
-  - ERC20 and native payments.
-  - USD pricing via Chainlink aggregators.
-  - Meta invoices (batch), disputes, partial refunds.
+  - ERC20 and native ETH payments.
+  - USD pricing via `OracleManager` (Chainlink aggregators).
+  - Single invoices, meta-invoices (batch), disputes, partial refunds.
+  - `releaseLocked` for admin recovery of LOCKED invoices.
+- `src/OracleManager.sol`
+  - Standalone price-feed manager referenced by `AdvancedPaymentProcessor`.
+  - Validates sequencer uptime (L2 grace period) and feed heartbeat.
+  - Ownership delegated to `PaymentProcessorStorage.owner()`.
 - `src/PaymentProcessorStorage.sol`
-  - Shared configuration: fee receiver, fee rate, default hold period, gas threshold, marketplace, and authorization.
-  - Ownable.
+  - Shared configuration: fee receiver, fee rate, default hold period, gas threshold, marketplace, and authorization list.
+  - Ownable; authorizes processor contracts.
 - `src/Escrow.sol`
-  - Minimal escrow that only allows the payment processor to withdraw funds.
+  - Minimal per-invoice escrow; only the payment processor can withdraw.
+  - Zero-amount withdrawals succeed without performing a transfer.
 - `src/EscrowFactory.sol`
   - Deterministic escrow deployment via CREATE3.
+- `src/Notes.sol`
+  - Stores encrypted note content per invoice.
+  - Per-note `share` flag controls public readability; `opened` mapping tracks whether an account has viewed a note.
 - `src/libraries/TaskQueueLib.sol`
   - Binary min-heap keyed by `(invoiceId, dueTime)`.
-- Interfaces in `src/interface/*`.
+  - `processDueTask` removes stale entries on `ERROR` / `NOT_ELIGIBLE_FOR_RELEASE` and continues, preventing queue stalls.
+  - `getItems` returns IDs in heap order (linear scan, no sort).
+- Interfaces in `src/interface/`.
+- Constants in `src/constants/`.
 
 ## Architecture Overview
 
 1. **Invoice creation**
-   - Simple: seller creates invoice (price in wei).
-   - Advanced: marketplace creates invoice (price in USD, 8 decimals).
+   - Simple: seller calls `createInvoice` (price in wei).
+   - Advanced: marketplace calls `createSingleInvoice` or `createMetaInvoice` (price in USD, 8 decimals).
 
 2. **Payment**
-   - Buyer pays invoice.
-   - Escrow is deployed deterministically and receives funds.
+   - Buyer pays; a dedicated `Escrow` is deployed via CREATE3 and receives the funds.
+   - Advanced processor converts USD price to token amount via `OracleManager`.
 
 3. **Decision + release**
-   - Simple: seller accepts or rejects within a decision window.
-   - Advanced: marketplace handles disputes and resolves releases.
-   - A hold period delays release; when due, a task is scheduled in the heap.
+   - Simple: seller has a configurable decision window to `acceptPayment` or `rejectPayment`.
+   - Advanced: marketplace handles disputes via `createDispute` / `handleDispute`.
+   - A hold period delays release after acceptance; expiry is tracked in the heap.
 
 4. **Automation**
-   - `checkUpkeep` indicates if any task is due.
-   - `performUpkeep` processes due tasks with a gas threshold to avoid OOG.
+   - `checkUpkeep` returns `true` when a task is due.
+   - `performUpkeep` (non-reentrant) drains due tasks within a gas threshold.
+   - Failed withdrawals are retried up to `MAX_WITHDRAWAL_RETRIES`; after exhaustion the invoice transitions to `LOCKED`.
+
+5. **Recovery**
+   - `releaseLocked` allows the owner to recover funds from a `LOCKED` invoice to any recipient.
+
+## Invoice State Machines
+
+**SimplePaymentProcessor**
+```
+CREATED → PAID → ACCEPTED → RELEASED
+                           → LOCKED (retry exhausted)
+               → REJECTED  (seller rejects)
+               → REFUNDED  (decision window expired)
+         → REFUNDED        (buyer refund after expiry)
+         → LOCKED          (refund retry exhausted)
+```
+
+**AdvancedPaymentProcessor**
+```
+CREATED → PAID → RELEASED           (automated or manual)
+               → REFUNDED           (automated refund)
+               → LOCKED             (retry exhausted)
+               → DISPUTED → DISPUTE_RESOLVED → RELEASED
+                          → DISPUTE_SETTLED
+                          → DISPUTE_DISMISSED → RELEASED
+```
 
 ## Key Behaviors
 
-- **Invoices**
-  - Simple: `CREATED -> PAID -> ACCEPTED/REJECTED -> RELEASED/REFUNDED`
-  - Advanced: `CREATED -> PAID -> (DISPUTED/RESOLVED/SETTLED/DISMISSED) -> RELEASED`
-- **Fees**
-  - Calculated in basis points and sent to `feeReceiver`.
-- **Access control**
-  - Storage owner manages configuration and authorizes processor contracts.
-  - Advanced processor restricts creation/management to the marketplace address.
-- **Notes**
-  - `Notes` stores encrypted references and optional shareability flags.
+- **Fees** — Calculated in basis points against the invoice price; sent to `feeReceiver`. In automated paths, a failed fee transfer emits `TransferFailed` but does not revert (best-effort to avoid head-of-line blocking). In manual `release`, a failed fee transfer reverts.
+- **Meta-invoices** — Batch of sub-invoices settled in a single call. Sub-invoices whose USD→token conversion rounds to zero are skipped (not reverted).
+- **Access control** — Storage owner manages configuration. `AdvancedPaymentProcessor` restricts invoice creation and dispute handling to the marketplace address. `OracleManager` writes are restricted to the storage owner.
+- **Heartbeat validation** — `OracleManager.setPriceFeed` rejects a heartbeat of 0 when registering a live aggregator. Pass `aggregator = address(0)` to remove a token.
+- **Notes** — `Notes` stores encrypted ciphertext. Notes with `share = true` are readable by any caller; the `opened` mapping tracks read status per account.
 
 ## Configuration
 
-`PaymentProcessorStorage` holds config used by both processors:
+`PaymentProcessorStorage` holds shared config:
 
-- `feeReceiver`: destination for fees.
-- `feeRate`: BPS (100 = 1%).
-- `defaultHoldPeriod`: escrow hold time in seconds.
-- `gasThreshold`: minimum gas to keep processing heap.
-- `marketplace`: authorized address for Advanced processor.
-- `authorized`: list of addresses allowed to call restricted storage functions.
+| Field | Description |
+|---|---|
+| `feeReceiver` | Destination for protocol fees |
+| `feeRate` | Fee in basis points (e.g. 500 = 5%) |
+| `defaultHoldPeriod` | Escrow hold time after acceptance (seconds) |
+| `gasThreshold` | Minimum gas to keep processing the heap in `performUpkeep` |
+| `marketplace` | Authorized caller for Advanced processor invoice/dispute functions |
+| `authorized` | Allowlist for restricted storage writes |
+
+`OracleManager` must have a `PriceFeedConfig` registered for each payment token (including `address(0)` for native ETH) before the Advanced processor can accept payments.
 
 ## Using the Simple Processor
 
-Typical flow:
-
-1. Seller calls `createInvoice`.
-2. Buyer pays with exact ETH value via `pay`.
-3. Seller accepts with `acceptPayment`.
-4. After `releaseAt`, funds are released to seller (manual or via Automation).
-5. If the decision window expires, buyer can be refunded.
+```
+1. Seller   → createInvoice(price, storageRef, share)
+2. Buyer    → pay{value: price}(invoiceId, storageRef, share)
+3. Seller   → acceptPayment(invoiceId)           // or rejectPayment
+4. Auto     → performUpkeep("")                  // releases after hold period
+   — or —
+   Seller   → release(invoiceId)                 // manual release after hold period
+   Buyer    → refundBuyer(invoiceId)             // if decision window expired
+```
 
 ## Using the Advanced Processor
 
-Typical flow:
+```
+1. Marketplace → createSingleInvoice(param)
+               → createMetaInvoice(params[])
+2. Buyer       → payInvoice(invoiceId, token)
+               → payMetaInvoice(metaId, token)
+               → payMetaInvoiceWithValue(metaId)  // ETH
+3. Marketplace → createDispute(invoiceId)          // if disputed
+               → handleDispute(invoiceId, resolution, sellerShare)
+4. Auto        → performUpkeep("")                 // releases after hold period
+   — or —
+   Marketplace → release(invoiceId)                // manual release
+```
 
-1. Marketplace calls `createSingleInvoice` or `createMetaInvoice`.
-2. Buyer calls `payInvoice` or `payMetaInvoice`.
-3. Disputes are created and handled by marketplace.
-4. When hold period expires, funds are released.
-
-Price feeds must be configured with `setPriceFeed` before ERC20 payments.
+Price feeds must be configured with `OracleManager.setPriceFeed` before ERC20 payments.
 
 ## Getting Started
 
@@ -120,43 +166,37 @@ forge fmt
 
 ## Tests
 
-- Unit tests under `test/unit`.
-- Invariant tests under `test/invariant`.
-- Mocks for ERC20 and price feeds under `test/mock`.
-
-If you already have invariants in Foundry, Echidna is optional.
+- Unit tests in `test/unit/` — per-contract coverage including edge cases, retry paths, and LOCKED recovery.
+- Invariant tests in `test/invariant/` — property-based fuzzing over invoice state machines.
+- Harness contracts in `test/harness/` — thin wrappers exposing internal library functions for direct testing.
+- Mocks in `test/mock/` — ERC20 tokens and Chainlink `MockV3Aggregator`.
 
 ## Static Analysis (Slither)
 
 Prerequisite: [Slither](https://github.com/crytic/slither) installed.
 
 ```bash
-# Run static analysis from repo root and write JSON report
-slither . \
-  --exclude-dependencies \
-  --json slither-report.json
+slither . --exclude-dependencies --json slither-report.json
 ```
 
-Slither will not overwrite an existing `slither-report.json`. Delete or rename the file before re-running if you need a fresh report.
+**Known Slither annotations for this repo**
 
-**Interpreting Slither Output For This Repo**
-
-- `incorrect-equality`: comparisons are against explicit state codes or zero-initialized fields (no floating-point or precision risk).
-- `locked-ether`: `PaymentProcessorStorage` is not designed to receive ETH; any ETH sent would be accidental and is not part of protocol flow.
-- `uninitialized-local`: local structs default to zero and are then assigned before use.
-- `unused-return`: return values are intentionally ignored where only side effects matter.
-- `events-maths`: some config setters do not emit events by design; not a correctness issue.
-- `missing-zero-check`: zero values are either intentionally allowed (e.g., disabling a forwarder) or inputs are already validated by trusted callers.
-- `calls-loop`: external calls occur in bounded loops (meta-invoice length) and are expected; gas cost is the main consideration.
-- `reentrancy-benign` / `reentrancy-events`: external calls are to protocol-controlled contracts and state is updated before withdrawals; events after calls are not stateful.
-- `timestamp`: time-based expiry and release logic is core to invoice/escrow behavior.
-- `pragma`: dependencies use `^0.8.4` but compile cleanly with `0.8.28`.
-- `dead-code`: `_release` is referenced via function pointer in `TaskQueueLib.processDueTask`, which Slither does not resolve.
-- `naming-convention`: leading-underscore parameters are a project style choice.
-- `too-many-digits`: false positive on generated bytecode literals; no impact.
+- `incorrect-equality` — comparisons are against explicit state constants or zero-initialized fields.
+- `locked-ether` — `PaymentProcessorStorage` intentionally has no ETH receive path.
+- `uninitialized-local` — local structs default to zero and are fully assigned before use.
+- `unused-return` — return values are intentionally ignored where only side effects matter (e.g. best-effort fee collection in automated paths).
+- `calls-loop` — external calls occur in bounded loops (meta-invoice sub-invoices) and are expected.
+- `reentrancy-benign` / `reentrancy-events` — `performUpkeep` and all pay functions are `nonReentrant`; remaining automated paths are reachable only through those guards.
+- `timestamp` — time-based expiry and release logic is core to invoice lifecycle.
+- `pragma` — dependencies use `^0.8.4` but compile cleanly with `0.8.28`.
+- `dead-code` — `_release` is referenced via function pointer in `TaskQueueLib.processDueTask`, which Slither does not resolve.
+- `naming-convention` — leading-underscore parameters are a project style choice.
+- `too-many-digits` — false positive on generated bytecode literals.
 
 ## Operational Notes
 
-- Ensure `PaymentProcessorStorage` authorizes processor contracts.
-- Keep `gasThreshold` conservative to avoid OOG in `performUpkeep`.
-- Configure Chainlink feeds for each ERC20 token in the advanced processor.
+- Authorize each processor in `PaymentProcessorStorage` before deployment goes live.
+- Register a `PriceFeedConfig` in `OracleManager` for every ERC20 token and for `address(0)` (native ETH) before enabling Advanced processor payments.
+- Set `gasThreshold` conservatively; too low a value causes `performUpkeep` to process more invoices per call than intended.
+- Monitor `TransferFailed` events from automated release paths — a blocked fee receiver will silently skip fee collection until the address is updated.
+- Use `releaseLocked` to recover funds from any invoice stuck in the `LOCKED` state.
