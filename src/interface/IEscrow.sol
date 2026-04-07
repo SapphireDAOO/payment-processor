@@ -1,68 +1,34 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+/**
+ * @title IEscrow
+ * @notice Interface for escrow contracts managing invoice payments.
+ * @dev Defines the required functions for interacting with escrow logic
+ */
 interface IEscrow {
     /// @notice Thrown when an unauthorized address attempts to perform a restricted action.
     error Unauthorized();
 
-    /// @notice Thrown when the provided value is lower than the required minimum.
-    error ValueIsTooLow();
-
-    /// @notice Thrown when a fund transfer fails.
-    error TransferFailed();
-
     /**
-     * @notice Refunds the balance held in escrow to the payer when invoice is rejected.
-     * @dev Only callable by the payment processor contract.
-     * @param _payer The address of the payer to whom the funds will be refunded.
+     * @notice Withdraws ETH or ERC20 tokens from the escrow contract to a specified receiver.
+     * @dev Only callable by the payment processor. Uses a low-level call for both ETH and ERC20
+     *      transfers and does NOT revert on failure — the return value must be checked by the caller.
+     *      For ETH (`_token == address(0)`): sends via `.call{value}("")`; returns `false` if the
+     *      recipient reverts or runs out of gas.
+     *      For ERC20: calls `transfer(address,uint256)` via low-level call; handles both tokens that
+     *      return a bool (ERC20 standard) and tokens that return nothing (e.g., USDT).
+     * @param _token The address of the ERC20 token to withdraw, or address(0) for ETH.
+     * @param _receiver The address that receives the withdrawn funds.
+     * @param _amount The amount of ETH (wei) or tokens to transfer.
+     * @return success True if the transfer succeeded, false otherwise.
      */
-    function refundToPayer(address _payer) external;
-
-    /**
-     * @notice Withdraws the balance held in escrow to the creator when the invoice is released.
-     * @dev Only callable by the payment processor contract.
-     * @param _creator The address of the creator to whom the funds will be withdrawn.
-     */
-    function withdrawToCreator(address _creator) external;
-
-    /**
-     * @notice Pays the processing fee for a specific invoice.
-     * @dev Can only be called by an authorized payment processor.
-     * @param _to The address receiving the fee.
-     * @param _invoiceId The ID of the invoice for which the fee is being paid.
-     * @param _fee The amount of the fee to be transferred (in wei).
-     */
-    function payFee(address _to, uint256 _invoiceId, uint256 _fee) external;
-
-    /**
-     * @notice Emitted when funds are refunded to the payer.
-     * @param invoiceId The ID of the invoice associated with the refund.
-     * @param payer The address of the payer receiving the refund.
-     * @param amount The amount refunded in wei.
-     */
-    event FundsRefunded(uint256 indexed invoiceId, address indexed payer, uint256 indexed amount);
-
-    /**
-     * @notice Emitted when funds are withdrawn by the creator.
-     * @param invoiceId The ID of the invoice associated with the withdrawal
-     * @param creator The address of the creator receiving the withdrawn funds.
-     * @param amount The amount withdrawn in wei.
-     */
-    event FundsWithdrawn(
-        uint256 indexed invoiceId, address indexed creator, uint256 indexed amount
-    );
+    function withdraw(address _token, address _receiver, uint256 _amount) external returns (bool success);
 
     /**
      * @notice Emitted when funds are deposited into the escrow for an invoice.
-     * @param invoiceId The unique ID of the invoice associated with the deposit.
+     * @param invoiceId The unique key of the invoice associated with the deposit.
      * @param value The amount of funds deposited in wei.
      */
-    event FundsDeposited(uint256 indexed invoiceId, uint256 indexed value);
-
-    /**
-     * @notice Emitted when a fee is successfully paid to a payment processor.
-     * @param invoiceId The unique ID of the invoice associated with the fee.
-     * @param amount The fee amount paid (in wei).
-     */
-    event FeePaid(uint256 indexed invoiceId, uint256 amount);
+    event FundsDeposited(uint216 indexed invoiceId, uint256 indexed value);
 }

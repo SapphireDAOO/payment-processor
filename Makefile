@@ -1,0 +1,44 @@
+SENDER=0x0f447989b14a3f0bbf08808020ec1a6de0b8cbc4
+
+include .env
+export
+
+.PHONY: help build test format clean deploy-local deploy-test deploy-mainnet
+
+help:
+	@echo "Usage: make <target>"
+	@echo ""
+	@echo "Targets:"
+	@echo "  build           Compile contracts"
+	@echo "  test            Run tests"
+	@echo "  format          Format Solidity source files"
+	@echo "  clean           Remove build artifacts"
+	@echo "  deploy-local    Deploy to local Anvil node"
+	@echo "  deploy-test     Deploy to testnet sepolia and verify"
+	@echo "  deploy-mainnet  Deploy to mainnet and verify"
+
+build:
+	@forge build
+
+test:
+	@forge test -vvv
+
+format:
+	@forge fmt
+
+clean:
+	@forge clean
+
+deploy-local:
+	@forge script script/Deploye.s.sol --rpc-url anvil \
+	--account sp-key --sender $(SENDER) --broadcast -vvv
+
+deploy-test:
+	@forge script script/Deploy.s.sol --rpc-url $(TEST_NET_RPC_URL) \
+	--account sp-key --sender $(SENDER) --etherscan-api-key $(ETHERSCAN_API_KEY) \
+	--verify --broadcast -vvv
+
+deploy-mainnet:
+	@forge script script/Deploye.s.sol --rpc-url $(MAINNET_RPC_URL) \
+	--account sp-key --sender $(SENDER) --etherscan-api-key $(ETHERSCAN_API_KEY) \
+	--verify --broadcast -vvv

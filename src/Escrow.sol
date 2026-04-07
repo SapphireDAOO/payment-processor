@@ -3,84 +3,54 @@ pragma solidity 0.8.28;
 
 import { IEscrow } from "./interface/IEscrow.sol";
 
+/**
+ * @title Escrow
+ * @notice Implements the core escrow functionality for holding and releasing payments between buyers and sellers.
+ * @dev Conforms to the IEscrow interface. Used by the payment processor for individual invoice escrow handling.
+ */
 contract Escrow is IEscrow {
-    /// @notice The address of the payer associated with this escrow.
-    address public immutable payer;
-
-    /// @notice The address of the creator associated with this escrow.
-    address public immutable creator;
-
     /// @notice The address of the payment processor.
-    address public immutable paymentProcessor;
+    address public immutable PAYMENT_PROCESSOR;
 
     /// @notice The invoice ID associated with the escrow.
-    uint256 public immutable invoiceId;
+    uint216 public immutable INVOICE_ID;
 
+    /**
+     * @notice Restricts access to the payment processor contract.
+     * @dev Reverts with Unauthorized if the caller is not the payment processor.
+     */
     modifier onlyPaymentProcessor() {
         _onlyPaymentProcessor();
         _;
     }
 
     /**
-     * @notice Initializes the escrow contract with invoice details and deposits the funds.
-     * @dev This constructor sets the invoice ID, creator, payer, and payment processor addresses, and records the sent
-     * Ether as the balance.
+     * @notice Initializes the escrow contract and receives the deposited funds.
+     * @dev Sets the immutable invoice ID and payment processor address. Any ETH sent with
+     *      deployment is held by the contract and tracked off-chain via the `FundsDeposited` event.
+     *      ERC20 escrows receive tokens via a direct transfer before or after deployment.
      * @param _invoiceId The unique identifier of the invoice associated with this escrow.
-     * @param _creator The address of the invoice creator.
-     * @param _payer The address of the payer for the invoice.
-     * @param _paymentProcessor The address of the payment processor contract managing the invoice.
+     * @param _paymentProcessorAddress The address of the payment processor contract managing the invoice.
      */
-    constructor(uint256 _invoiceId, address _creator, address _payer, address _paymentProcessor)
-        payable
-    {
-        invoiceId = _invoiceId;
-        creator = _creator;
-        payer = _payer;
-        paymentProcessor = _paymentProcessor;
+    constructor(uint216 _invoiceId, address _paymentProcessorAddress) payable {
+        INVOICE_ID = _invoiceId;
+        PAYMENT_PROCESSOR = _paymentProcessorAddress;
         emit FundsDeposited(_invoiceId, msg.value);
     }
 
     /// @inheritdoc IEscrow
-    function withdrawToCreator(address _creator) external onlyPaymentProcessor {
-        uint256 bal = _withdraw(_creator);
-        emit FundsWithdrawn(invoiceId, _creator, bal);
-    }
-
-    /// @inheritdoc IEscrow
-    function refundToPayer(address _payer) external onlyPaymentProcessor {
-        uint256 bal = _withdraw(_payer);
-        emit FundsRefunded(invoiceId, _payer, bal);
-    }
-
-    /// @inheritdoc IEscrow
-    function payFee(address _to, uint256 _invoiceId, uint256 _fee) external onlyPaymentProcessor {
-        _withdraw(_to, _fee);
-        emit FeePaid(_invoiceId, _fee);
-    }
-
-    /**
-     * @notice Withdraws the entire balance of the contract to a specified address.
-     * @dev This function attempts to transfer the full balance of the contract to the provided address.
-     *      The balance is returned to provide feedback on the transaction.
-     * @param _to The address to which the funds should be sent.
-     * @return The amount of funds (in wei) that was transferred.
-     */
-    function _withdraw(address _to) internal returns (uint256) {
-        uint256 bal = address(this).balance;
-        _withdraw(_to, bal);
-        return bal;
-    }
-    /**
-     * @notice Withdraws a specific amount of Ether to the given address.
-     * @dev Uses low-level call to transfer Ether and reverts if the transfer fails.
-     *  @param _to The address to receive the Ether.
-     *  @param _amount The amount of Ether to transfer (in wei).
-     */
-
-    function _withdraw(address _to, uint256 _amount) internal {
-        (bool success,) = _to.call{ value: _amount }("");
-        if (!success) {
-            revert TransferFailed();
+    function withdraw(address _token, address _receiver, uint256 _amount)
+        external
+        onlyPaymentProcessor
+        returns (bool success)
+    {
+        if (_token == address(0)) {
+            (success,) = _receiver.call{ value: _amount }("");
+        } else {
+            bytes4 transferSelector = 0xa9059cbb;
+            bytes memory ret;
+            (success, ret) = _token.call(abi.encodeWithSelector(transferSelector, _receiver, _amount));
+            if (success && ret.length > 0) success = abi.decode(ret, (bool));
         }
     }
 
@@ -89,7 +59,7 @@ contract Escrow is IEscrow {
      * @dev Reverts with `Unauthorized` if `msg.sender` is not equal to `paymentProcessor`.
      */
     function _onlyPaymentProcessor() internal view {
-        if (msg.sender != paymentProcessor) {
+        if (msg.sender != PAYMENT_PROCESSOR) {
             revert Unauthorized();
         }
     }
