@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
+
+/// @title INotes
+/// @notice Notes interface for encrypted, shareable invoice notes.
+interface INotes {
+    /// @notice Thrown when the caller is not authorized to access the note.
+    error Unauthorized();
+    /// @notice Thrown when creating a note with empty content.
+    error EmptyContent();
+    /// @notice Thrown when the requested note does not exist.
+    error NoteNotFound();
+
+    /// @notice Stored note data.
+    /// @param author The note author.
+    /// @param share Whether the note is shared with the other party.
+    /// @param exists Whether the note exists.
+    /// @param version The note schema version.
+    /// @param content The encrypted note content.
+    struct Note {
+        address author;
+        bool share;
+        bool exists;
+        uint8 version;
+        bytes content;
+    }
+
+    /**
+     * @notice Create a note under an invoice.
+     * @dev Only authorized callers can create notes. The first note created for an invoice
+     *      (noteId 0) automatically marks the author as having opened it.
+     * @param _invoiceId Invoice identifier.
+     * @param _author Note author.
+     * @param _encryptedContent Encrypted note payload.
+     * @param _share Whether the note is shared with non-authors.
+     * @return noteId Newly created note id.
+     */
+    function createNote(uint216 _invoiceId, address _author, bytes calldata _encryptedContent, bool _share)
+        external
+        returns (uint256 noteId);
+
+    /**
+     * @notice Mark a note as opened or unopened for an account.
+     * @dev Only authorized callers can update opened state. Reverts with Unauthorized if
+     *      the note is not shared — opened state can only be tracked for shared notes.
+     * @param _invoiceId Invoice identifier.
+     * @param _account Account whose opened state is updated.
+     * @param _noteId Note identifier.
+     */
+    function setOpened(uint216 _invoiceId, address _account, uint256 _noteId) external;
+
+    /**
+     * @notice Get the total number of notes for an invoice.
+     * @param _invoiceId Invoice identifier.
+     * @return totalNotes Total number of notes created for the invoice.
+     */
+    function getNoteCount(uint216 _invoiceId) external view returns (uint256 totalNotes);
+
+    /**
+     * @notice Check if a note is opened for a specific user.
+     * @param _invoiceId Invoice identifier.
+     * @param _noteId Note identifier.
+     * @param _user Address to check.
+     * @return isOpen True if the note is opened for the user.
+     */
+    function isOpened(uint216 _invoiceId, uint256 _noteId, address _user) external view returns (bool isOpen);
+
+    /**
+     * @notice Updates the active note encryption version.
+     * @dev Only owner. This affects only notes created after the update.
+     * Existing notes retain their original version and remain decryptable
+     * using the encrypter associated with their stored version.
+     * @param _newVersion The new note encryption version identifier to use.
+     */
+    function updateVersion(uint8 _newVersion) external;
+
+    /**
+     * @notice Get a single note if visible to the caller.
+     * @dev Reverts with Unauthorized if the caller is not the note author and the note is
+     *      not shared. Only the author can read a private note; shared notes are readable
+     *      by anyone.
+     * @param _invoiceId Invoice identifier.
+     * @param _noteId Note identifier.
+     * @return author Note author.
+     * @return share Whether the note is shared.
+     * @return content Encrypted note content.
+     * @return openedStatus Whether the caller has opened the note.
+     * @return version Note schema version.
+     */
+    function getNote(uint216 _invoiceId, uint256 _noteId)
+        external
+        view
+        returns (address author, bool share, bytes memory content, bool openedStatus, uint8 version);
+
+    /**
+     * @notice Updates the authorization status for a user.
+     * @dev Only owner.
+     * @param _user The address to update.
+     * @param _enabled Whether the user should be authorized.
+     */
+    function setAuthorized(address _user, bool _enabled) external;
+
+    /**
+     * @notice Returns the active note encryption version.
+     * @return v The current note version.
+     */
+    function getCurrentVersion() external view returns (uint8 v);
+
+    /**
+     * @notice Emitted when a new note is created for an invoice.
+     * @param invoiceId The unique identifier of the invoice the note is associated with.
+     * @param noteId The unique identifier of the created note.
+     * @param author The address of the account that created the note.
+     * @param share Indicates whether the note is shared with other parties.
+     * @param encryptedContent The encrypted contents of the note.
+     */
+    event NoteCreated(
+        uint216 indexed invoiceId, uint256 indexed noteId, address indexed author, bool share, bytes encryptedContent
+    );
+
+    /**
+     * @notice Emitted when a user changes their opened state for a note.
+     * @param invoiceId The unique identifier of the invoice the note belongs to.
+     * @param noteId The unique identifier of the note.
+     * @param user The address of the user whose note state was updated.
+     * @param opened Whether the note is marked as opened or not by the user.
+     */
+    event NoteStateChanged(uint216 indexed invoiceId, uint256 indexed noteId, address indexed user, bool opened);
+}
