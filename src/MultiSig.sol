@@ -9,7 +9,7 @@ import { PENDING, APPROVED, EXECUTED } from "./constants/MultiSig.sol";
  * @notice Multisignature governance contract for privileged payment processor administration.
  *         Replaces a single-owner key with collective authorization across a defined signer set.
  *         Administrative calls (fee updates, decision windows, locked fund recovery, etc.) to
- *         SimplePaymentProcessor and AdvancedPaymentProcessor must pass through this contract.
+ *         SimplePaymentProcessor, AdvancedPaymentProcessor and PaymentProcessorStorage must pass through this contract.
  */
 contract MultiSig is IMultiSig {
     // ================================================================
@@ -31,11 +31,8 @@ contract MultiSig is IMultiSig {
     /// @notice Per-transaction approval record.
     mapping(bytes32 txHash => mapping(address signer => bool approved)) private approvals;
 
-    /// @notice Cumulative approval count per transaction hash.
-    mapping(bytes32 txHash => uint256 count) private approvalCount;
-
-    /// @notice Tracks nonces that have already been used to prevent replay.
-    mapping(uint256 nonce => bool used) private usedNonces;
+    /// @notice Auto-incrementing nonce assigned to each new transaction proposal.
+    uint256 private nonce;
 
     // ================================================================
     //                           MODIFIERS
@@ -70,17 +67,54 @@ contract MultiSig is IMultiSig {
      * @param _initialThreshold Minimum approvals required for execution; must be >= 1
      *        and <= _initialSigners.length.
      */
-    constructor(address[] memory _initialSigners, uint256 _initialThreshold) { }
+    constructor(address[] memory _initialSigners, uint256 _initialThreshold) {
+        uint256 len = _initialSigners.length;
+        if (len < 2) revert();
+        if (_initialThreshold < 1) revert();
+
+        for (uint256 i; i < len; i++) {
+            signers[_initialSigners[i]] = true;
+        }
+        signerCount = len;
+        threshold = _initialThreshold;
+    }
 
     /// @inheritdoc IMultiSig
-    function proposeTransaction(address _target, uint256 _value, bytes calldata _data, uint256 _nonce)
+    function proposeTransaction(address _target, uint256 _value, bytes calldata _data)
         external
         onlySigner
         returns (bytes32 txHash)
-    { }
+    {
+        if (_target == address(0)) revert InvalidTarget();
+
+        nonce++;
+        uint256 newNonce = nonce;
+
+        Transaction memory txn = Transaction({
+            target: _target, value: _value, nonce: newNonce, data: _data, status: PENDING, approvalCount: 1
+        });
+
+        txHash = keccak256(abi.encode(_target, _data, newNonce));
+
+        transactions[txHash] = txn;
+        approvals[txHash][msg.sender] = true;
+
+        emit TransactionProposed(txHash, _target, _value, _data, newNonce, msg.sender);
+    }
 
     /// @inheritdoc IMultiSig
-    function approveTransaction(bytes32 _txHash) external onlySigner { }
+    function approveTransaction(bytes32 _txHash) external onlySigner {
+        Transaction memory txn = transactions[_txHash];
+        if (txn.nonce == 0) revert TransactionDoesNotExist();
+        if (txn.status != PENDING) revert AlreadyApproved();
+        if (approvals[_txHash][msg.sender]) revert AlreadyApprovedByThisSigner();
+
+        transactions[_txHash].approvalCount++;
+
+        if (txn.approvalCount + 1 == threshold) {
+            transactions[_txHash].status = APPROVED;
+        }
+    }
 
     /// @inheritdoc IMultiSig
     function executeTransaction(bytes32 _txHash) external onlySigner { }
@@ -99,22 +133,37 @@ contract MultiSig is IMultiSig {
     // ================================================================
 
     /// @inheritdoc IMultiSig
-    function getTransaction(bytes32 _txHash) external view returns (Transaction memory) { }
+    function getTransaction(bytes32 _txHash) external view returns (Transaction memory) {
+        return transactions[_txHash];
+    }
 
     /// @inheritdoc IMultiSig
-    function hasApproved(bytes32 _txHash, address _signer) external view returns (bool) { }
+    function hasApproved(bytes32 _txHash, address _signer) external view returns (bool) {
+        return approvals[_txHash][_signer];
+    }
 
     /// @inheritdoc IMultiSig
     function getApprovalCount(bytes32 _txHash) external view returns (uint256) { }
 
     /// @inheritdoc IMultiSig
-    function isSigner(address _account) external view returns (bool) { }
+    function isSigner(address _account) external view returns (bool) {
+        return signers[_account];
+    }
 
     /// @inheritdoc IMultiSig
-    function getThreshold() external view returns (uint256) { }
+    function getThreshold() external view returns (uint256) {
+        return threshold;
+    }
 
     /// @inheritdoc IMultiSig
-    function getSignerCount() external view returns (uint256) { }
+    function getSignerCount() external view returns (uint256) {
+        return signerCount;
+    }
+
+    /// @inheritdoc IMultiSig
+    function getNonce() external view returns (uint256) {
+        return nonce;
+    }
 
     /**
      * @notice Ensures the caller is a registered signer.

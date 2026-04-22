@@ -9,12 +9,12 @@ abstract contract MultiSigSetUp is Test {
     MultiSig multisig;
 
     // Signers
-    address internal signerOne = address(0x1001);
-    address internal signerTwo = address(0x1002);
-    address internal signerThree = address(0x1003);
+    address internal signerOne = address(1);
+    address internal signerTwo = address(2);
+    address internal signerThree = address(3);
 
     // Non-signer
-    address internal outsider = address(0x1004);
+    address internal outsider = address(4);
 
     // Default deployment parameters
     uint256 constant INITIAL_THRESHOLD = 2;
@@ -23,6 +23,7 @@ abstract contract MultiSigSetUp is Test {
     // Payment processor targets used across tests
     address internal simplePP = address(0x2001);
     address internal advancedPP = address(0x2002);
+    address internal ppStorage = address(0x2003);
 
     function setUp() public virtual {
         _multiSigSetUp();
@@ -42,27 +43,13 @@ abstract contract MultiSigSetUp is Test {
     //                         HELPER FUNCTIONS
     // ----------------------------------------------------------------
 
-    /// @notice Returns a valid proposeTransaction calldata targeting simplePP.
-    function _buildProposal(bytes memory data, uint256 nonce)
-        internal
-        view
-        returns (address target, uint256 value, bytes memory callData, uint256 proposalNonce)
-    {
-        target = simplePP;
-        value = 0;
-        callData = data;
-        proposalNonce = nonce;
-    }
-
-    /// @notice Proposes a transaction as signerOne and returns the txHash.
-    function _propose(bytes memory data, uint256 nonce) internal returns (bytes32 txHash) {
+    function _propose(bytes memory data) internal returns (bytes32 txHash) {
         vm.prank(signerOne);
-        txHash = multisig.proposeTransaction(simplePP, 0, data, nonce);
+        txHash = multisig.proposeTransaction(simplePP, 0, data);
     }
 
-    /// @notice Proposes and fully approves a transaction (signerOne + signerTwo) to reach threshold.
-    function _proposeAndApprove(bytes memory data, uint256 nonce) internal returns (bytes32 txHash) {
-        txHash = _propose(data, nonce);
+    function _proposeAndApprove(bytes memory data) internal returns (bytes32 txHash) {
+        txHash = _propose(data);
 
         vm.prank(signerOne);
         multisig.approveTransaction(txHash);
@@ -71,13 +58,20 @@ abstract contract MultiSigSetUp is Test {
         multisig.approveTransaction(txHash);
     }
 
-    /// @notice ABI-encodes a setDecisionWindow call for use as proposal data.
     function _encodeSetDecisionWindow(uint256 window) internal pure returns (bytes memory) {
         return abi.encodeWithSignature("setDecisionWindow(uint256)", window);
     }
 
-    /// @notice ABI-encodes a setMinimumInvoiceValue call for use as proposal data.
     function _encodeSetMinimumInvoiceValue(uint256 value) internal pure returns (bytes memory) {
         return abi.encodeWithSignature("setMinimumInvoiceValue(uint256)", value);
+    }
+
+    function _hashTx(address _target, bytes memory _data, uint256 _newNonce) internal pure returns (bytes32) {
+        return keccak256(abi.encode(_target, _data, _newNonce));
+    }
+
+    function _call(address _target, bytes memory _data) internal {
+        vm.etch(_target, new bytes(0x02));
+        vm.mockCall(_target, _data, abi.encode(true));
     }
 }

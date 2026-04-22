@@ -28,6 +28,9 @@ interface IMultiSig {
     /// @notice Thrown when the signer has already approved this transaction.
     error AlreadyApproved();
 
+    /// @notice Thrown when a signer attempts to approve a transaction they have already approved.
+    error AlreadyApprovedByThisSigner();
+
     /// @notice Thrown when the transaction has already been executed.
     error AlreadyExecuted();
 
@@ -39,9 +42,6 @@ interface IMultiSig {
 
     /// @notice Thrown when the target address is the zero address.
     error InvalidTarget();
-
-    /// @notice Thrown when the supplied nonce has already been used by an existing transaction.
-    error NonceAlreadyUsed();
 
     /// @notice Thrown when removing a signer would bring the signer count below the current threshold.
     error SignerCountBelowThreshold();
@@ -65,12 +65,14 @@ interface IMultiSig {
     /// @param data ABI-encoded admin function call.
     /// @param nonce Unique identifier preventing replay.
     /// @param status Current lifecycle state: PENDING (1), APPROVED (2), or EXECUTED (3).
+    /// @param approvalCount Cumulative approval count per transaction hash.
     struct Transaction {
         address target;
         uint256 value;
         bytes data;
         uint256 nonce;
         uint8 status;
+        uint256 approvalCount;
     }
 
     // ================================================================
@@ -126,12 +128,9 @@ interface IMultiSig {
      * @param target  Payment processor address (SimplePaymentProcessor or AdvancedPaymentProcessor).
      * @param value   ETH to forward; must be 0 for admin calls.
      * @param data    ABI-encoded payment processor admin function call.
-     * @param nonce   Unique value preventing replay; must not have been used before.
      * @return txHash keccak256 hash of the transaction, used as its identifier.
      */
-    function proposeTransaction(address target, uint256 value, bytes calldata data, uint256 nonce)
-        external
-        returns (bytes32 txHash);
+    function proposeTransaction(address target, uint256 value, bytes calldata data) external returns (bytes32 txHash);
 
     /**
      * @notice Records the caller's approval for a pending transaction.
@@ -208,4 +207,10 @@ interface IMultiSig {
      * @return The current signer count.
      */
     function getSignerCount() external view returns (uint256);
+
+    /**
+     * @notice Returns the current nonce value, equal to the total number of transactions proposed.
+     * @return The latest nonce assigned to a transaction proposal.
+     */
+    function getNonce() external view returns (uint256);
 }
