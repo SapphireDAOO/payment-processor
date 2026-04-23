@@ -34,6 +34,8 @@ interface IMultiSig {
     /// @notice Thrown when the transaction has already been executed.
     error AlreadyExecuted();
 
+    error ThresholdCannotBeZero();
+
     /// @notice Thrown when the low-level call to the payment processor fails.
     error ExecutionFailed();
 
@@ -142,8 +144,9 @@ interface IMultiSig {
     /**
      * @notice Executes an APPROVED transaction by forwarding the encoded call to the target.
      * @param txHash Identifier of the approved transaction to execute.
+     * @return The raw bytes returned by the target call.
      */
-    function executeTransaction(bytes32 txHash) external;
+    function executeTransaction(bytes32 txHash) external returns (bytes memory);
 
     /**
      * @notice Adds a new signer to the authorized set.
@@ -181,13 +184,6 @@ interface IMultiSig {
      * @return True if the signer has approved.
      */
     function hasApproved(bytes32 txHash, address signer) external view returns (bool);
-
-    /**
-     * @notice Returns the current approval count for a transaction.
-     * @param txHash The transaction identifier.
-     * @return The number of approvals recorded.
-     */
-    function getApprovalCount(bytes32 txHash) external view returns (uint256);
 
     /**
      * @notice Returns whether an address is a registered signer.
