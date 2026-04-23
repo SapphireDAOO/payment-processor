@@ -3,10 +3,11 @@ pragma solidity 0.8.28;
 
 import { Test } from "forge-std/Test.sol";
 import { MultiSig } from "../../src/MultiSig.sol";
-import { IMultiSig } from "../../src/interface/IMultiSig.sol";
+import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 
 abstract contract MultiSigSetUp is Test {
     MultiSig multisig;
+    PaymentProcessorStorage ppStorage;
 
     // Signers
     address internal signerOne = address(1);
@@ -16,14 +17,14 @@ abstract contract MultiSigSetUp is Test {
     // Non-signer
     address internal outsider = address(4);
 
+    address internal feeReceiver = address(5);
+
     // Default deployment parameters
     uint256 constant INITIAL_THRESHOLD = 2;
     uint256 constant INITIAL_SIGNER_COUNT = 3;
-
-    // Payment processor targets used across tests
-    address internal simplePP = address(0x2001);
-    address internal advancedPP = address(0x2002);
-    address internal ppStorage = address(0x2003);
+    uint96 constant FEE_RATE = 500;
+    uint96 constant DEFAULT_HOLD_PERIOD = 1 days;
+    uint96 constant GAS_THRESHOLD = 100_000;
 
     function setUp() public virtual {
         _multiSigSetUp();
@@ -36,6 +37,17 @@ abstract contract MultiSigSetUp is Test {
         initialSigners[2] = signerThree;
 
         multisig = new MultiSig(initialSigners, INITIAL_THRESHOLD);
+
+        IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
+            owner: address(multisig),
+            feeReceiver: feeReceiver,
+            marketplace: address(this),
+            feeRate: FEE_RATE,
+            defaultHoldPeriod: DEFAULT_HOLD_PERIOD,
+            gasThreshold: GAS_THRESHOLD
+        });
+
+        ppStorage = new PaymentProcessorStorage(config);
         deployedMultiSig = multisig;
     }
 
@@ -45,33 +57,30 @@ abstract contract MultiSigSetUp is Test {
 
     function _propose(bytes memory data) internal returns (bytes32 txHash) {
         vm.prank(signerOne);
-        txHash = multisig.proposeTransaction(simplePP, 0, data);
+        txHash = multisig.proposeTransaction(address(ppStorage), 0, data);
     }
 
+    /// @dev signerOne auto-approves on propose; one more signer reaches the threshold of 2.
     function _proposeAndApprove(bytes memory data) internal returns (bytes32 txHash) {
         txHash = _propose(data);
-
-        vm.prank(signerOne);
-        multisig.approveTransaction(txHash);
 
         vm.prank(signerTwo);
         multisig.approveTransaction(txHash);
     }
 
-    function _encodeSetDecisionWindow(uint256 window) internal pure returns (bytes memory) {
-        return abi.encodeWithSignature("setDecisionWindow(uint256)", window);
+    function _encodeSetFeeRate(uint96 _feeRate) internal pure returns (bytes memory) {
+        return abi.encodeCall(IPaymentProcessorStorage.setFeeRate, _feeRate);
     }
 
-    function _encodeSetMinimumInvoiceValue(uint256 value) internal pure returns (bytes memory) {
-        return abi.encodeWithSignature("setMinimumInvoiceValue(uint256)", value);
+    function _encodeSetDefaultHoldPeriod(uint96 _period) internal pure returns (bytes memory) {
+        return abi.encodeCall(IPaymentProcessorStorage.setDefaultHoldPeriod, _period);
+    }
+
+    function _encodeSetGasThreshold(uint96 _threshold) internal pure returns (bytes memory) {
+        return abi.encodeCall(IPaymentProcessorStorage.setGasThreshold, _threshold);
     }
 
     function _hashTx(address _target, bytes memory _data, uint256 _newNonce) internal pure returns (bytes32) {
         return keccak256(abi.encode(_target, _data, _newNonce));
-    }
-
-    function _call(address _target, bytes memory _data) internal {
-        vm.etch(_target, new bytes(0x02));
-        vm.mockCall(_target, _data, abi.encode(true));
     }
 }

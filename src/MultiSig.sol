@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import { IMultiSig } from "./interface/IMultiSig.sol";
 import { PENDING, APPROVED, EXECUTED } from "./constants/MultiSig.sol";
+import { LibCall } from "solady/utils/LibCall.sol";
 
 /**
  * @title MultiSig
@@ -12,9 +13,7 @@ import { PENDING, APPROVED, EXECUTED } from "./constants/MultiSig.sol";
  *         SimplePaymentProcessor, AdvancedPaymentProcessor and PaymentProcessorStorage must pass through this contract.
  */
 contract MultiSig is IMultiSig {
-    // ================================================================
-    //                          STATE VARIABLES
-    // ================================================================
+    using LibCall for address;
 
     /// @notice Tracks whether an address is an authorized signer.
     mapping(address signer => bool authorized) private signers;
@@ -33,10 +32,6 @@ contract MultiSig is IMultiSig {
 
     /// @notice Auto-incrementing nonce assigned to each new transaction proposal.
     uint256 private nonce;
-
-    // ================================================================
-    //                           MODIFIERS
-    // ================================================================
 
     /**
      * @notice Restricts the function to registered signers only.
@@ -69,11 +64,12 @@ contract MultiSig is IMultiSig {
      */
     constructor(address[] memory _initialSigners, uint256 _initialThreshold) {
         uint256 len = _initialSigners.length;
-        if (len < 2) revert();
-        if (_initialThreshold < 1) revert();
+        if (len < 2) revert InsufficientSigners();
+        if (_initialThreshold < 1 || _initialThreshold > len) revert InvalidThreshold();
 
         for (uint256 i; i < len; i++) {
             signers[_initialSigners[i]] = true;
+            emit SignerAdded(_initialSigners[i]);
         }
         signerCount = len;
         threshold = _initialThreshold;
@@ -109,28 +105,53 @@ contract MultiSig is IMultiSig {
         if (txn.status != PENDING) revert AlreadyApproved();
         if (approvals[_txHash][msg.sender]) revert AlreadyApprovedByThisSigner();
 
-        transactions[_txHash].approvalCount++;
+        uint256 newApprovalCount = txn.approvalCount + 1;
+        transactions[_txHash].approvalCount = newApprovalCount;
 
-        if (txn.approvalCount + 1 == threshold) {
+        if (newApprovalCount == threshold) {
             transactions[_txHash].status = APPROVED;
         }
+
+        emit TransactionApproved(_txHash, msg.sender, newApprovalCount);
     }
 
     /// @inheritdoc IMultiSig
-    function executeTransaction(bytes32 _txHash) external onlySigner { }
+    function executeTransaction(bytes32 _txHash) external onlySigner returns (bytes memory) {
+        Transaction memory txn = transactions[_txHash];
+        if (txn.status != APPROVED) revert TransactionNotApproved();
+        transactions[_txHash].status = EXECUTED;
+
+        emit TransactionExecuted(_txHash, msg.sender);
+        return txn.target.callContract(0, txn.data);
+    }
 
     /// @inheritdoc IMultiSig
-    function addSigner(address _signer) external onlySelf { }
+    function addSigner(address _signer) external onlySelf {
+        if (signers[_signer]) revert AlreadyASigner();
+
+        signerCount++;
+        signers[_signer] = true;
+        emit SignerAdded(_signer);
+    }
 
     /// @inheritdoc IMultiSig
-    function removeSigner(address _signer) external onlySelf { }
+    function removeSigner(address _signer) external onlySelf {
+        if (!signers[_signer]) revert NotASigner();
+        if (threshold > signerCount - 1) revert SignerCountBelowThreshold();
+
+        signerCount--;
+        signers[_signer] = false;
+        emit SignerRemoved(_signer);
+    }
 
     /// @inheritdoc IMultiSig
-    function updateThreshold(uint256 _newThreshold) external onlySelf { }
+    function updateThreshold(uint256 _newThreshold) external onlySelf {
+        if (_newThreshold == 0) revert ThresholdCannotBeZero();
+        if (_newThreshold > signerCount) revert SignerCountBelowThreshold();
 
-    // ================================================================
-    //                           VIEW FUNCTIONS
-    // ================================================================
+        emit ThresholdUpdated(threshold, _newThreshold);
+        threshold = _newThreshold;
+    }
 
     /// @inheritdoc IMultiSig
     function getTransaction(bytes32 _txHash) external view returns (Transaction memory) {
@@ -141,9 +162,6 @@ contract MultiSig is IMultiSig {
     function hasApproved(bytes32 _txHash, address _signer) external view returns (bool) {
         return approvals[_txHash][_signer];
     }
-
-    /// @inheritdoc IMultiSig
-    function getApprovalCount(bytes32 _txHash) external view returns (uint256) { }
 
     /// @inheritdoc IMultiSig
     function isSigner(address _account) external view returns (bool) {
