@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { IMultiSig } from "./interface/IMultiSig.sol";
-import { PENDING, APPROVED, EXECUTED, MINIMUM_THRESHOLD, MINIMUM_SIGNERS } from "./constants/MultiSig.sol";
+import { PENDING, APPROVED, EXECUTED, CANCELED, MINIMUM_THRESHOLD, MINIMUM_SIGNERS } from "./constants/MultiSig.sol";
 import { LibCall } from "solady/utils/LibCall.sol";
 
 /**
@@ -120,6 +120,16 @@ contract MultiSig is IMultiSig {
 
         emit TransactionExecuted(_txHash, msg.sender);
         return txn.target.callContract(txn.data);
+    }
+
+    /// @inheritdoc IMultiSig
+    function cancelTransaction(bytes32 _txHash) external onlySelf {
+        Transaction memory txn = transactions[_txHash];
+        if (txn.nonce == 0) revert TransactionDoesNotExist();
+        if (txn.status != PENDING && txn.status != APPROVED) revert TransactionNotPendingOrApproved();
+
+        transactions[_txHash].status = CANCELED;
+        emit TransactionCanceled(_txHash);
     }
 
     /// @inheritdoc IMultiSig

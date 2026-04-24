@@ -5,7 +5,7 @@ import { MultiSigSetUp } from "../utils/MultiSigSetUp.sol";
 import { IMultiSig } from "src/interface/IMultiSig.sol";
 import { MultiSig } from "../../src/MultiSig.sol";
 
-import { PENDING, APPROVED, EXECUTED } from "src/constants/MultiSig.sol";
+import { PENDING, APPROVED, EXECUTED, CANCELED } from "src/constants/MultiSig.sol";
 
 contract MultiSigTest is MultiSigSetUp {
     function test_initialState() public view {
@@ -211,5 +211,50 @@ contract MultiSigTest is MultiSigSetUp {
 
         vm.expectRevert(IMultiSig.InvalidThreshold.selector);
         new MultiSig(signers, 3);
+    }
+
+    function test_cancelTransaction() public {
+        bytes memory data = _encodeSetFeeRate(1000);
+
+        bytes32 txHash = _propose(data);
+
+        vm.prank(signerOne);
+        vm.expectRevert(IMultiSig.NotSelf.selector);
+        multisig.cancelTransaction(txHash);
+
+        vm.prank(address(multisig));
+        vm.expectRevert(IMultiSig.TransactionDoesNotExist.selector);
+        multisig.cancelTransaction(keccak256(""));
+
+        vm.expectEmit(address(multisig));
+        emit IMultiSig.TransactionCanceled(txHash);
+        vm.prank(address(multisig));
+        multisig.cancelTransaction(txHash);
+
+        assertEq(multisig.getTransaction(txHash).status, CANCELED);
+
+        vm.prank(address(multisig));
+        vm.expectRevert(IMultiSig.TransactionNotPendingOrApproved.selector);
+        multisig.cancelTransaction(txHash);
+
+        vm.prank(signerTwo);
+        vm.expectRevert(IMultiSig.AlreadyApproved.selector);
+        multisig.approveTransaction(txHash);
+
+        vm.prank(signerOne);
+        vm.expectRevert(IMultiSig.TransactionNotApproved.selector);
+        multisig.executeTransaction(txHash);
+
+        bytes32 approvedTxHash = _proposeAndApprove(data);
+        assertEq(multisig.getTransaction(approvedTxHash).status, APPROVED);
+
+        vm.prank(address(multisig));
+        multisig.cancelTransaction(approvedTxHash);
+
+        assertEq(multisig.getTransaction(approvedTxHash).status, CANCELED);
+
+        vm.prank(signerOne);
+        vm.expectRevert(IMultiSig.TransactionNotApproved.selector);
+        multisig.executeTransaction(approvedTxHash);
     }
 }
