@@ -53,5 +53,4 @@ contract MultiSigInvariant is StdInvariant, MultiSigSetUp {
             assertEq(multisig.getTransaction(txHash).status, CANCELED);
         }
     }
-
 }
