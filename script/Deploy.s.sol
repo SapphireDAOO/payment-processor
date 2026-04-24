@@ -51,21 +51,42 @@ contract Deploy is Script {
 
     uint256 constant INITIAL_THRESHOLD = 2;
 
-    address constant SIGNER_ONE = address(0x01);
-    address constant SIGNER_TWO = address(0x02);
+    address constant SIGNER_ONE = 0x60D7dD3b4248D53Abba8DA999B22023656A2E4B3;
+    address constant SIGNER_TWO = 0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4;
     address[] signers = [SIGNER_ONE, SIGNER_TWO];
 
     function run() external {
-        console.log("-----Deploying-----");
-        console.log("Chain ID:", block.chainid);
+        bool isMainnet = block.chainid == MAINNET_CHAIN_ID;
+
+        console.log("=== SapphireDAO Payment Processor Deployment ===");
+        console.log("Network:  ", isMainnet ? "Base Mainnet" : "Base Sepolia");
+        console.log("Chain ID: ", block.chainid);
+        console.log("Deployer: ", msg.sender);
+        console.log("");
+        console.log("--- Config ---");
+        console.log("Fee rate (bps):      ", FEE_RATE);
+        console.log("Hold period (s):     ", DEFAULT_HOLD_PERIOD);
+        console.log("Min invoice (wei):   ", MINIMUM_INVOICE_VALUE);
+        console.log("Gas threshold:       ", DEFAULT_GAS_THRESHOLD);
+        console.log("MultiSig threshold:  ", INITIAL_THRESHOLD);
+        console.log("Signer[0]:           ", SIGNER_ONE);
+        console.log("Signer[1]:           ", SIGNER_TWO);
+        console.log("");
+        console.log("--- Deploying ---");
+
         vm.startBroadcast();
 
         MultiSig multisig = new MultiSig(signers, INITIAL_THRESHOLD);
+        console.log("MultiSig deployed:                ", address(multisig));
 
         Addr memory addr = _setUp();
+        if (!isMainnet) {
+            console.log("MockUsdc deployed:                ", addr.usdc);
+            console.log("MockWbtc deployed:                ", addr.wbtc);
+        }
 
         IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
-            owner: address(multisig),
+            owner: msg.sender,
             feeReceiver: msg.sender,
             marketplace: msg.sender,
             feeRate: FEE_RATE,
@@ -74,22 +95,32 @@ contract Deploy is Script {
         });
 
         PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(config);
+        console.log("PaymentProcessorStorage deployed: ", address(ppStorage));
 
         Notes notes = new Notes(address(ppStorage));
+        console.log("Notes deployed:                   ", address(notes));
 
         SimplePaymentProcessor simplePP =
             new SimplePaymentProcessor(address(ppStorage), MINIMUM_INVOICE_VALUE, address(notes));
+        console.log("SimplePaymentProcessor deployed:  ", address(simplePP));
 
         OracleManager oracle = new OracleManager(address(ppStorage), addr.sequencerUptimeFeed);
+        console.log("OracleManager deployed:           ", address(oracle));
 
         AdvancedPaymentProcessor advancedPP = new AdvancedPaymentProcessor(address(ppStorage), address(oracle));
+        console.log("AdvancedPaymentProcessor deployed:", address(advancedPP));
+
+        console.log("");
+        console.log("--- Wiring ---");
 
         notes.setAuthorized(msg.sender, true);
         notes.setAuthorized(address(simplePP), true);
         notes.setAuthorized(address(advancedPP), true);
+        console.log("Notes authorized: deployer, SimplePaymentProcessor, AdvancedPaymentProcessor");
 
         ppStorage.setAuthorizedAddress(address(simplePP), true);
         ppStorage.setAuthorizedAddress(address(advancedPP), true);
+        console.log("Storage authorized: SimplePaymentProcessor, AdvancedPaymentProcessor");
 
         oracle.setPriceFeed(
             address(0),
@@ -101,18 +132,24 @@ contract Deploy is Script {
         oracle.setPriceFeed(
             addr.wbtc, IOracleManager.PriceFeedConfig({ aggregator: addr.wbtcPriceFeed, heartbeat: FEED_HEARTBEAT })
         );
+        console.log("Price feeds set: ETH/USD, USDC/USD, WBTC/USD");
+
+        ppStorage.transferOwnership(address(multisig));
+        console.log("Ownership transferred to MultiSig:", address(multisig));
 
         vm.stopBroadcast();
 
-        console.log("-----Deployed-----");
-        console.log("MultiSig: ", address(multisig));
-        console.log("PaymentProcessorStorage:", address(ppStorage));
-        console.log("Notes:                 ", address(notes));
-        console.log("SimplePaymentProcessor:", address(simplePP));
+        console.log("");
+        console.log("=== Deployment Complete ===");
+        console.log("MultiSig:                ", address(multisig));
+        console.log("PaymentProcessorStorage: ", address(ppStorage));
+        console.log("Notes:                   ", address(notes));
+        console.log("SimplePaymentProcessor:  ", address(simplePP));
+        console.log("OracleManager:           ", address(oracle));
         console.log("AdvancedPaymentProcessor:", address(advancedPP));
-        if (block.chainid != MAINNET_CHAIN_ID) {
-            console.log("MockUsdc:              ", addr.usdc);
-            console.log("MockWbtc:              ", addr.wbtc);
+        if (!isMainnet) {
+            console.log("MockUsdc:                ", addr.usdc);
+            console.log("MockWbtc:                ", addr.wbtc);
         }
     }
 
@@ -141,3 +178,4 @@ contract Deploy is Script {
         }
     }
 }
+
