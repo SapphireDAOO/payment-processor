@@ -7,9 +7,11 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 - `SimplePaymentProcessor`
 - `AdvancedPaymentProcessor`
 - `PaymentProcessorStorage`
+- `MultiSig`
 - Handlers:
   - `test/invariant/handlers/SimplePaymentProcessorHandler.sol`
   - `test/invariant/handlers/AdvancedPaymentProcessorHandler.sol`
+  - `test/invariant/handlers/MultiSigHandler.sol`
 
 ## Global Invariants
 
@@ -50,4 +52,15 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 | --- | --- | --- |
 | BAL-1 | `invariant_simpleProcessorNativeTokenBalanceIsAlwaysZero` | `address(simplePaymentProcessor).balance == 0` |
 | BAL-2 | `invariant_advancedProcessorNativeTokenBalanceAlwaysZero` | `address(advancedPaymentProcessor).balance == 0` |
+
+## MultiSig Invariants
+
+| Id | Invariant Function | Property |
+| --- | --- | --- |
+| MSG-1 | `invariant_thresholdBounds` | `threshold >= 1 && threshold <= signerCount` always holds — threshold can never be zero or exceed the active signer set |
+| MSG-2 | `invariant_nonceConsistency` | `multisig.getNonce() == ghostNonce` — on-chain nonce equals the total number of `proposeTransaction` calls made through the handler |
+| MSG-3 | `invariant_executedStatusIsPermanent` | Once a transaction reaches `EXECUTED` status it never reverts to `PENDING` or `APPROVED` |
+| MSG-4 | `invariant_validTransactionStatus` | Every tracked transaction has status in `{PENDING=1, APPROVED=2, EXECUTED=3}` — no other value is possible |
+| MSG-5 | `invariant_signerCountConsistency` | `handler.getSignerCount() == multisig.getSignerCount()` — the handler's ghost signer set size always matches the on-chain count |
+| MSG-6 | `invariant_thresholdConsistency` | `handler.getGhostThreshold() == multisig.getThreshold()` — the handler's ghost threshold always matches the on-chain value |
 

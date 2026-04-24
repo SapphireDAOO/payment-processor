@@ -251,10 +251,11 @@ contract AdvancedPaymentProcessor is
         if (i.state != LOCKED) revert InvalidInvoiceState();
         if (_amount > i.balance) revert InsufficientBalance();
 
-        i.state = RELEASED;
-        i.balance -= _amount;
+        if (i.balance == _amount) {
+            i.state = RELEASED;
+        }
 
-        invoices[_invoiceId] = i;
+        invoices[_invoiceId].balance -= _amount;
 
         if (!IEscrow(i.escrow).withdraw(i.paymentToken, _recipient, _amount)) revert EscrowWithdrawFailed();
 

@@ -225,10 +225,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         Invoice memory i = invoices[_invoiceId];
         if (i.state != LOCKED) revert InvalidInvoiceState(i.state);
 
-        i.state = RELEASED;
-        i.balance = 0;
+        if (i.balance == _amount) {
+            i.state = RELEASED;
+        }
 
-        invoices[_invoiceId] = i;
+        invoices[_invoiceId].balance -= _amount;
 
         if (!IEscrow(i.escrow).withdraw(address(0), _recipient, _amount)) revert EscrowWithdrawFailed();
 

@@ -9,6 +9,7 @@ import { OracleManager } from "../src/OracleManager.sol";
 import { IOracleManager } from "../src/interface/IOracleManager.sol";
 import { MockUsdc, MockWbtc } from "../test/mock/mERC20.sol";
 import { Notes } from "../src/Notes.sol";
+import { MultiSig } from "../src/MultiSig.sol";
 
 struct Addr {
     address usdcPriceFeed;
@@ -48,15 +49,23 @@ contract Deploy is Script {
     uint256 constant TESTNET_CHAIN_ID = 84532;
     uint256 constant MAINNET_CHAIN_ID = 8453;
 
+    uint256 constant INITIAL_THRESHOLD = 2;
+
+    address constant SIGNER_ONE = address(0x01);
+    address constant SIGNER_TWO = address(0x02);
+    address[] signers = [SIGNER_ONE, SIGNER_TWO];
+
     function run() external {
         console.log("-----Deploying-----");
         console.log("Chain ID:", block.chainid);
         vm.startBroadcast();
 
+        MultiSig multisig = new MultiSig(signers, INITIAL_THRESHOLD);
+
         Addr memory addr = _setUp();
 
         IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
-            owner: msg.sender,
+            owner: address(multisig),
             feeReceiver: msg.sender,
             marketplace: msg.sender,
             feeRate: FEE_RATE,
@@ -96,6 +105,7 @@ contract Deploy is Script {
         vm.stopBroadcast();
 
         console.log("-----Deployed-----");
+        console.log("MultiSig: ", address(multisig));
         console.log("PaymentProcessorStorage:", address(ppStorage));
         console.log("Notes:                 ", address(notes));
         console.log("SimplePaymentProcessor:", address(simplePP));

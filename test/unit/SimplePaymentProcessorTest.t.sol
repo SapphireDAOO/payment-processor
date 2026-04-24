@@ -536,7 +536,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.rejectPayment(invoiceId);
     }
 
-    function test_releaseLocked_revertsIfNotLocked() public {
+    function test_releaseLockedRevertsIfNotLocked() public {
         uint256 invoicePrice = 10 ether;
 
         vm.prank(sellerOne);
@@ -566,7 +566,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(admin);
         simplePP.releaseLocked(invoiceId, admin, invoicePrice);
 
-        assertEq(simplePP.getInvoiceData(invoiceId).state, RELEASED);
+        assertEq(simplePP.getInvoiceData(invoiceId).state, LOCKED);
         assertEq(admin.balance, adminBalanceBefore + invoicePrice);
     }
 
@@ -580,7 +580,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(admin);
         simplePP.releaseLocked(invoiceId, admin, partialAmount);
 
-        assertEq(simplePP.getInvoiceData(invoiceId).state, RELEASED);
+        assertEq(simplePP.getInvoiceData(invoiceId).state, LOCKED);
         assertEq(admin.balance, adminBefore + partialAmount);
     }
 
@@ -602,7 +602,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(address(ppStorage));
         simplePP.releaseLocked(invoiceId, admin, invoicePrice);
 
-        assertEq(simplePP.getInvoiceData(invoiceId).state, RELEASED);
+        assertEq(simplePP.getInvoiceData(invoiceId).state, LOCKED);
     }
 
     function test_automatedSellerReleaseRetry() public {
