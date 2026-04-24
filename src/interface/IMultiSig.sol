@@ -19,6 +19,8 @@ interface IMultiSig {
     /// @notice Thrown when the referenced transaction hash does not exist.
     error TransactionDoesNotExist();
 
+    error TransactionNotPendingOrApproved();
+
     /// @notice Thrown when an operation requires PENDING status but the transaction is not pending.
     error TransactionNotPending();
 
@@ -108,6 +110,10 @@ interface IMultiSig {
     /// @param executor The signer who triggered execution.
     event TransactionExecuted(bytes32 indexed txHash, address indexed executor);
 
+    /// @notice Emitted when a PENDING or APPROVED transaction is canceled via a multisig-executed transaction.
+    /// @param txHash The transaction hash that was canceled.
+    event TransactionCanceled(bytes32 indexed txHash);
+
     /// @notice Emitted when a new signer is added via a multisig-executed transaction.
     /// @param signer The address added as a signer.
     event SignerAdded(address indexed signer);
@@ -147,6 +153,14 @@ interface IMultiSig {
      * @return The raw bytes returned by the target call.
      */
     function executeTransaction(bytes32 txHash) external returns (bytes memory);
+
+    /**
+     * @notice Cancels a PENDING or APPROVED transaction, preventing execution.
+     * @dev Only callable by the multisig contract itself via an executed transaction.
+     *      Reverts if the transaction does not exist or is already EXECUTED or CANCELED.
+     * @param txHash Identifier of the transaction to cancel.
+     */
+    function cancelTransaction(bytes32 txHash) external;
 
     /**
      * @notice Adds a new signer to the authorized set.

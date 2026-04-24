@@ -10,6 +10,8 @@ uint8 constant APPROVED = 2;
 // Transaction has been executed; the encoded call was forwarded to the target payment processor.
 uint8 constant EXECUTED = 3;
 
+uint8 constant CANCELED = 4;
+
 uint8 constant MINIMUM_THRESHOLD = 2;
 
 uint8 constant MINIMUM_SIGNERS = 2;

@@ -20,6 +20,7 @@ contract MultiSigHandler is Test {
 
     bytes32[] public allTxHashes;
     bytes32[] public executedTxHashes;
+    bytes32[] public canceledTxHashes;
 
     mapping(bytes32 txHash => mapping(address signer => bool approved)) internal ghostApprovals;
 
@@ -93,6 +94,20 @@ contract MultiSigHandler is Test {
         executedTxHashes.push(txHash);
     }
 
+    function cancel(uint256 _txIndex) external hasSigners hasTx {
+        _txIndex = bound(_txIndex, 0, allTxHashes.length - 1);
+
+        bytes32 txHash = allTxHashes[_txIndex];
+        uint8 status = multisig.getTransaction(txHash).status;
+
+        if (status != PENDING && status != APPROVED) return;
+
+        bytes memory data = abi.encodeCall(IMultiSig.cancelTransaction, txHash);
+        if (!_proposeApproveExecute(data, address(multisig))) return;
+
+        canceledTxHashes.push(txHash);
+    }
+
     function governAddSigner(address _newSigner) external hasSigners {
         if (_newSigner == address(0)) return;
         for (uint256 i; i < signers.length; i++) {
@@ -140,6 +155,14 @@ contract MultiSigHandler is Test {
 
     function getExecutedTxHash(uint256 _index) external view returns (bytes32) {
         return executedTxHashes[_index];
+    }
+
+    function getCanceledTxCount() external view returns (uint256) {
+        return canceledTxHashes.length;
+    }
+
+    function getCanceledTxHash(uint256 _index) external view returns (bytes32) {
+        return canceledTxHashes[_index];
     }
 
     function getSignerCount() external view returns (uint256) {
