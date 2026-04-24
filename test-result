@@ -1,39 +1,17 @@
-Compiling 11 files with Solc 0.8.28
-Solc 0.8.28 finished in 2.88s
-Compiler run successful!
+No files changed, compilation skipped
 
 Ran 4 tests for test/unit/NotesTest.t.sol:NotesTest
 [PASS] test_createNote() (gas: 210361)
 [PASS] test_getNotes() (gas: 123164)
 [PASS] test_newVersion() (gas: 131731)
 [PASS] test_setOpened() (gas: 211691)
-Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 801.83µs (279.63µs CPU time)
-
-Ran 7 tests for test/integration/SimplePaymentProcessor.t.sol:SimplePaymentProcessorInteractions
-[PASS] test_acceptAndReleaseInvoice() (gas: 441373)
-[PASS] test_payInvoice() (gas: 479207)
-[PASS] test_performUpkeep_autoRefundsBuyerWhenSellerDoesNotAct() (gas: 425838)
-[PASS] test_performUpkeep_autoReleasesAcceptedInvoice() (gas: 446215)
-[PASS] test_refundBuyerAfterDecisionWindowExpires() (gas: 417079)
-[PASS] test_rejectPayment() (gas: 412327)
-[PASS] test_sellerCancelInvoice() (gas: 138604)
-Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 2.65s (1.77s CPU time)
-
-Ran 7 tests for test/integration/AdvancedPaymentProcoessor.t.sol:AdvancedPaymentProcoessorInteractions
-[PASS] test_erc20PaymentForMetaInvoice() (gas: 1382387)
-[PASS] test_erc20PaymentForSingleInvoice() (gas: 700948)
-[PASS] test_invoiceRelease() (gas: 651750)
-[PASS] test_nativeTokenPaymentForMetaInvoice() (gas: 1313840)
-[PASS] test_nativeTokenPaymentForSingleInvoice() (gas: 635973)
-[PASS] test_sellerCancelInitiatedInvoice() (gas: 698252)
-[PASS] test_settledDispute() (gas: 685427)
-Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 6.42s (15.82s CPU time)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 4.30ms (643.13µs CPU time)
 
 Ran 18 tests for test/unit/OracleManagerTest.t.sol:OracleManagerTest
 [PASS] test_constructor() (gas: 16029)
 [PASS] test_getUsdPerToken_invalidPrice_negative() (gas: 114185)
 [PASS] test_getUsdPerToken_invalidPrice_zero() (gas: 89450)
-[PASS] test_getUsdPerToken_noSequencerFeedConfigured() (gas: 438248)
+[PASS] test_getUsdPerToken_noSequencerFeedConfigured() (gas: 451580)
 [PASS] test_getUsdPerToken_returnsCorrectPrice() (gas: 37661)
 [PASS] test_getUsdPerToken_sequencerDown() (gas: 118924)
 [PASS] test_getUsdPerToken_sequencerFeedReverts() (gas: 16159)
@@ -41,139 +19,112 @@ Ran 18 tests for test/unit/OracleManagerTest.t.sol:OracleManagerTest
 [PASS] test_getUsdPerToken_stalePriceFeed() (gas: 37969)
 [PASS] test_getUsdPerToken_staleRound() (gas: 29204)
 [PASS] test_getUsdPerToken_unsupportedToken() (gas: 10820)
-[PASS] test_setPriceFeed_owner() (gas: 439972)
-[PASS] test_setPriceFeed_ppStorageAddressIsAuthorized() (gas: 437556)
-[PASS] test_setPriceFeed_removeToken() (gas: 18263)
+[PASS] test_setPriceFeed_owner() (gas: 440074)
+[PASS] test_setPriceFeed_ppStorageAddressIsAuthorized() (gas: 437658)
+[PASS] test_setPriceFeed_removeToken() (gas: 18330)
 [PASS] test_setPriceFeed_revertsForNonOwner() (gas: 16457)
 [PASS] test_setSequencerUptimeFeed_owner() (gas: 22325)
 [PASS] test_setSequencerUptimeFeed_revertsForNonOwner() (gas: 16026)
 [PASS] test_setSequencerUptimeFeed_toZeroDisablesCheck() (gas: 33621)
-Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 17.71s (354.00µs CPU time)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 4.39ms (683.08µs CPU time)
 
 Ran 38 tests for test/unit/SimplePaymentProcessorTest.t.sol:SimplePaymentProcessorTest
-[PASS] test_acceptAndRelease(uint256) (runs: 512, μ: 471624, ~: 471661)
-[PASS] test_automatedLockedFromAcceptedInvoice() (gas: 609841)
-[PASS] test_automatedRefund() (gas: 423208)
-[PASS] test_automatedRelease() (gas: 4355713)
-[PASS] test_automatedSellerReleaseRetry() (gas: 526894)
-[PASS] test_calculateFee(uint256) (runs: 512, μ: 17643, ~: 17618)
-[PASS] test_cancelInvoice() (gas: 600608)
-[PASS] test_cancelInvoice(uint256) (runs: 512, μ: 143178, ~: 143215)
-[PASS] test_checkUpkeepReturnsFalseWhenEmpty() (gas: 11563)
-[PASS] test_createAndPayInvoice(uint256) (runs: 512, μ: 490271, ~: 490308)
-[PASS] test_defaultHoldReleaseInvoice() (gas: 477002)
-[PASS] test_directEscrowWithdrawal() (gas: 480477)
-[PASS] test_dynamicAcceptanceDuration() (gas: 425565)
-[PASS] test_dynamicHoldReleaseInvoice() (gas: 502611)
+[PASS] test_acceptAndRelease(uint256) (runs: 512, μ: 470414, ~: 470457)
+[PASS] test_automatedLockedFromAcceptedInvoice() (gas: 608513)
+[PASS] test_automatedRefund() (gas: 422005)
+[PASS] test_automatedRelease() (gas: 4336391)
+[PASS] test_automatedSellerReleaseRetry() (gas: 525623)
+[PASS] test_calculateFee(uint256) (runs: 512, μ: 17668, ~: 17640)
+[PASS] test_cancelInvoice() (gas: 599408)
+[PASS] test_cancelInvoice(uint256) (runs: 512, μ: 143194, ~: 143237)
+[PASS] test_checkUpkeepReturnsFalseWhenEmpty() (gas: 11585)
+[PASS] test_createAndPayInvoice(uint256) (runs: 512, μ: 489065, ~: 489108)
+[PASS] test_defaultHoldReleaseInvoice() (gas: 475798)
+[PASS] test_directEscrowWithdrawal() (gas: 479299)
+[PASS] test_dynamicAcceptanceDuration() (gas: 424373)
+[PASS] test_dynamicHoldReleaseInvoice() (gas: 501407)
 [PASS] test_dynamicInvalidationPeriod() (gas: 150593)
-[PASS] test_ineligibleRelease() (gas: 491453)
-[PASS] test_invoiceCreation() (gas: 368885)
-[PASS] test_invoiceCreation(uint256) (runs: 512, μ: 144284, ~: 144321)
-[PASS] test_payerRefundDecisionWindow() (gas: 418823)
-[PASS] test_payment() (gas: 643205)
-[PASS] test_paymentAcceptance() (gas: 498998)
-[PASS] test_paymentAcceptanceAfterDecisionWindow() (gas: 479157)
-[PASS] test_paymentRejection() (gas: 415308)
-[PASS] test_performUpkeepForwarderCanCall() (gas: 423746)
-[PASS] test_refundMaliciousBuyer() (gas: 565706)
-[PASS] test_rejectPayment(uint256) (runs: 512, μ: 418951, ~: 418988)
-[PASS] test_rejectPaymentRevertsAfterWindowExpires() (gas: 479112)
-[PASS] test_releaseLocked() (gas: 594198)
-[PASS] test_releaseLockedEscrowWithdrawFails() (gas: 617079)
-[PASS] test_releaseLockedPartialAmount() (gas: 582686)
-[PASS] test_releaseLockedPpStorageCanCall() (gas: 583893)
-[PASS] test_releaseLocked_revertsIfNotLocked() (gas: 486701)
+[PASS] test_ineligibleRelease() (gas: 490270)
+[PASS] test_invoiceCreation() (gas: 368907)
+[PASS] test_invoiceCreation(uint256) (runs: 512, μ: 144278, ~: 144321)
+[PASS] test_payerRefundDecisionWindow() (gas: 461964)
+[PASS] test_payment() (gas: 642027)
+[PASS] test_paymentAcceptance() (gas: 497798)
+[PASS] test_paymentAcceptanceAfterDecisionWindow() (gas: 477912)
+[PASS] test_paymentRejection() (gas: 414111)
+[PASS] test_performUpkeepForwarderCanCall() (gas: 422554)
+[PASS] test_refundMaliciousBuyer() (gas: 529608)
+[PASS] test_rejectPayment(uint256) (runs: 512, μ: 417660, ~: 417703)
+[PASS] test_rejectPaymentRevertsAfterWindowExpires() (gas: 477867)
+[PASS] test_releaseLocked() (gas: 539280)
+[PASS] test_releaseLockedEscrowWithdrawFails() (gas: 562204)
+[PASS] test_releaseLockedPartialAmount() (gas: 547741)
+[PASS] test_releaseLockedPpStorageCanCall() (gas: 529063)
+[PASS] test_releaseLockedRevertsIfNotLocked() (gas: 486431)
 [PASS] test_setDecisionWindow() (gas: 35623)
 [PASS] test_setForwarder() (gas: 13988)
-[PASS] test_setForwarderAuthorizedCanSet() (gas: 22476)
+[PASS] test_setForwarderAuthorizedCanSet() (gas: 22498)
 [PASS] test_setMinimumInvoiceValue() (gas: 13925)
-[PASS] test_setMinimumInvoiceValueAuthorizedCanSet() (gas: 26650)
+[PASS] test_setMinimumInvoiceValueAuthorizedCanSet() (gas: 26672)
 [PASS] test_storageState() (gas: 32974)
-Suite result: ok. 38 passed; 0 failed; 0 skipped; finished in 17.71s (234.46ms CPU time)
+Suite result: ok. 38 passed; 0 failed; 0 skipped; finished in 251.79ms (242.20ms CPU time)
 
-Ran 55 tests for test/unit/AdvancedPaymentProcessorTest.t.sol:AdvancedPaymentProcessorTest
-[PASS] test_Initialization() (gas: 20625)
-[PASS] test_MetaInvoiceTotalPrice() (gas: 562329)
-[PASS] test_USDConversionRoundingDownUnderpaysInvoice() (gas: 652172)
-[PASS] test_automatedReleaseAfterDispute() (gas: 2288779)
-[PASS] test_automatedReleaseViaUpkeep() (gas: 1763451)
-[PASS] test_cancelInvoice() (gas: 707789)
-[PASS] test_createMetaInvoice(uint256,uint256,uint256,uint256) (runs: 512, μ: 414733, ~: 415019)
-[PASS] test_createMultipleInvoiceAndMakePayment() (gas: 429451)
-[PASS] test_createSingleInvoice(uint256) (runs: 512, μ: 156449, ~: 156671)
-[PASS] test_customEscrowHoldPeriodForMetaInvoice() (gas: 1258469)
-[PASS] test_customEscrowHoldPeriodIsUsedWhenSet() (gas: 615409)
-[PASS] test_customEscrowHoldPeriod_canReleaseAfterIt() (gas: 585170)
-[PASS] test_customEscrowHoldPeriod_cannotReleaseBeforeIt() (gas: 607733)
-[PASS] test_decimal() (gas: 9211)
-[PASS] test_defaultHoldPeriodUsedWhenEscrowHoldPeriodIsZero() (gas: 618595)
-[PASS] test_dismissedDispute() (gas: 1320478)
-[PASS] test_disputeCreation() (gas: 569829)
-[PASS] test_disputeSettledFundDistribution(uint256,uint256) (runs: 512, μ: 616345, ~: 617479)
-[PASS] test_erc20PaymentForMetaInvoice() (gas: 1383487)
-[PASS] test_erc20PaymentForSingleInvoice() (gas: 669357)
-[PASS] test_fullRefund() (gas: 565628)
-[PASS] test_fullRefundErc20() (gas: 577555)
-[PASS] test_getTokenValueFromUsd(uint256) (runs: 512, μ: 36589, ~: 36796)
-[PASS] test_handleDispute(uint256,uint256,uint256) (runs: 512, μ: 621128, ~: 611038)
-[PASS] test_invoiceRelease() (gas: 596829)
-[PASS] test_maliciousSeller() (gas: 651806)
-[PASS] test_nativeTokenPaymentForMetaInvoice() (gas: 1358720)
-[PASS] test_nativeTokenPaymentForSingleInvoice() (gas: 870313)
-[PASS] test_partialRefund(uint256,uint256) (runs: 512, μ: 635210, ~: 635456)
-[PASS] test_partialRefundErc20ThenRelease() (gas: 658306)
-[PASS] test_payInvoice(uint256) (runs: 512, μ: 616851, ~: 616900)
-[PASS] test_payInvoiceErc20RejectsNonZeroMsgValue(uint256,uint256) (runs: 512, μ: 213487, ~: 213246)
-[PASS] test_payInvoiceWithERC20(uint256) (runs: 512, μ: 665256, ~: 665305)
-[PASS] test_payMetaInvoice(uint256,uint256,uint256,uint256) (runs: 512, μ: 1352905, ~: 1353191)
-[PASS] test_payMetaInvoiceWithValue(uint256,uint256) (runs: 512, μ: 1268089, ~: 1268220)
-[PASS] test_payMetaInvoice_revertsOnIncorrectMsgValue() (gas: 461811)
-[PASS] test_performUpkeepForwarderCanCall() (gas: 592018)
-[PASS] test_refundAndRelease() (gas: 605437)
-[PASS] test_releaseAfterCancelationMetaInvoice() (gas: 1412907)
-[PASS] test_releaseLocked() (gas: 790535)
-[PASS] test_releasePayment() (gas: 1214664)
-[PASS] test_releasePayment(uint256,uint256) (runs: 512, μ: 591040, ~: 591292)
-[PASS] test_resolveDispute() (gas: 670960)
-[PASS] test_resolveDisputeAndRelease(uint256) (runs: 512, μ: 622200, ~: 622249)
-[PASS] test_setForwarder() (gas: 13920)
-[PASS] test_setForwarderOwnerCanSet() (gas: 22403)
-[PASS] test_setInvoiceReleaseTime(uint256,uint256) (runs: 512, μ: 613003, ~: 613339)
-[PASS] test_setInvoiceReleaseTimeOnDisputeDismissed() (gas: 652982)
-[PASS] test_setInvoiceReleaseTimeOnDisputeResolved() (gas: 652568)
-[PASS] test_setMinimumPrice() (gas: 176685)
-[PASS] test_setPriceFeed() (gas: 51847)
-[PASS] test_settledDispute() (gas: 676779)
-[PASS] test_singleInvoiceCreation() (gas: 204765)
-[PASS] test_storageConfig() (gas: 43041)
-[PASS] test_updateInvoiceNonce() (gas: 10879)
-Suite result: ok. 55 passed; 0 failed; 0 skipped; finished in 17.71s (1.56s CPU time)
+Ran 7 tests for test/integration/SimplePaymentProcessor.t.sol:SimplePaymentProcessorInteractions
+[PASS] test_acceptAndReleaseInvoice() (gas: 440147)
+[PASS] test_payInvoice() (gas: 478007)
+[PASS] test_performUpkeep_autoRefundsBuyerWhenSellerDoesNotAct() (gas: 424624)
+[PASS] test_performUpkeep_autoReleasesAcceptedInvoice() (gas: 444994)
+[PASS] test_refundBuyerAfterDecisionWindowExpires() (gas: 438093)
+[PASS] test_rejectPayment() (gas: 411108)
+[PASS] test_sellerCancelInvoice() (gas: 138604)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 3.04s (486.71ms CPU time)
+
+Ran 7 tests for test/integration/AdvancedPaymentProcoessor.t.sol:AdvancedPaymentProcoessorInteractions
+[PASS] test_erc20PaymentForMetaInvoice() (gas: 1379848)
+[PASS] test_erc20PaymentForSingleInvoice() (gas: 699609)
+[PASS] test_invoiceRelease() (gas: 650385)
+[PASS] test_nativeTokenPaymentForMetaInvoice() (gas: 1311208)
+[PASS] test_nativeTokenPaymentForSingleInvoice() (gas: 634634)
+[PASS] test_sellerCancelInitiatedInvoice() (gas: 698440)
+[PASS] test_settledDispute() (gas: 684031)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 7.17s (9.95s CPU time)
 
 Ran 23 tests for test/unit/TaskQueueLibTest.t.sol:TaskQueueLibTest
 [PASS] test_dueAfterDueTime() (gas: 77613)
 [PASS] test_dueAtDueTime() (gas: 77085)
-[PASS] test_dueBeforeDueTime() (gas: 77143)
-[PASS] test_dueEmptyHeap() (gas: 10639)
-[PASS] test_getItemsEmptyHeap() (gas: 11046)
-[PASS] test_getItemsReturnsAllIds() (gas: 174661)
+[PASS] test_dueBeforeDueTime() (gas: 77165)
+[PASS] test_dueEmptyHeap() (gas: 10661)
+[PASS] test_getItemsEmptyHeap() (gas: 11035)
+[PASS] test_getItemsReturnsAllIds() (gas: 173039)
 [PASS] test_insert(uint216,uint40) (runs: 512, μ: 78271, ~: 78271)
-[PASS] test_insertAndProcessAll(uint16) (runs: 512, μ: 112891423, ~: 123765192)
-[PASS] test_insertAndRemoveOne() (gas: 47022187)
-[PASS] test_insertMaintainsMinHeap() (gas: 177421)
+[PASS] test_insertAndProcessAll(uint16) (runs: 512, μ: 110604178, ~: 123244712)
+[PASS] test_insertAndRemoveOne() (gas: 47022088)
+[PASS] test_insertMaintainsMinHeap() (gas: 175321)
 [PASS] test_insert_revertsOnDuplicate() (gas: 76851)
-[PASS] test_processDueTasksBreaksOnError() (gas: 101293)
-[PASS] test_processDueTasksPartialBatch() (gas: 101333)
-[PASS] test_processDueTasksSkipsFutureTasks() (gas: 77964)
-[PASS] test_removeAt(uint216,uint40) (runs: 512, μ: 60685, ~: 60700)
-[PASS] test_removeAtMiddlePreservesHeapProperty() (gas: 137236)
-[PASS] test_removeAtOnlyElement() (gas: 59800)
-[PASS] test_removeAtRootRebalances() (gas: 142161)
-[PASS] test_reschedule(uint216,uint40,uint16) (runs: 512, μ: 56087310, ~: 65268937)
-[PASS] test_rescheduleEarlierBubblesUpToRoot() (gas: 182916)
-[PASS] test_rescheduleLaterSinksDown() (gas: 181005)
+[PASS] test_processDueTasksPartialBatch() (gas: 101329)
+[PASS] test_processDueTasksRemovesStaleOnError() (gas: 119800)
+[PASS] test_processDueTasksSkipsFutureTasks() (gas: 77970)
+[PASS] test_removeAt(uint216,uint40) (runs: 512, μ: 60686, ~: 60698)
+[PASS] test_removeAtMiddlePreservesHeapProperty() (gas: 137219)
+[PASS] test_removeAtOnlyElement() (gas: 59782)
+[PASS] test_removeAtRootRebalances() (gas: 141089)
+[PASS] test_reschedule(uint216,uint40,uint16) (runs: 512, μ: 56809288, ~: 66069596)
+[PASS] test_rescheduleEarlierBubblesUpToRoot() (gas: 181272)
+[PASS] test_rescheduleLaterSinksDown() (gas: 178949)
 [PASS] test_rescheduleRevertsWhenNotFound() (gas: 10791)
-[PASS] test_rescheduleSameTimeNoOp() (gas: 80169)
-Suite result: ok. 23 passed; 0 failed; 0 skipped; finished in 49.94s (40.16s CPU time)
+[PASS] test_rescheduleSameTimeNoOp() (gas: 80147)
+Suite result: ok. 23 passed; 0 failed; 0 skipped; finished in 41.78s (48.65s CPU time)
+
+Ran 8 tests for test/unit/MultiSigTest.t.sol:MultiSigTest
+[PASS] test_addSigner() (gas: 303822)
+[PASS] test_approveTransaction() (gas: 290540)
+[PASS] test_constructor() (gas: 111507)
+[PASS] test_executeTransaction() (gas: 296304)
+[PASS] test_initialState() (gas: 30821)
+[PASS] test_proposeTransaction() (gas: 247042)
+[PASS] test_removeSigner() (gas: 286337)
+[PASS] test_updateThreshold() (gas: 306935)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 54.41s (10.12ms CPU time)
 
 Ran 7 tests for test/invariant/invariant.t.sol:Invariant
 [PASS] invariant_advancedInvoiceStateConsistency() (runs: 5000, calls: 320000, reverts: 0)
@@ -181,55 +132,57 @@ Ran 7 tests for test/invariant/invariant.t.sol:Invariant
 ╭---------------------------------+--------------------------+-------+---------+----------╮
 | Contract                        | Selector                 | Calls | Reverts | Discards |
 +=========================================================================================+
-| AdvancedPaymentProcessorHandler | cancelInvoice            | 12721 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | cancelInvoice            | 12296 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createDispute            | 12762 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createDispute            | 12412 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createInvoice            | 12876 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createInvoice            | 12375 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12811 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12196 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | handleDispute            | 12865 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | handleDispute            | 12382 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12770 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12445 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12794 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12309 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | performUpkeep            | 12607 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | performUpkeep            | 12258 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | refund                   | 13061 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | refund                   | 12358 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | release                  | 12749 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | release                  | 12283 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | resolveDispute           | 12823 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | releaseLocked            | 12402 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12924 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | resolveDispute           | 12245 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12719 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12381 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | acceptPayment            | 12591 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12374 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | cancelInvoice            | 12912 | 0       | 0        |
+| SimplePaymentProcessorHandler   | acceptPayment            | 12304 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | createInvoice            | 12611 | 0       | 0        |
+| SimplePaymentProcessorHandler   | cancelInvoice            | 12129 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | makePayment              | 12688 | 0       | 0        |
+| SimplePaymentProcessorHandler   | createInvoice            | 12015 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | performUpkeep            | 12832 | 0       | 0        |
+| SimplePaymentProcessorHandler   | makePayment              | 12280 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | refundBuyer              | 12899 | 0       | 0        |
+| SimplePaymentProcessorHandler   | performUpkeep            | 12379 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | rejectPayment            | 12790 | 0       | 0        |
+| SimplePaymentProcessorHandler   | refundBuyer              | 12424 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | release                  | 13064 | 0       | 0        |
+| SimplePaymentProcessorHandler   | rejectPayment            | 12248 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | releaseLocked            | 12697 | 0       | 0        |
+| SimplePaymentProcessorHandler   | release                  | 12224 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setDecisionWindow        | 12806 | 0       | 0        |
+| SimplePaymentProcessorHandler   | releaseLocked            | 12405 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12787 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setDecisionWindow        | 12194 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12841 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12281 | 0       | 0        |
+|---------------------------------+--------------------------+-------+---------+----------|
+| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12401 | 0       | 0        |
 ╰---------------------------------+--------------------------+-------+---------+----------╯
 
 [PASS] invariant_advancedProcessorNativeTokenBalanceAlwaysZero() (runs: 5000, calls: 320000, reverts: 0)
@@ -237,55 +190,57 @@ Ran 7 tests for test/invariant/invariant.t.sol:Invariant
 ╭---------------------------------+--------------------------+-------+---------+----------╮
 | Contract                        | Selector                 | Calls | Reverts | Discards |
 +=========================================================================================+
-| AdvancedPaymentProcessorHandler | cancelInvoice            | 12721 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | cancelInvoice            | 12296 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createDispute            | 12762 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createDispute            | 12412 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createInvoice            | 12876 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createInvoice            | 12375 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12811 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12196 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | handleDispute            | 12865 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | handleDispute            | 12382 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12770 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12445 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12794 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12309 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | performUpkeep            | 12607 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | performUpkeep            | 12258 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | refund                   | 13061 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | refund                   | 12358 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | release                  | 12749 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | release                  | 12283 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | resolveDispute           | 12823 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | releaseLocked            | 12402 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12924 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | resolveDispute           | 12245 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12719 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12381 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | acceptPayment            | 12591 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12374 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | cancelInvoice            | 12912 | 0       | 0        |
+| SimplePaymentProcessorHandler   | acceptPayment            | 12304 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | createInvoice            | 12611 | 0       | 0        |
+| SimplePaymentProcessorHandler   | cancelInvoice            | 12129 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | makePayment              | 12688 | 0       | 0        |
+| SimplePaymentProcessorHandler   | createInvoice            | 12015 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | performUpkeep            | 12832 | 0       | 0        |
+| SimplePaymentProcessorHandler   | makePayment              | 12280 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | refundBuyer              | 12899 | 0       | 0        |
+| SimplePaymentProcessorHandler   | performUpkeep            | 12379 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | rejectPayment            | 12790 | 0       | 0        |
+| SimplePaymentProcessorHandler   | refundBuyer              | 12424 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | release                  | 13064 | 0       | 0        |
+| SimplePaymentProcessorHandler   | rejectPayment            | 12248 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | releaseLocked            | 12697 | 0       | 0        |
+| SimplePaymentProcessorHandler   | release                  | 12224 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setDecisionWindow        | 12806 | 0       | 0        |
+| SimplePaymentProcessorHandler   | releaseLocked            | 12405 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12787 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setDecisionWindow        | 12194 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12841 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12281 | 0       | 0        |
+|---------------------------------+--------------------------+-------+---------+----------|
+| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12401 | 0       | 0        |
 ╰---------------------------------+--------------------------+-------+---------+----------╯
 
 [PASS] invariant_consistentId() (runs: 5000, calls: 320000, reverts: 0)
@@ -293,55 +248,57 @@ Ran 7 tests for test/invariant/invariant.t.sol:Invariant
 ╭---------------------------------+--------------------------+-------+---------+----------╮
 | Contract                        | Selector                 | Calls | Reverts | Discards |
 +=========================================================================================+
-| AdvancedPaymentProcessorHandler | cancelInvoice            | 12721 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | cancelInvoice            | 12296 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createDispute            | 12762 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createDispute            | 12412 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createInvoice            | 12876 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createInvoice            | 12375 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12811 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12196 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | handleDispute            | 12865 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | handleDispute            | 12382 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12770 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12445 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12794 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12309 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | performUpkeep            | 12607 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | performUpkeep            | 12258 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | refund                   | 13061 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | refund                   | 12358 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | release                  | 12749 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | release                  | 12283 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | resolveDispute           | 12823 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | releaseLocked            | 12402 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12924 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | resolveDispute           | 12245 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12719 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12381 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | acceptPayment            | 12591 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12374 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | cancelInvoice            | 12912 | 0       | 0        |
+| SimplePaymentProcessorHandler   | acceptPayment            | 12304 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | createInvoice            | 12611 | 0       | 0        |
+| SimplePaymentProcessorHandler   | cancelInvoice            | 12129 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | makePayment              | 12688 | 0       | 0        |
+| SimplePaymentProcessorHandler   | createInvoice            | 12015 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | performUpkeep            | 12832 | 0       | 0        |
+| SimplePaymentProcessorHandler   | makePayment              | 12280 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | refundBuyer              | 12899 | 0       | 0        |
+| SimplePaymentProcessorHandler   | performUpkeep            | 12379 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | rejectPayment            | 12790 | 0       | 0        |
+| SimplePaymentProcessorHandler   | refundBuyer              | 12424 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | release                  | 13064 | 0       | 0        |
+| SimplePaymentProcessorHandler   | rejectPayment            | 12248 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | releaseLocked            | 12697 | 0       | 0        |
+| SimplePaymentProcessorHandler   | release                  | 12224 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setDecisionWindow        | 12806 | 0       | 0        |
+| SimplePaymentProcessorHandler   | releaseLocked            | 12405 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12787 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setDecisionWindow        | 12194 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12841 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12281 | 0       | 0        |
+|---------------------------------+--------------------------+-------+---------+----------|
+| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12401 | 0       | 0        |
 ╰---------------------------------+--------------------------+-------+---------+----------╯
 
 [PASS] invariant_consistentMetaInvoiceId() (runs: 5000, calls: 320000, reverts: 0)
@@ -349,55 +306,57 @@ Ran 7 tests for test/invariant/invariant.t.sol:Invariant
 ╭---------------------------------+--------------------------+-------+---------+----------╮
 | Contract                        | Selector                 | Calls | Reverts | Discards |
 +=========================================================================================+
-| AdvancedPaymentProcessorHandler | cancelInvoice            | 12721 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | cancelInvoice            | 12296 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createDispute            | 12762 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createDispute            | 12412 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createInvoice            | 12876 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createInvoice            | 12375 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12811 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12196 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | handleDispute            | 12865 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | handleDispute            | 12382 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12770 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12445 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12794 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12309 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | performUpkeep            | 12607 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | performUpkeep            | 12258 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | refund                   | 13061 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | refund                   | 12358 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | release                  | 12749 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | release                  | 12283 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | resolveDispute           | 12823 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | releaseLocked            | 12402 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12924 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | resolveDispute           | 12245 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12719 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12381 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | acceptPayment            | 12591 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12374 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | cancelInvoice            | 12912 | 0       | 0        |
+| SimplePaymentProcessorHandler   | acceptPayment            | 12304 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | createInvoice            | 12611 | 0       | 0        |
+| SimplePaymentProcessorHandler   | cancelInvoice            | 12129 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | makePayment              | 12688 | 0       | 0        |
+| SimplePaymentProcessorHandler   | createInvoice            | 12015 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | performUpkeep            | 12832 | 0       | 0        |
+| SimplePaymentProcessorHandler   | makePayment              | 12280 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | refundBuyer              | 12899 | 0       | 0        |
+| SimplePaymentProcessorHandler   | performUpkeep            | 12379 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | rejectPayment            | 12790 | 0       | 0        |
+| SimplePaymentProcessorHandler   | refundBuyer              | 12424 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | release                  | 13064 | 0       | 0        |
+| SimplePaymentProcessorHandler   | rejectPayment            | 12248 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | releaseLocked            | 12697 | 0       | 0        |
+| SimplePaymentProcessorHandler   | release                  | 12224 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setDecisionWindow        | 12806 | 0       | 0        |
+| SimplePaymentProcessorHandler   | releaseLocked            | 12405 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12787 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setDecisionWindow        | 12194 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12841 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12281 | 0       | 0        |
+|---------------------------------+--------------------------+-------+---------+----------|
+| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12401 | 0       | 0        |
 ╰---------------------------------+--------------------------+-------+---------+----------╯
 
 [PASS] invariant_metaInvoicePriceConsistency() (runs: 5000, calls: 320000, reverts: 0)
@@ -405,55 +364,57 @@ Ran 7 tests for test/invariant/invariant.t.sol:Invariant
 ╭---------------------------------+--------------------------+-------+---------+----------╮
 | Contract                        | Selector                 | Calls | Reverts | Discards |
 +=========================================================================================+
-| AdvancedPaymentProcessorHandler | cancelInvoice            | 12721 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | cancelInvoice            | 12296 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createDispute            | 12762 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createDispute            | 12412 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createInvoice            | 12876 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createInvoice            | 12375 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12811 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12196 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | handleDispute            | 12865 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | handleDispute            | 12382 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12770 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12445 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12794 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12309 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | performUpkeep            | 12607 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | performUpkeep            | 12258 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | refund                   | 13061 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | refund                   | 12358 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | release                  | 12749 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | release                  | 12283 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | resolveDispute           | 12823 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | releaseLocked            | 12402 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12924 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | resolveDispute           | 12245 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12719 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12381 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | acceptPayment            | 12591 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12374 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | cancelInvoice            | 12912 | 0       | 0        |
+| SimplePaymentProcessorHandler   | acceptPayment            | 12304 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | createInvoice            | 12611 | 0       | 0        |
+| SimplePaymentProcessorHandler   | cancelInvoice            | 12129 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | makePayment              | 12688 | 0       | 0        |
+| SimplePaymentProcessorHandler   | createInvoice            | 12015 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | performUpkeep            | 12832 | 0       | 0        |
+| SimplePaymentProcessorHandler   | makePayment              | 12280 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | refundBuyer              | 12899 | 0       | 0        |
+| SimplePaymentProcessorHandler   | performUpkeep            | 12379 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | rejectPayment            | 12790 | 0       | 0        |
+| SimplePaymentProcessorHandler   | refundBuyer              | 12424 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | release                  | 13064 | 0       | 0        |
+| SimplePaymentProcessorHandler   | rejectPayment            | 12248 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | releaseLocked            | 12697 | 0       | 0        |
+| SimplePaymentProcessorHandler   | release                  | 12224 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setDecisionWindow        | 12806 | 0       | 0        |
+| SimplePaymentProcessorHandler   | releaseLocked            | 12405 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12787 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setDecisionWindow        | 12194 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12841 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12281 | 0       | 0        |
+|---------------------------------+--------------------------+-------+---------+----------|
+| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12401 | 0       | 0        |
 ╰---------------------------------+--------------------------+-------+---------+----------╯
 
 [PASS] invariant_simpleInvoiceStateConsistency() (runs: 5000, calls: 320000, reverts: 0)
@@ -461,55 +422,57 @@ Ran 7 tests for test/invariant/invariant.t.sol:Invariant
 ╭---------------------------------+--------------------------+-------+---------+----------╮
 | Contract                        | Selector                 | Calls | Reverts | Discards |
 +=========================================================================================+
-| AdvancedPaymentProcessorHandler | cancelInvoice            | 12721 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | cancelInvoice            | 12296 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createDispute            | 12762 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createDispute            | 12412 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createInvoice            | 12876 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createInvoice            | 12375 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12811 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12196 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | handleDispute            | 12865 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | handleDispute            | 12382 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12770 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12445 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12794 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12309 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | performUpkeep            | 12607 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | performUpkeep            | 12258 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | refund                   | 13061 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | refund                   | 12358 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | release                  | 12749 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | release                  | 12283 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | resolveDispute           | 12823 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | releaseLocked            | 12402 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12924 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | resolveDispute           | 12245 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12719 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12381 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | acceptPayment            | 12591 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12374 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | cancelInvoice            | 12912 | 0       | 0        |
+| SimplePaymentProcessorHandler   | acceptPayment            | 12304 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | createInvoice            | 12611 | 0       | 0        |
+| SimplePaymentProcessorHandler   | cancelInvoice            | 12129 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | makePayment              | 12688 | 0       | 0        |
+| SimplePaymentProcessorHandler   | createInvoice            | 12015 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | performUpkeep            | 12832 | 0       | 0        |
+| SimplePaymentProcessorHandler   | makePayment              | 12280 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | refundBuyer              | 12899 | 0       | 0        |
+| SimplePaymentProcessorHandler   | performUpkeep            | 12379 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | rejectPayment            | 12790 | 0       | 0        |
+| SimplePaymentProcessorHandler   | refundBuyer              | 12424 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | release                  | 13064 | 0       | 0        |
+| SimplePaymentProcessorHandler   | rejectPayment            | 12248 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | releaseLocked            | 12697 | 0       | 0        |
+| SimplePaymentProcessorHandler   | release                  | 12224 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setDecisionWindow        | 12806 | 0       | 0        |
+| SimplePaymentProcessorHandler   | releaseLocked            | 12405 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12787 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setDecisionWindow        | 12194 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12841 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12281 | 0       | 0        |
+|---------------------------------+--------------------------+-------+---------+----------|
+| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12401 | 0       | 0        |
 ╰---------------------------------+--------------------------+-------+---------+----------╯
 
 [PASS] invariant_simpleProcessorNativeTokenBalanceIsAlwaysZero() (runs: 5000, calls: 320000, reverts: 0)
@@ -517,57 +480,228 @@ Ran 7 tests for test/invariant/invariant.t.sol:Invariant
 ╭---------------------------------+--------------------------+-------+---------+----------╮
 | Contract                        | Selector                 | Calls | Reverts | Discards |
 +=========================================================================================+
-| AdvancedPaymentProcessorHandler | cancelInvoice            | 12721 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | cancelInvoice            | 12296 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createDispute            | 12762 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createDispute            | 12412 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createInvoice            | 12876 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createInvoice            | 12375 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12811 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | createMetaInvoice        | 12196 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | handleDispute            | 12865 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | handleDispute            | 12382 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12770 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeMetaInvoicePayment   | 12445 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12794 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | makeSingleInvoicePayment | 12309 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | performUpkeep            | 12607 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | performUpkeep            | 12258 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | refund                   | 13061 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | refund                   | 12358 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | release                  | 12749 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | release                  | 12283 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | resolveDispute           | 12823 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | releaseLocked            | 12402 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12924 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | resolveDispute           | 12245 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12719 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setInvoiceReleaseTime    | 12381 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | acceptPayment            | 12591 | 0       | 0        |
+| AdvancedPaymentProcessorHandler | setMinimumPrice          | 12374 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | cancelInvoice            | 12912 | 0       | 0        |
+| SimplePaymentProcessorHandler   | acceptPayment            | 12304 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | createInvoice            | 12611 | 0       | 0        |
+| SimplePaymentProcessorHandler   | cancelInvoice            | 12129 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | makePayment              | 12688 | 0       | 0        |
+| SimplePaymentProcessorHandler   | createInvoice            | 12015 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | performUpkeep            | 12832 | 0       | 0        |
+| SimplePaymentProcessorHandler   | makePayment              | 12280 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | refundBuyer              | 12899 | 0       | 0        |
+| SimplePaymentProcessorHandler   | performUpkeep            | 12379 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | rejectPayment            | 12790 | 0       | 0        |
+| SimplePaymentProcessorHandler   | refundBuyer              | 12424 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | release                  | 13064 | 0       | 0        |
+| SimplePaymentProcessorHandler   | rejectPayment            | 12248 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | releaseLocked            | 12697 | 0       | 0        |
+| SimplePaymentProcessorHandler   | release                  | 12224 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setDecisionWindow        | 12806 | 0       | 0        |
+| SimplePaymentProcessorHandler   | releaseLocked            | 12405 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12787 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setDecisionWindow        | 12194 | 0       | 0        |
 |---------------------------------+--------------------------+-------+---------+----------|
-| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12841 | 0       | 0        |
+| SimplePaymentProcessorHandler   | setInvoiceReleaseTime    | 12281 | 0       | 0        |
+|---------------------------------+--------------------------+-------+---------+----------|
+| SimplePaymentProcessorHandler   | setMinimumInvoiceValue   | 12401 | 0       | 0        |
 ╰---------------------------------+--------------------------+-------+---------+----------╯
 
-Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 55.44s (225.18s CPU time)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 61.13s (252.60s CPU time)
 
-Ran 8 test suites in 55.44s (167.59s CPU time): 159 tests passed, 0 failed, 0 skipped (159 total tests)
+Ran 6 tests for test/invariant/MultiSigInvariant.t.sol:MultiSigInvariant
+[PASS] invariant_executedStatusIsPermanent() (runs: 5000, calls: 320000, reverts: 0)
+
+╭-----------------+-----------------------+-------+---------+----------╮
+| Contract        | Selector              | Calls | Reverts | Discards |
++======================================================================+
+| MultiSigHandler | approve               | 53405 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | execute               | 53614 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governAddSigner       | 53162 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governRemoveSigner    | 52834 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governUpdateThreshold | 53510 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | propose               | 53475 | 0       | 0        |
+╰-----------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_nonceConsistency() (runs: 5000, calls: 320000, reverts: 0)
+
+╭-----------------+-----------------------+-------+---------+----------╮
+| Contract        | Selector              | Calls | Reverts | Discards |
++======================================================================+
+| MultiSigHandler | approve               | 53405 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | execute               | 53614 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governAddSigner       | 53162 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governRemoveSigner    | 52834 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governUpdateThreshold | 53510 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | propose               | 53475 | 0       | 0        |
+╰-----------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_signerCountConsistency() (runs: 5000, calls: 320000, reverts: 0)
+
+╭-----------------+-----------------------+-------+---------+----------╮
+| Contract        | Selector              | Calls | Reverts | Discards |
++======================================================================+
+| MultiSigHandler | approve               | 53405 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | execute               | 53614 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governAddSigner       | 53162 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governRemoveSigner    | 52834 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governUpdateThreshold | 53510 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | propose               | 53475 | 0       | 0        |
+╰-----------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_thresholdBounds() (runs: 5000, calls: 320000, reverts: 0)
+
+╭-----------------+-----------------------+-------+---------+----------╮
+| Contract        | Selector              | Calls | Reverts | Discards |
++======================================================================+
+| MultiSigHandler | approve               | 53405 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | execute               | 53614 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governAddSigner       | 53162 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governRemoveSigner    | 52834 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governUpdateThreshold | 53510 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | propose               | 53475 | 0       | 0        |
+╰-----------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_thresholdConsistency() (runs: 5000, calls: 320000, reverts: 0)
+
+╭-----------------+-----------------------+-------+---------+----------╮
+| Contract        | Selector              | Calls | Reverts | Discards |
++======================================================================+
+| MultiSigHandler | approve               | 53405 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | execute               | 53614 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governAddSigner       | 53162 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governRemoveSigner    | 52834 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governUpdateThreshold | 53510 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | propose               | 53475 | 0       | 0        |
+╰-----------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_validTransactionStatus() (runs: 5000, calls: 320000, reverts: 0)
+
+╭-----------------+-----------------------+-------+---------+----------╮
+| Contract        | Selector              | Calls | Reverts | Discards |
++======================================================================+
+| MultiSigHandler | approve               | 53405 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | execute               | 53614 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governAddSigner       | 53162 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governRemoveSigner    | 52834 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | governUpdateThreshold | 53510 | 0       | 0        |
+|-----------------+-----------------------+-------+---------+----------|
+| MultiSigHandler | propose               | 53475 | 0       | 0        |
+╰-----------------+-----------------------+-------+---------+----------╯
+
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 130.01s (436.07s CPU time)
+
+Ran 55 tests for test/unit/AdvancedPaymentProcessorTest.t.sol:AdvancedPaymentProcessorTest
+[PASS] test_Initialization() (gas: 20625)
+[PASS] test_MetaInvoiceTotalPrice() (gas: 562470)
+[PASS] test_USDConversionRoundingDownUnderpaysInvoice() (gas: 651019)
+[PASS] test_automatedReleaseAfterDispute() (gas: 2255767)
+[PASS] test_automatedReleaseViaUpkeep() (gas: 1760005)
+[PASS] test_cancelInvoice() (gas: 707977)
+[PASS] test_createMetaInvoice(uint256,uint256,uint256,uint256) (runs: 512, μ: 414837, ~: 415113)
+[PASS] test_createMultipleInvoiceAndMakePayment() (gas: 429545)
+[PASS] test_createSingleInvoice(uint256) (runs: 512, μ: 156494, ~: 156718)
+[PASS] test_customEscrowHoldPeriodForMetaInvoice() (gas: 1256209)
+[PASS] test_customEscrowHoldPeriodIsUsedWhenSet() (gas: 614256)
+[PASS] test_customEscrowHoldPeriod_canReleaseAfterIt() (gas: 583991)
+[PASS] test_customEscrowHoldPeriod_cannotReleaseBeforeIt() (gas: 606580)
+[PASS] test_decimal() (gas: 9211)
+[PASS] test_defaultHoldPeriodUsedWhenEscrowHoldPeriodIsZero() (gas: 617442)
+[PASS] test_dismissedDispute() (gas: 1318218)
+[PASS] test_disputeCreation() (gas: 568676)
+[PASS] test_disputeSettledFundDistribution(uint256,uint256) (runs: 512, μ: 615148, ~: 616269)
+[PASS] test_erc20PaymentForMetaInvoice() (gas: 1381227)
+[PASS] test_erc20PaymentForSingleInvoice() (gas: 668204)
+[PASS] test_fullRefund() (gas: 564456)
+[PASS] test_fullRefundErc20() (gas: 576383)
+[PASS] test_getTokenValueFromUsd(uint256) (runs: 512, μ: 36588, ~: 36796)
+[PASS] test_handleDispute(uint256,uint256,uint256) (runs: 512, μ: 619847, ~: 609828)
+[PASS] test_invoiceRelease() (gas: 595650)
+[PASS] test_maliciousSeller() (gas: 650582)
+[PASS] test_nativeTokenPaymentForMetaInvoice() (gas: 1356462)
+[PASS] test_nativeTokenPaymentForSingleInvoice() (gas: 869207)
+[PASS] test_partialRefund(uint256,uint256) (runs: 512, μ: 634049, ~: 634284)
+[PASS] test_partialRefundErc20ThenRelease() (gas: 657108)
+[PASS] test_payInvoice(uint256) (runs: 512, μ: 615684, ~: 615747)
+[PASS] test_payInvoiceErc20RejectsNonZeroMsgValue(uint256,uint256) (runs: 512, μ: 213531, ~: 213293)
+[PASS] test_payInvoiceWithERC20(uint256) (runs: 512, μ: 664089, ~: 664152)
+[PASS] test_payMetaInvoice(uint256,uint256,uint256,uint256) (runs: 512, μ: 1350646, ~: 1350931)
+[PASS] test_payMetaInvoiceWithValue(uint256,uint256) (runs: 512, μ: 1265835, ~: 1265960)
+[PASS] test_payMetaInvoice_revertsOnIncorrectMsgValue() (gas: 461905)
+[PASS] test_performUpkeepForwarderCanCall() (gas: 590844)
+[PASS] test_refundAndRelease() (gas: 604239)
+[PASS] test_releaseAfterCancelationMetaInvoice() (gas: 1410695)
+[PASS] test_releaseLocked() (gas: 784922)
+[PASS] test_releasePayment() (gas: 1212352)
+[PASS] test_releasePayment(uint256,uint256) (runs: 512, μ: 589873, ~: 590113)
+[PASS] test_resolveDispute() (gas: 669807)
+[PASS] test_resolveDisputeAndRelease(uint256) (runs: 512, μ: 621007, ~: 621070)
+[PASS] test_setForwarder() (gas: 13920)
+[PASS] test_setForwarderOwnerCanSet() (gas: 22403)
+[PASS] test_setInvoiceReleaseTime(uint256,uint256) (runs: 512, μ: 611839, ~: 612160)
+[PASS] test_setInvoiceReleaseTimeOnDisputeDismissed() (gas: 651829)
+[PASS] test_setInvoiceReleaseTimeOnDisputeResolved() (gas: 651415)
+[PASS] test_setMinimumPrice() (gas: 176779)
+[PASS] test_setPriceFeed() (gas: 51949)
+[PASS] test_settledDispute() (gas: 675569)
+[PASS] test_singleInvoiceCreation() (gas: 204953)
+[PASS] test_storageConfig() (gas: 43041)
+[PASS] test_updateInvoiceNonce() (gas: 10879)
+Suite result: ok. 55 passed; 0 failed; 0 skipped; finished in 130.07s (131.25s CPU time)
+
+Ran 10 test suites in 130.08s (427.87s CPU time): 173 tests passed, 0 failed, 0 skipped (173 total tests)

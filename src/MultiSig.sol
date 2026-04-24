@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { IMultiSig } from "./interface/IMultiSig.sol";
-import { PENDING, APPROVED, EXECUTED } from "./constants/MultiSig.sol";
+import { PENDING, APPROVED, EXECUTED, MINIMUM_THRESHOLD, MINIMUM_SIGNERS } from "./constants/MultiSig.sol";
 import { LibCall } from "solady/utils/LibCall.sol";
 
 /**
@@ -52,10 +52,6 @@ contract MultiSig is IMultiSig {
         _;
     }
 
-    // ================================================================
-    //                           CONSTRUCTOR
-    // ================================================================
-
     /**
      * @notice Deploys the multisig with an initial signer set and approval threshold.
      * @param _initialSigners Array of addresses to register as signers (minimum 2).
@@ -64,8 +60,8 @@ contract MultiSig is IMultiSig {
      */
     constructor(address[] memory _initialSigners, uint256 _initialThreshold) {
         uint256 len = _initialSigners.length;
-        if (len < 2) revert InsufficientSigners();
-        if (_initialThreshold < 1 || _initialThreshold > len) revert InvalidThreshold();
+        if (len < MINIMUM_SIGNERS) revert InsufficientSigners();
+        if (_initialThreshold < MINIMUM_THRESHOLD || _initialThreshold > len) revert InvalidThreshold();
 
         for (uint256 i; i < len; i++) {
             signers[_initialSigners[i]] = true;
@@ -107,8 +103,9 @@ contract MultiSig is IMultiSig {
 
         uint256 newApprovalCount = txn.approvalCount + 1;
         transactions[_txHash].approvalCount = newApprovalCount;
+        approvals[_txHash][msg.sender] = true;
 
-        if (newApprovalCount == threshold) {
+        if (newApprovalCount >= threshold) {
             transactions[_txHash].status = APPROVED;
         }
 
@@ -122,7 +119,7 @@ contract MultiSig is IMultiSig {
         transactions[_txHash].status = EXECUTED;
 
         emit TransactionExecuted(_txHash, msg.sender);
-        return txn.target.callContract(0, txn.data);
+        return txn.target.callContract(txn.data);
     }
 
     /// @inheritdoc IMultiSig
@@ -148,6 +145,7 @@ contract MultiSig is IMultiSig {
     function updateThreshold(uint256 _newThreshold) external onlySelf {
         if (_newThreshold == 0) revert ThresholdCannotBeZero();
         if (_newThreshold > signerCount) revert SignerCountBelowThreshold();
+        if (_newThreshold < MINIMUM_THRESHOLD) revert InvalidThreshold();
 
         emit ThresholdUpdated(threshold, _newThreshold);
         threshold = _newThreshold;
