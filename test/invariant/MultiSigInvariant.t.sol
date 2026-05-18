@@ -5,7 +5,7 @@ import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { MultiSigSetUp } from "../utils/MultiSigSetUp.sol";
 import { MultiSigHandler } from "./handlers/MultiSigHandler.sol";
 
-import { PENDING, APPROVED, EXECUTED, CANCELED } from "src/constants/MultiSig.sol";
+import { PROPOSED, APPROVED, EXECUTED, CANCELED } from "src/constants/MultiSig.sol";
 
 contract MultiSigInvariant is StdInvariant, MultiSigSetUp {
     MultiSigHandler handler;
@@ -42,7 +42,7 @@ contract MultiSigInvariant is StdInvariant, MultiSigSetUp {
         for (uint256 i; i < count; i++) {
             bytes32 txHash = handler.getTxHash(i);
             uint8 status = multisig.getTransaction(txHash).status;
-            assertTrue(status == PENDING || status == APPROVED || status == EXECUTED || status == CANCELED);
+            assertTrue(status == PROPOSED || status == APPROVED || status == EXECUTED || status == CANCELED);
         }
     }
 

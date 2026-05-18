@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 // Transaction has been proposed and is awaiting sufficient approvals.
-uint8 constant PENDING = 1;
+uint8 constant PROPOSED = 1;
 
 // Transaction has received enough approvals to meet the threshold and is ready for execution.
 uint8 constant APPROVED = 2;

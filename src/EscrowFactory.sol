@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { CREATE3 } from "solady/utils/CREATE3.sol";
+import { Create2 } from "openzeppelin-contracts/contracts/utils/Create2.sol";
 
 import { Escrow } from "./Escrow.sol";
 import { IEscrowFactory } from "./interface/IEscrowFactory.sol";
@@ -9,7 +9,7 @@ import { IEscrowFactory } from "./interface/IEscrowFactory.sol";
 /**
  * @title EscrowFactory
  * @notice Abstract factory for deploying Escrow contracts deterministically.
- * @dev Uses CREATE3 to generate predictable addresses. Must be inherited by a processor contract.
+ * @dev Uses CREATE2 to generate predictable addresses. Must be inherited by a processor contract.
  */
 abstract contract EscrowFactory is IEscrowFactory {
     /// @inheritdoc IEscrowFactory
@@ -18,12 +18,14 @@ abstract contract EscrowFactory is IEscrowFactory {
     }
 
     /// @inheritdoc IEscrowFactory
-    function getPredictedAddress(bytes32 _salt) public view returns (address predictedAddress) {
-        return CREATE3.predictDeterministicAddress(_salt);
+    function getPredictedAddress(bytes32 _salt, uint216 _invoiceId) public view returns (address predictedAddress) {
+        bytes32 bytecodeHash =
+            keccak256(abi.encodePacked(type(Escrow).creationCode, abi.encode(_invoiceId, address(this))));
+        return Create2.computeAddress(_salt, bytecodeHash);
     }
 
     /**
-     * @notice Deploys a new Escrow contract deterministically using CREATE3.
+     * @notice Deploys a new Escrow contract deterministically using CREATE2.
      * @dev Uses a unique salt derived from the seller, buyer, and invoice ID to ensure predictable address generation.
      *      The Escrow constructor receives only the invoice ID and the payment processor address (this contract);
      *      seller and buyer are not passed as constructor args — they are used solely for salt derivation.
@@ -39,9 +41,7 @@ abstract contract EscrowFactory is IEscrowFactory {
             _params.value = 0;
         }
 
-        escrow = CREATE3.deployDeterministic(
-            _params.value, abi.encodePacked(type(Escrow).creationCode, constructorArg), salt
-        );
+        escrow = Create2.deploy(_params.value, salt, abi.encodePacked(type(Escrow).creationCode, constructorArg));
 
         emit EscrowCreated(_params.invoiceId, escrow);
         return escrow;

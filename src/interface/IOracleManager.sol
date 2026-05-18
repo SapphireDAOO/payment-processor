@@ -68,4 +68,12 @@ interface IOracleManager {
      * @return feed The sequencer uptime feed address, or address(0) if the check is disabled.
      */
     function getSequencerUptimeFeed() external view returns (address feed);
+
+    /**
+     * @notice Emitted when the price feed configuration for a token is updated.
+     * @param token The payment token address (address(0) for the native currency).
+     * @param aggregator The Chainlink aggregator address (address(0) removes the token).
+     * @param heartbeat The maximum acceptable age (in seconds) of a price update.
+     */
+    event PriceFeedSet(address indexed token, address indexed aggregator, uint96 heartbeat);
 }

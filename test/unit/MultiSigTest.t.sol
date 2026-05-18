@@ -5,7 +5,7 @@ import { MultiSigSetUp } from "../utils/MultiSigSetUp.sol";
 import { IMultiSig } from "src/interface/IMultiSig.sol";
 import { MultiSig } from "../../src/MultiSig.sol";
 
-import { PENDING, APPROVED, EXECUTED, CANCELED } from "src/constants/MultiSig.sol";
+import { PROPOSED, APPROVED, EXECUTED, CANCELED } from "src/constants/MultiSig.sol";
 
 contract MultiSigTest is MultiSigSetUp {
     function test_initialState() public view {
@@ -39,7 +39,7 @@ contract MultiSigTest is MultiSigSetUp {
         assertEq(txn.target, target);
         assertEq(txn.value, 0);
         assertEq(txn.nonce, nonce);
-        assertEq(txn.status, PENDING);
+        assertEq(txn.status, PROPOSED);
         assertEq(expectedTxHash, txHash);
         assertEq(txn.approvalCount, 1);
         assertTrue(multisig.hasApproved(txHash, signerOne));
@@ -65,7 +65,9 @@ contract MultiSigTest is MultiSigSetUp {
         vm.startPrank(signerTwo);
 
         vm.expectEmit(address(multisig));
-        emit IMultiSig.TransactionApproved(txHash, signerTwo, 2);
+        emit IMultiSig.TransactionApproved(txHash);
+        vm.expectEmit(address(multisig));
+        emit IMultiSig.ApprovalAdded(txHash, signerTwo, 2);
         multisig.approveTransaction(txHash);
 
         vm.expectRevert(IMultiSig.AlreadyApproved.selector);
@@ -234,7 +236,7 @@ contract MultiSigTest is MultiSigSetUp {
         assertEq(multisig.getTransaction(txHash).status, CANCELED);
 
         vm.prank(address(multisig));
-        vm.expectRevert(IMultiSig.TransactionNotPendingOrApproved.selector);
+        vm.expectRevert(IMultiSig.TransactionNotProposedOrApproved.selector);
         multisig.cancelTransaction(txHash);
 
         vm.prank(signerTwo);

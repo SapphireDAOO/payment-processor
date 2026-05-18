@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { IMultiSig } from "./interface/IMultiSig.sol";
-import { PENDING, APPROVED, EXECUTED, CANCELED, MINIMUM_THRESHOLD, MINIMUM_SIGNERS } from "./constants/MultiSig.sol";
+import { PROPOSED, APPROVED, EXECUTED, CANCELED, MINIMUM_THRESHOLD, MINIMUM_SIGNERS } from "./constants/MultiSig.sol";
 import { LibCall } from "solady/utils/LibCall.sol";
 
 /**
@@ -83,7 +83,7 @@ contract MultiSig is IMultiSig {
         uint256 newNonce = nonce;
 
         Transaction memory txn = Transaction({
-            target: _target, value: _value, nonce: newNonce, data: _data, status: PENDING, approvalCount: 1
+            target: _target, value: _value, nonce: newNonce, data: _data, status: PROPOSED, approvalCount: 1
         });
 
         txHash = keccak256(abi.encode(_target, _data, newNonce));
@@ -98,7 +98,7 @@ contract MultiSig is IMultiSig {
     function approveTransaction(bytes32 _txHash) external onlySigner {
         Transaction memory txn = transactions[_txHash];
         if (txn.nonce == 0) revert TransactionDoesNotExist();
-        if (txn.status != PENDING) revert AlreadyApproved();
+        if (txn.status != PROPOSED) revert AlreadyApproved();
         if (approvals[_txHash][msg.sender]) revert AlreadyApprovedByThisSigner();
 
         uint256 newApprovalCount = txn.approvalCount + 1;
@@ -107,9 +107,10 @@ contract MultiSig is IMultiSig {
 
         if (newApprovalCount >= threshold) {
             transactions[_txHash].status = APPROVED;
+            emit TransactionApproved(_txHash);
         }
 
-        emit TransactionApproved(_txHash, msg.sender, newApprovalCount);
+        emit ApprovalAdded(_txHash, msg.sender, newApprovalCount);
     }
 
     /// @inheritdoc IMultiSig
@@ -126,7 +127,7 @@ contract MultiSig is IMultiSig {
     function cancelTransaction(bytes32 _txHash) external onlySelf {
         Transaction memory txn = transactions[_txHash];
         if (txn.nonce == 0) revert TransactionDoesNotExist();
-        if (txn.status != PENDING && txn.status != APPROVED) revert TransactionNotPendingOrApproved();
+        if (txn.status != PROPOSED && txn.status != APPROVED) revert TransactionNotProposedOrApproved();
 
         transactions[_txHash].status = CANCELED;
         emit TransactionCanceled(_txHash);

@@ -61,7 +61,7 @@ contract AdvancedPaymentProcessor is
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable ppStorage;
 
-    IOracleManager public immutable oracle;
+    IOracleManager public oracle;
 
     /// @notice The next available meta-invoice ID to be assigned.
     uint216 private nextMetaInvoiceNonce;
@@ -347,6 +347,13 @@ contract AdvancedPaymentProcessor is
     /// @inheritdoc IAdvancedPaymentProcessor
     function setMinimumPrice(uint256 _newMinimumPrice) external onlyOwner {
         minimumPrice = _newMinimumPrice;
+    }
+
+    /// @inheritdoc IAdvancedPaymentProcessor
+    function setOracle(address _oracle) external onlyOwner {
+        if (_oracle == address(0)) revert InvalidOracle();
+        emit OracleUpdated(address(oracle), _oracle);
+        oracle = IOracleManager(_oracle);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
