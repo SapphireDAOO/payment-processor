@@ -19,10 +19,10 @@ interface IMultiSig {
     /// @notice Thrown when the referenced transaction hash does not exist.
     error TransactionDoesNotExist();
 
-    error TransactionNotPendingOrApproved();
+    error TransactionNotProposedOrApproved();
 
-    /// @notice Thrown when an operation requires PENDING status but the transaction is not pending.
-    error TransactionNotPending();
+    /// @notice Thrown when an operation requires PROPOSED status but the transaction is not proposed.
+    error TransactionNotProposed();
 
     /// @notice Thrown when execution is attempted but the transaction has not reached APPROVED status.
     error TransactionNotApproved();
@@ -68,7 +68,7 @@ interface IMultiSig {
     /// @param value ETH value to forward (0 for admin calls).
     /// @param data ABI-encoded admin function call.
     /// @param nonce Unique identifier preventing replay.
-    /// @param status Current lifecycle state: PENDING (1), APPROVED (2), or EXECUTED (3).
+    /// @param status Current lifecycle state: PROPOSED (1), APPROVED (2), or EXECUTED (3).
     /// @param approvalCount Cumulative approval count per transaction hash.
     struct Transaction {
         address target;
@@ -99,18 +99,22 @@ interface IMultiSig {
         address indexed proposer
     );
 
-    /// @notice Emitted when a signer approves a transaction.
+    /// @notice Emitted when a signer records their approval for a transaction.
     /// @param txHash The transaction hash that was approved.
     /// @param approver The signer who approved.
     /// @param approvalCount The updated total approval count.
-    event TransactionApproved(bytes32 indexed txHash, address indexed approver, uint256 approvalCount);
+    event ApprovalAdded(bytes32 indexed txHash, address indexed approver, uint256 approvalCount);
+
+    /// @notice Emitted when a transaction accumulates enough approvals to reach APPROVED status.
+    /// @param txHash The transaction hash that reached the approval threshold.
+    event TransactionApproved(bytes32 indexed txHash);
 
     /// @notice Emitted when an approved transaction is executed.
     /// @param txHash The transaction hash that was executed.
     /// @param executor The signer who triggered execution.
     event TransactionExecuted(bytes32 indexed txHash, address indexed executor);
 
-    /// @notice Emitted when a PENDING or APPROVED transaction is canceled via a multisig-executed transaction.
+    /// @notice Emitted when a PROPOSED or APPROVED transaction is canceled via a multisig-executed transaction.
     /// @param txHash The transaction hash that was canceled.
     event TransactionCanceled(bytes32 indexed txHash);
 
@@ -141,7 +145,7 @@ interface IMultiSig {
     function proposeTransaction(address target, uint256 value, bytes calldata data) external returns (bytes32 txHash);
 
     /**
-     * @notice Records the caller's approval for a pending transaction.
+     * @notice Records the caller's approval for a proposed transaction.
      *         Automatically transitions the transaction to APPROVED when the threshold is met.
      * @param txHash Identifier of the transaction to approve.
      */
@@ -155,7 +159,7 @@ interface IMultiSig {
     function executeTransaction(bytes32 txHash) external returns (bytes memory);
 
     /**
-     * @notice Cancels a PENDING or APPROVED transaction, preventing execution.
+     * @notice Cancels a PROPOSED or APPROVED transaction, preventing execution.
      * @dev Only callable by the multisig contract itself via an executed transaction.
      *      Reverts if the transaction does not exist or is already EXECUTED or CANCELED.
      * @param txHash Identifier of the transaction to cancel.

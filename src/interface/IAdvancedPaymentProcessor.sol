@@ -77,6 +77,9 @@ interface IAdvancedPaymentProcessor {
     /// @notice Thrown when the escrow withdrawal fails during a manual refund.
     error EscrowWithdrawFailed();
 
+    /// @notice Thrown when attempting to set the oracle address to the zero address.
+    error InvalidOracle();
+
     // ================================================================
     //                              STRUCTS
     // ================================================================
@@ -284,6 +287,13 @@ interface IAdvancedPaymentProcessor {
     function setMinimumPrice(uint256 _newMinimumPrice) external;
 
     /**
+     * @notice Updates the OracleManager contract used for token price conversions.
+     * @dev Only callable by the owner. Reverts with `InvalidOracle` if `_oracle` is the zero address.
+     * @param _oracle The address of the new OracleManager contract.
+     */
+    function setOracle(address _oracle) external;
+
+    /**
      * @notice Retrieves the invoice data for a specific invoice ID.
      * @param _invoiceId The ID of the invoice.
      * @return i The invoice data.
@@ -466,4 +476,11 @@ interface IAdvancedPaymentProcessor {
      * @param amount The amount that could not be transferred.
      */
     event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+
+    /**
+     * @notice Emitted when the OracleManager contract is updated.
+     * @param previousOracle The previously configured OracleManager address.
+     * @param newOracle The newly configured OracleManager address.
+     */
+    event OracleUpdated(address indexed previousOracle, address indexed newOracle);
 }

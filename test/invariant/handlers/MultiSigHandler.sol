@@ -7,7 +7,7 @@ import { IMultiSig } from "../../../src/interface/IMultiSig.sol";
 import { IPaymentProcessorStorage } from "../../../src/interface/IPaymentProcessorStorage.sol";
 import { PaymentProcessorStorage } from "../../../src/PaymentProcessorStorage.sol";
 
-import { PENDING, APPROVED, MINIMUM_THRESHOLD } from "src/constants/MultiSig.sol";
+import { PROPOSED, APPROVED, MINIMUM_THRESHOLD } from "src/constants/MultiSig.sol";
 
 contract MultiSigHandler is Test {
     MultiSig public multisig;
@@ -70,7 +70,7 @@ contract MultiSigHandler is Test {
         bytes32 txHash = allTxHashes[_txIndex];
         address signer = signers[_signerIndex];
 
-        if (multisig.getTransaction(txHash).status != PENDING) return;
+        if (multisig.getTransaction(txHash).status != PROPOSED) return;
         if (ghostApprovals[txHash][signer]) return;
 
         vm.prank(signer);
@@ -100,7 +100,7 @@ contract MultiSigHandler is Test {
         bytes32 txHash = allTxHashes[_txIndex];
         uint8 status = multisig.getTransaction(txHash).status;
 
-        if (status != PENDING && status != APPROVED) return;
+        if (status != PROPOSED && status != APPROVED) return;
 
         bytes memory data = abi.encodeCall(IMultiSig.cancelTransaction, txHash);
         if (!_proposeApproveExecute(data, address(multisig))) return;

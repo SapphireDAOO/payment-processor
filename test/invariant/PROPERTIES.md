@@ -58,7 +58,7 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 | Id | Invariant Function | Property |
 | --- | --- | --- |
 | MSG-1 | `invariant_thresholdBounds` | `threshold >= 1 && threshold <= signerCount` always holds — threshold can never be zero or exceed the active signer set |
-| MSG-2 | `invariant_executedStatusIsPermanent` | Once a transaction reaches `EXECUTED` status it never reverts to `PENDING`, `APPROVED`, or `CANCELED` |
+| MSG-2 | `invariant_executedStatusIsPermanent` | Once a transaction reaches `EXECUTED` status it never reverts to `PROPOSED`, `APPROVED`, or `CANCELED` |
 | MSG-3 | `invariant_canceledStatusIsPermanent` | Once a transaction reaches `CANCELED` status it never transitions to any other state |
-| MSG-4 | `invariant_validTransactionStatus` | Every tracked transaction has status in `{PENDING=1, APPROVED=2, EXECUTED=3, CANCELED=4}` — no other value is possible |
+| MSG-4 | `invariant_validTransactionStatus` | Every tracked transaction has status in `{PROPOSED=1, APPROVED=2, EXECUTED=3, CANCELED=4}` — no other value is possible |
 

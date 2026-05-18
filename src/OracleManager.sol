@@ -85,6 +85,7 @@ contract OracleManager is IOracleManager {
     function setPriceFeed(address _token, PriceFeedConfig memory _config) external onlyAuthorized {
         if (_config.aggregator != address(0) && _config.heartbeat == 0) revert InvalidHeartbeat();
         priceFeeds[_token] = _config;
+        emit PriceFeedSet(_token, _config.aggregator, _config.heartbeat);
     }
 
     /// @inheritdoc IOracleManager

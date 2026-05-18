@@ -69,5 +69,5 @@ function getEscrowAddress(AdvancedPaymentProcessor _pp, address _seller, address
     returns (address escrowAddress)
 {
     bytes32 salt = _pp.computeSalt(_seller, _buyer, _invoiceId);
-    escrowAddress = _pp.getPredictedAddress(salt);
+    escrowAddress = _pp.getPredictedAddress(salt, _invoiceId);
 }
