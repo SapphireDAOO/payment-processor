@@ -289,8 +289,10 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Emitted when an invoice is released (funds disbursed from escrow).
      * @param invoiceId The unique ID of the released invoice.
+     * @param sellerAmount The net amount transferred to the seller, after fees.
+     * @param fee The platform fee deducted and sent to the fee receiver.
      */
-    event InvoiceReleased(uint216 indexed invoiceId);
+    event InvoiceReleased(uint216 indexed invoiceId, uint256 sellerAmount, uint256 fee);
 
     /**
      * @notice Emitted when the hold period of a given invoice is updated to a new timestamp.

@@ -93,9 +93,6 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
             vm.makePersistent(address(advancedPP), _storageAddress);
         }
 
-        vm.prank(admin);
-        advancedPP.setForwarderAddress(FORWARDER);
-
         advancedPaymentProcessor = advancedPP;
     }
 

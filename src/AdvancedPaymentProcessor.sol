@@ -6,12 +6,10 @@ import { IEscrow } from "./interface/IEscrow.sol";
 import { IOracleManager } from "./interface/IOracleManager.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { IAdvancedPaymentProcessor } from "./interface/IAdvancedPaymentProcessor.sol";
-import { AutomationCompatibleInterface } from "./interface/AutomationCompatibleInterface.sol";
 
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
-import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
 import { ReentrancyGuard } from "solady/utils/ReentrancyGuard.sol";
 
 import {
@@ -24,36 +22,22 @@ import {
     DISPUTE_DISMISSED,
     DISPUTE_SETTLED,
     RELEASED,
-    LOCKED,
     BASIS_POINTS,
     DEFAULT_DECIMAL,
-    DEFAULT_MINIMUM_INVOICE_PRICE,
-    MAX_WITHDRAWAL_RETRIES
+    DEFAULT_MINIMUM_INVOICE_PRICE
 } from "./constants/Advanced.sol";
 
 /**
  * @title AdvancedPaymentProcessor
  * @notice Handles the creation, payment, and lifecycle management of single and meta invoices with escrow logic.
- * @dev Inherits interfaces for payment processing, Chainlink Automation compatibility, and escrow deployment.
+ * @dev Releases and refunds are triggered manually by the marketplace; there is no automated upkeep path.
+ *      Inherits interfaces for payment processing and escrow deployment.
  */
-contract AdvancedPaymentProcessor is
-    IAdvancedPaymentProcessor,
-    AutomationCompatibleInterface,
-    EscrowFactory,
-    ReentrancyGuard
-{
-    using TaskQueueLib for TaskQueueLib.Heap;
-
+contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, ReentrancyGuard {
     using { SafeTransferLib.safeTransferETH, SafeTransferLib.safeTransferFrom } for address;
     using { SafeCastLib.toUint40, SafeCastLib.toUint216 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
     using { FixedPointMathLib.mulDiv, FixedPointMathLib.mulDivUp } for uint256;
-
-    /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
-    TaskQueueLib.Heap private heap;
-
-    /// @notice Address of the forwarder contract responsible for calling performUpkeep.
-    address private forwarder;
 
     /// @notice Minimum USD price (8 decimals) an invoice must meet to be accepted by the processor.
     uint256 private minimumPrice;
@@ -78,12 +62,6 @@ contract AdvancedPaymentProcessor is
      *      Each MetaInvoice contains the total price and all associated sub-invoice IDs.
      */
     mapping(uint216 metaInvoiceId => MetaInvoice invoice) private metaInvoices;
-
-    /**
-     *  @notice Maps task or invoice ID to its 1-based index position in the heap.
-     * @dev A value of 0 means the task is not present in the heap
-     */
-    mapping(uint216 invoiceId => uint256 key) private index;
 
     /**
      * @notice Restricts function access to the authorized marketplace address.
@@ -211,7 +189,6 @@ contract AdvancedPaymentProcessor is
 
         i.state = DISPUTED;
         invoices[_invoiceId] = i;
-        heap.removeAt(index[_invoiceId] - 1, index);
         emit DisputeCreated(_invoiceId);
     }
 
@@ -229,37 +206,35 @@ contract AdvancedPaymentProcessor is
         invoices[_invoiceId] = i;
 
         if (_resolution == DISPUTE_DISMISSED) {
-            heap.insert(_invoiceId, i.releaseAt, index);
             emit DisputeDismissed(_invoiceId);
         }
 
         if (_resolution == DISPUTE_SETTLED) {
             invoices[_invoiceId].balance = 0;
-            (uint256 sellerReceivingValue, uint256 buyerReceivingValue) = _distributeFunds(i, _sellerShare);
-            emit DisputeSettled(_invoiceId, sellerReceivingValue, buyerReceivingValue);
+            (uint256 sellerReceivingValue, uint256 buyerReceivingValue, uint256 fee) = _distributeFunds(i, _sellerShare);
+            emit DisputeSettled(_invoiceId, sellerReceivingValue, buyerReceivingValue, fee);
         }
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
     function release(uint216 _invoiceId) external onlyMarketplace {
-        if (_release(_invoiceId) != TaskQueueLib.SUCCESSFUL) revert InvalidInvoiceState();
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external onlyOwner {
         Invoice memory i = invoices[_invoiceId];
-        if (i.state != LOCKED) revert InvalidInvoiceState();
-        if (_amount > i.balance) revert InsufficientBalance();
+        uint8 state = i.state;
+        bool isReleasable = (state == PAID || state == DISPUTE_RESOLVED || state == DISPUTE_DISMISSED)
+            && block.timestamp >= i.releaseAt;
+        if (!isReleasable) revert InvalidInvoiceState();
+        uint256 fee = _applyBasisPoints(i.balance, ppStorage.getFeeRate());
+        uint256 sellerNetAmount = i.balance - fee;
+        IEscrow(i.escrow).withdraw(i.paymentToken, i.seller, sellerNetAmount);
 
-        if (i.balance == _amount) {
-            i.state = RELEASED;
+        invoices[_invoiceId].state = RELEASED;
+        invoices[_invoiceId].balance = 0;
+
+        if (!IEscrow(i.escrow).withdraw(i.paymentToken, ppStorage.getFeeReceiver(), fee)) {
+            emit TransferFailed(_invoiceId, ppStorage.getFeeReceiver(), fee);
         }
 
-        invoices[_invoiceId].balance -= _amount;
-
-        if (!IEscrow(i.escrow).withdraw(i.paymentToken, _recipient, _amount)) revert EscrowWithdrawFailed();
-
-        emit LockedPaymentRecovered(_invoiceId, _recipient, _amount);
+        emit PaymentReleased(_invoiceId, i.seller, i.paymentToken, sellerNetAmount, fee);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -273,7 +248,6 @@ contract AdvancedPaymentProcessor is
         if (amount > i.balance) revert InsufficientBalance();
 
         if (_refundShare == BASIS_POINTS) {
-            heap.removeAt(index[_invoiceId] - 1, index);
             i.state = REFUNDED;
         }
 
@@ -301,26 +275,9 @@ contract AdvancedPaymentProcessor is
         Invoice memory i = invoices[_invoiceId];
         if (i.state != DISPUTED) revert InvalidInvoiceState();
         i.state = DISPUTE_RESOLVED;
-        heap.insert(_invoiceId, i.releaseAt, index);
 
         invoices[_invoiceId] = i;
         emit DisputeResolved(_invoiceId);
-    }
-
-    /// @inheritdoc AutomationCompatibleInterface
-    function checkUpkeep(bytes calldata) external view returns (bool upkeepNeeded, bytes memory performData) {
-        upkeepNeeded = heap.due();
-        performData = bytes("");
-    }
-
-    /// @inheritdoc AutomationCompatibleInterface
-    function performUpkeep(bytes calldata) external {
-        if (msg.sender != _owner() && msg.sender != forwarder) {
-            revert NotAuthorized();
-        }
-
-        uint256 gasThreshold = ppStorage.getGasThreshold();
-        heap.processDueTask(index, _release, gasThreshold);
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -334,14 +291,7 @@ contract AdvancedPaymentProcessor is
         i.releaseAt = (block.timestamp + _holdPeriod).toUint40();
         invoices[_invoiceId] = i;
 
-        heap.reschedule(_invoiceId, i.releaseAt, index);
-
         emit UpdateReleaseTime(_invoiceId, _holdPeriod);
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function setForwarderAddress(address _forwarderAddress) external onlyOwner {
-        forwarder = _forwarderAddress;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -354,11 +304,6 @@ contract AdvancedPaymentProcessor is
         if (_oracle == address(0)) revert InvalidOracle();
         emit OracleUpdated(address(oracle), _oracle);
         oracle = IOracleManager(_oracle);
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function getForwarder() external view returns (address forwarderAddress) {
-        return forwarder;
     }
 
     /// @inheritdoc IAdvancedPaymentProcessor
@@ -383,104 +328,6 @@ contract AdvancedPaymentProcessor is
      */
     function _usdPerToken(address _paymentToken) internal view returns (uint256) {
         return oracle.getUsdPerToken(_paymentToken);
-    }
-
-    /**
-     * @notice Checks whether an invoice is currently eligible to be released to the seller.
-     * @dev An invoice is releasable if it is in the PAID, DISPUTE_RESOLVED, or DISPUTE_DISMISSED state
-     *      and its `releaseAt` timestamp has been reached or passed.
-     * @param _i The in-memory invoice struct to evaluate.
-     * @return isReleasable True if the invoice can be released.
-     */
-    function _isReleasable(Invoice memory _i) internal view returns (bool isReleasable) {
-        isReleasable = (_i.state == PAID || _i.state == DISPUTE_RESOLVED || _i.state == DISPUTE_DISMISSED)
-            && block.timestamp >= _i.releaseAt;
-    }
-
-    /**
-     * @notice Dispatches automation release for a due invoice.
-     * @dev Called by `performUpkeep` via `processDueTask`. Returns a status code rather than reverting.
-     *      Only PAID, DISPUTE_RESOLVED, and DISPUTE_DISMISSED invoices are ever on the heap.
-     *      Seller release is retried up to MAX_WITHDRAWAL_RETRIES times, then falls back to buyer
-     *      refund for another MAX_WITHDRAWAL_RETRIES attempts. Transitions to RELEASED, REFUNDED,
-     *      or LOCKED accordingly. Invalid heap position returns ERROR.
-     * @param _invoiceId The ID of the invoice to release.
-     * @return status `SUCCESSFUL`, `NOT_ELIGIBLE_FOR_RELEASE`, or `ERROR`.
-     */
-    function _release(uint216 _invoiceId) internal returns (uint256 status) {
-        Invoice memory i = invoices[_invoiceId];
-        if (!_isReleasable(i)) return TaskQueueLib.NOT_ELIGIBLE_FOR_RELEASE;
-
-        uint256 pos = index[_invoiceId];
-        if (pos == 0 || pos > heap.data.length) return TaskQueueLib.ERROR;
-
-        if (i.withdrawalRetries < MAX_WITHDRAWAL_RETRIES) return _autoRelease(_invoiceId, pos, i);
-
-        return _autoRefund(_invoiceId, pos, i, 2 * MAX_WITHDRAWAL_RETRIES);
-    }
-
-    /**
-     * @notice Executes automated seller release with retry logic.
-     * @dev Computes fee from current balance and attempts seller withdrawal. On failure the retry
-     *      counter is incremented and the invoice remains on the heap for the next upkeep cycle.
-     *      On success fee is collected best-effort (failure emits TransferFailed).
-     *      Once `withdrawalRetries` reaches MAX_WITHDRAWAL_RETRIES, `_release` routes to buyer fallback.
-     * @param _invoiceId The invoice to release.
-     * @param _pos The invoice's 1-based heap position.
-     * @param _i In-memory snapshot of the invoice.
-     * @return status `SUCCESSFUL`.
-     */
-    function _autoRelease(uint216 _invoiceId, uint256 _pos, Invoice memory _i) internal returns (uint256 status) {
-        uint256 fee = _applyBasisPoints(_i.balance, ppStorage.getFeeRate());
-        uint256 sellerNetAmount = _i.balance - fee;
-        if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.seller, sellerNetAmount)) {
-            invoices[_invoiceId].withdrawalRetries = _i.withdrawalRetries + 1;
-            emit WithdrawalRetried(_invoiceId, _i.seller, sellerNetAmount, _i.withdrawalRetries + 1);
-            return TaskQueueLib.SUCCESSFUL;
-        }
-        invoices[_invoiceId].state = RELEASED;
-        invoices[_invoiceId].balance = 0;
-        heap.removeAt(_pos - 1, index);
-        if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, ppStorage.getFeeReceiver(), fee)) {
-            emit TransferFailed(_invoiceId, ppStorage.getFeeReceiver(), fee);
-        }
-
-        emit PaymentReleased(_invoiceId, _i.seller, _i.paymentToken, sellerNetAmount);
-        return TaskQueueLib.SUCCESSFUL;
-    }
-
-    /**
-     * @notice Executes automated buyer refund with retry logic.
-     * @dev Attempts to withdraw `_i.balance` to `_i.buyer`. On failure the retry counter is
-     *      incremented and the invoice remains on the heap for the next upkeep cycle.
-     *      Transitions to REFUNDED on success or LOCKED once `withdrawalRetries` reaches `_withdrawRetries`.
-     * @param _invoiceId The invoice to refund.
-     * @param _pos The invoice's 1-based heap position.
-     * @param _i In-memory snapshot of the invoice.
-     * @param _withdrawRetries Retry ceiling; LOCKED when `withdrawalRetries` reaches this value.
-     * @return status `SUCCESSFUL`.
-     */
-    function _autoRefund(uint216 _invoiceId, uint256 _pos, Invoice memory _i, uint8 _withdrawRetries)
-        internal
-        returns (uint256 status)
-    {
-        if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.buyer, _i.balance)) {
-            if (_i.withdrawalRetries < _withdrawRetries) {
-                invoices[_invoiceId].withdrawalRetries = _i.withdrawalRetries + 1;
-                emit WithdrawalRetried(_invoiceId, _i.buyer, _i.balance, _i.withdrawalRetries + 1);
-                return TaskQueueLib.SUCCESSFUL;
-            }
-
-            heap.removeAt(_pos - 1, index);
-            invoices[_invoiceId].state = LOCKED;
-            return TaskQueueLib.SUCCESSFUL;
-        }
-
-        heap.removeAt(_pos - 1, index);
-        invoices[_invoiceId].state = REFUNDED;
-        invoices[_invoiceId].balance = 0;
-        emit Refunded(_invoiceId, _i.balance);
-        return TaskQueueLib.SUCCESSFUL;
     }
 
     /**
@@ -527,7 +374,6 @@ contract AdvancedPaymentProcessor is
             uint256 holdPeriod =
                 _i.escrowHoldPeriod != 0 ? uint256(_i.escrowHoldPeriod) : ppStorage.getDefaultHoldPeriod();
             _i.releaseAt = (block.timestamp + holdPeriod).toUint40();
-            heap.insert(_invoiceId, _i.releaseAt, index);
         }
 
         emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, _tokenPrice, _i.releaseAt);
@@ -614,12 +460,13 @@ contract AdvancedPaymentProcessor is
      * @dev Transfers the buyer's refund (if any) and the seller's payout based on the given share.
      * @param _i The invoice containing payment and escrow details.
      * @param _sellerShare The portion of the invoice balance (in basis points) to be sent to the seller.
-     * @return sellerReceivingValue The amount sent to the seller.
+     * @return sellerReceivingValue The net amount sent to the seller, after fees.
      * @return buyerReceivingValue The amount refunded to the buyer (zero if sellerShare == 10000).
+     * @return fee The platform fee deducted from the seller's share and sent to the fee receiver.
      */
     function _distributeFunds(Invoice memory _i, uint256 _sellerShare)
         internal
-        returns (uint256 sellerReceivingValue, uint256 buyerReceivingValue)
+        returns (uint256 sellerReceivingValue, uint256 buyerReceivingValue, uint256 fee)
     {
         if (_sellerShare != BASIS_POINTS) {
             buyerReceivingValue = _applyBasisPoints(_i.balance, BASIS_POINTS - _sellerShare);
@@ -631,7 +478,7 @@ contract AdvancedPaymentProcessor is
 
         sellerReceivingValue = _i.balance - buyerReceivingValue;
         if (sellerReceivingValue != 0) {
-            sellerReceivingValue = _processSellerPayout(_i, sellerReceivingValue, true);
+            (sellerReceivingValue, fee) = _processSellerPayout(_i, sellerReceivingValue, true);
         }
     }
 
@@ -639,15 +486,16 @@ contract AdvancedPaymentProcessor is
      * @notice Distributes the seller's payout from the escrow, applying platform fees.
      * @param _i The invoice data containing escrow and recipient info.
      * @param _sellerReceivingValue The gross amount owed to the seller before fees.
-     * @param _revertOnFail If true, reverts on failed transfer (manual paths). If false, emits
-     *        TransferFailed instead (automation path, to prevent head-of-line DoS).
+     * @param _revertOnFail If true, reverts on failed transfer. If false, emits TransferFailed
+     *        instead so a single failing recipient cannot block the remaining payout.
      * @return sellerNetAmount The amount the seller receives after fees are deducted.
+     * @return fee The platform fee deducted and sent to the fee receiver.
      */
     function _processSellerPayout(Invoice memory _i, uint256 _sellerReceivingValue, bool _revertOnFail)
         internal
-        returns (uint256 sellerNetAmount)
+        returns (uint256 sellerNetAmount, uint256 fee)
     {
-        uint256 fee = _applyBasisPoints(_sellerReceivingValue, ppStorage.getFeeRate());
+        fee = _applyBasisPoints(_sellerReceivingValue, ppStorage.getFeeRate());
         sellerNetAmount = _sellerReceivingValue - fee;
 
         if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.seller, sellerNetAmount)) {
@@ -657,8 +505,6 @@ contract AdvancedPaymentProcessor is
         if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, ppStorage.getFeeReceiver(), fee)) {
             if (_revertOnFail) revert EscrowWithdrawFailed();
         }
-
-        return sellerNetAmount;
     }
 
     /**
@@ -755,10 +601,5 @@ contract AdvancedPaymentProcessor is
     /// @inheritdoc IAdvancedPaymentProcessor
     function getNextMetaInvoiceNonce() external view returns (uint216 nextMetaInvoiceId) {
         return nextMetaInvoiceNonce;
-    }
-
-    /// @inheritdoc IAdvancedPaymentProcessor
-    function getItems() external view returns (uint216[] memory items) {
-        return heap.getItems();
     }
 }

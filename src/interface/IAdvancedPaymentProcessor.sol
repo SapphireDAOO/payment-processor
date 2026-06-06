@@ -91,7 +91,7 @@ interface IAdvancedPaymentProcessor {
     /// @param releaseAt The timestamp when funds in escrow can be released to the seller.
     /// @param expiresAt The timestamp after which the invoice is no longer payable.
     /// @param state Current state of the invoice.
-    /// @param withdrawalRetries Number of failed `IEscrow.withdraw` attempts by the automation path. Packed with `state`.
+    /// @param withdrawalRetries Reserved retry counter retained for storage-layout compatibility; unused now that releases are manual. Packed with `state`.
     /// @param escrowHoldPeriod Custom hold duration (in seconds) between payment and release, set at invoice creation. When non-zero, it overrides the storage default.
     /// @param metaInvoiceId Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.
     /// @param buyer Address of the buyer.
@@ -201,8 +201,8 @@ interface IAdvancedPaymentProcessor {
     /**
      * @notice Creates a dispute for an invoice.
      * @dev Callable only by the marketplace. Only valid for invoices in the PAID state.
-     *      Removes the invoice from the auto-release queue, canceling the pending release timer
-     *      until the dispute is resolved or dismissed.
+     *      Transitions the invoice to DISPUTED, blocking release until the dispute is
+     *      resolved or dismissed.
      * @param _invoiceId The ID of the invoice to dispute.
      */
     function createDispute(uint216 _invoiceId) external;
@@ -212,9 +212,9 @@ interface IAdvancedPaymentProcessor {
      * @dev Callable only by the marketplace. Invoice must be in the PAID state.
      *      `_refundShare` must be between 1 and 10,000 basis points (inclusive). The refund
      *      amount is sent directly to the buyer from escrow.
-     *      A full refund (10,000 BPS) transitions the invoice to REFUNDED and removes it from
-     *      the auto-release heap. A partial refund reduces the escrow balance but leaves the
-     *      invoice in PAID state — it remains in the heap and can still be auto-released.
+     *      A full refund (10,000 BPS) transitions the invoice to REFUNDED. A partial refund
+     *      reduces the escrow balance but leaves the invoice in PAID state, so it can still
+     *      be released later.
      * @param _invoiceId The identifier of the invoice to refund.
      * @param _refundShare The portion of the escrow balance to refund, in basis points (1% = 100, 100% = 10000).
      */
@@ -226,9 +226,9 @@ interface IAdvancedPaymentProcessor {
      *      `_resolution` must be either DISPUTE_DISMISSED or DISPUTE_SETTLED; DISPUTE_RESOLVED
      *      is a separate flow handled by `resolveDispute`.
      *      `_sellerShare` must be between 0 and 10,000 BPS (0 = full refund to buyer).
-     *      If dismissed, the invoice is re-inserted into the auto-release heap, restoring its
-     *      release timer. If settled, funds are immediately distributed between seller and buyer
-     *      according to `_sellerShare` and the invoice balance is zeroed.
+     *      If dismissed, the invoice becomes releasable again once `releaseAt` is reached.
+     *      If settled, funds are immediately distributed between seller and buyer according
+     *      to `_sellerShare` and the invoice balance is zeroed.
      * @param _invoiceId The ID of the invoice.
      * @param _resolution The resolution outcome: DISPUTE_DISMISSED or DISPUTE_SETTLED.
      * @param _sellerShare The portion of the escrow balance (in basis points) awarded to the seller (0–10,000).
@@ -249,36 +249,18 @@ interface IAdvancedPaymentProcessor {
      * @dev Callable only by the marketplace. Valid for invoices in the PAID, DISPUTE_RESOLVED,
      *      or DISPUTE_DISMISSED state once `releaseAt` has been reached. Platform fees are
      *      deducted before the net amount is transferred to the seller. The invoice transitions
-     *      to RELEASED, its balance is zeroed, and it is removed from the auto-release heap.
+     *      to RELEASED and its balance is zeroed.
      * @param _invoiceId The ID of the invoice.
      */
     function release(uint216 _invoiceId) external;
 
     /**
-     * @notice Recovers funds from a LOCKED invoice by withdrawing from its escrow to a specified recipient.
-     * @dev Only callable by the owner. The invoice must be in LOCKED state — meaning all automated
-     *      withdrawal retries (seller + buyer fallback) have been exhausted. Transitions to RELEASED
-     *      to prevent double-recovery. The token used is taken from the invoice's stored `paymentToken`.
-     * @param _invoiceId The ID of the locked invoice.
-     * @param _recipient The address to send the recovered funds to.
-     * @param _amount The amount to withdraw from escrow.
-     */
-    function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external;
-
-    /**
      * @notice Sets a custom release time for a given invoice by adding a hold period to the current timestamp.
-     * @dev Callable only by the owner. Valid for invoices in the PAID, DISPUTE_RESOLVED, or DISPUTE_DISMISSED state
-     *      (i.e., invoices currently tracked in the heap).
+     * @dev Callable only by the owner. Valid for invoices in the PAID, DISPUTE_RESOLVED, or DISPUTE_DISMISSED state.
      * @param _invoiceId The ID of the invoice to update.
      * @param _holdPeriod Additional hold period (in seconds) to add to the current timestamp.
      */
     function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external;
-
-    /**
-     * @notice Updates the address of the forwarder contract used for relayed or automated calls.
-     * @param _forwarderAddress The new forwarder contract address to be set.
-     */
-    function setForwarderAddress(address _forwarderAddress) external;
 
     /**
      * @notice Sets the minimum USD price an invoice must have to be created.
@@ -326,12 +308,6 @@ interface IAdvancedPaymentProcessor {
     function getMinimumPrice() external view returns (uint256 minimumPrice);
 
     /**
-     * @notice Returns the address of the configured forwarder contract.
-     * @return forwarderAddress The configured forwarder address.
-     */
-    function getForwarder() external view returns (address forwarderAddress);
-
-    /**
      * @notice Returns the nonce that will be assigned to the next invoice.
      * @return nextInvoiceNonce The next invoice nonce value.
      */
@@ -342,13 +318,6 @@ interface IAdvancedPaymentProcessor {
      * @return nextMetaInvoiceNonce The next meta-invoice nonce value.
      */
     function getNextMetaInvoiceNonce() external view returns (uint216 nextMetaInvoiceNonce);
-
-    /**
-     * @notice Returns a list of all task IDs currently in the heap.
-     * @dev Retrieves the uint216 task identifiers extracted from the internal encoded heap structure.
-     * @return items Array of task IDs.
-     */
-    function getItems() external view returns (uint216[] memory items);
 
     /**
      * @notice Converts a USD-denominated price to the equivalent amount in the specified payment token.
@@ -393,9 +362,12 @@ interface IAdvancedPaymentProcessor {
      * @param invoiceId The unique identifier of the invoice.
      * @param receiver The address that receives the released funds (typically the seller).
      * @param currency The address of the token used for the payment (address(0) for native ETH).
-     * @param sellerAmount The amount transferred to the receiver.
+     * @param sellerAmount The net amount transferred to the receiver, after fees.
+     * @param fee The platform fee deducted and sent to the fee receiver.
      */
-    event PaymentReleased(uint216 indexed invoiceId, address receiver, address currency, uint256 sellerAmount);
+    event PaymentReleased(
+        uint216 indexed invoiceId, address receiver, address currency, uint256 sellerAmount, uint256 fee
+    );
 
     /**
      * @notice Emitted when a refund is issued for a specific order.
@@ -427,8 +399,8 @@ interface IAdvancedPaymentProcessor {
 
     /**
      * @notice Emitted when a dispute is resolved in the seller's favor via `resolveDispute`.
-     * @dev The invoice transitions to DISPUTE_RESOLVED and is re-inserted into the auto-release
-     *      heap. The seller receives the full escrow balance (minus platform fees) once `releaseAt`
+     * @dev The invoice transitions to DISPUTE_RESOLVED and becomes releasable. The seller receives
+     *      the full escrow balance (minus platform fees) once `release` is called after `releaseAt`
      *      is reached. No funds are distributed at the time this event is emitted.
      * @param invoiceId The ID of the invoice involved in the dispute.
      */
@@ -437,10 +409,11 @@ interface IAdvancedPaymentProcessor {
     /**
      * @notice Emitted when a dispute is settled and the funds are split between buyer and seller.
      * @param invoiceId The ID of the invoice that was disputed.
-     * @param sellerAmount The amount transferred to the seller.
+     * @param sellerAmount The net amount transferred to the seller, after fees.
      * @param buyerAmount The amount refunded to the buyer.
+     * @param fee The platform fee deducted from the seller's share and sent to the fee receiver.
      */
-    event DisputeSettled(uint216 indexed invoiceId, uint256 sellerAmount, uint256 buyerAmount);
+    event DisputeSettled(uint216 indexed invoiceId, uint256 sellerAmount, uint256 buyerAmount, uint256 fee);
 
     /**
      * @notice Emitted when the escrow release time is updated for a given invoice.
@@ -448,18 +421,6 @@ interface IAdvancedPaymentProcessor {
      * @param newHoldPeriod The updated escrow hold duration in seconds.
      */
     event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
-
-    /**
-     * @notice Emitted when an automated withdrawal fails and the invoice is queued for retry.
-     * @dev The invoice remains on the heap for the next upkeep cycle. Seller attempts are numbered
-     *      1–MAX_WITHDRAWAL_RETRIES; buyer fallback attempts continue from MAX_WITHDRAWAL_RETRIES+1
-     *      up to 2×MAX_WITHDRAWAL_RETRIES. After all retries the invoice transitions to LOCKED.
-     * @param invoiceId The invoice being retried.
-     * @param recipient The intended recipient (seller for release phase, buyer for fallback phase).
-     * @param amount The amount that could not be delivered.
-     * @param attempt The cumulative retry attempt number (1 through 2×MAX_WITHDRAWAL_RETRIES).
-     */
-    event WithdrawalRetried(uint216 indexed invoiceId, address indexed recipient, uint256 amount, uint8 attempt);
 
     /**
      * @notice Emitted when an admin recovers funds from a LOCKED invoice.
@@ -470,7 +431,7 @@ interface IAdvancedPaymentProcessor {
     event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
 
     /**
-     * @notice Emitted when a best-effort fee or payout transfer fails in an automated release path.
+     * @notice Emitted when a best-effort fee or payout transfer fails during release or dispute settlement.
      * @param invoiceId The invoice whose fee transfer failed.
      * @param recipient The intended recipient of the failed transfer.
      * @param amount The amount that could not be transferred.
