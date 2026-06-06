@@ -187,6 +187,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         if (!IEscrow(i.escrow).withdraw(address(0), msg.sender, i.price - fee)) revert EscrowWithdrawFailed();
         if (!IEscrow(i.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), fee)) revert EscrowWithdrawFailed();
+        // add amount and fee here
         emit InvoiceReleased(_invoiceId);
     }
 
