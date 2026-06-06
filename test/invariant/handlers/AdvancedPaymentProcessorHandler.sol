@@ -14,8 +14,7 @@ import {
     DISPUTE_RESOLVED,
     DISPUTE_DISMISSED,
     DISPUTE_SETTLED,
-    BASIS_POINTS,
-    LOCKED as ADV_LOCKED
+    BASIS_POINTS
 } from "src/constants/Advanced.sol";
 
 contract AdvancedPaymentProcessorHandler is Test {
@@ -238,21 +237,6 @@ contract AdvancedPaymentProcessorHandler is Test {
         _newMin = bound(_newMin, 1e6, 1_000e8);
         vm.prank(admin);
         advancedPP.setMinimumPrice(_newMin);
-    }
-
-    function performUpkeep() public {
-        vm.prank(admin);
-        advancedPP.performUpkeep("");
-    }
-
-    function releaseLocked(uint256 _index) public onlyExistingInvoice {
-        if (singleAndSubInvoice.length == 0) return;
-        _index = bound(_index, 0, singleAndSubInvoice.length - 1);
-        uint216 invoiceId = singleAndSubInvoice[_index];
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-        if (inv.state != ADV_LOCKED) return;
-        vm.prank(admin);
-        advancedPP.releaseLocked(invoiceId, inv.buyer, inv.balance);
     }
 
     /// @notice Returns the total number of single invoices created by the handler.

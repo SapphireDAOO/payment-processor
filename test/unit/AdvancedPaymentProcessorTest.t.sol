@@ -5,7 +5,6 @@ import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../src/A
 import { IOracleManager } from "../../src/interface/IOracleManager.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { console } from "forge-std/console.sol";
-import { NoReceiveEther } from "../utils/NoReceiveEther.sol";
 
 import { AdvancedPaymentProcessorSetUp } from "../utils/AdvancedPaymentProcessorSetUp.sol";
 
@@ -22,7 +21,6 @@ import {
     CANCELED,
     DISPUTED,
     REFUNDED,
-    LOCKED,
     DISPUTE_RESOLVED,
     DISPUTE_DISMISSED,
     DISPUTE_SETTLED,
@@ -45,7 +43,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
     function test_Initialization() public view {
         assertEq(advancedPP.getNextInvoiceNonce(), 1);
         assertEq(advancedPP.getNextMetaInvoiceNonce(), 1);
-        assertEq(advancedPP.getForwarder(), FORWARDER);
     }
 
     function test_storageConfig() public {
@@ -72,14 +69,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(address(0xb0), ppStorage.getMarketplace());
     }
 
-    function test_setForwarderOwnerCanSet() public {
-        address newForwarder = address(0xcafe);
-        vm.prank(admin);
-        advancedPP.setForwarderAddress(newForwarder);
-
-        assertEq(advancedPP.getForwarder(), newForwarder);
-    }
-
     function test_setMinimumPrice() public {
         vm.prank(buyerOne);
         vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
@@ -99,11 +88,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
     function test_updateInvoiceNonce() public {
         vm.expectRevert(NotAuthorized.selector);
         ppStorage.updateInvoiceNonce(1);
-    }
-
-    function test_setForwarder() public {
-        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
-        advancedPP.setForwarderAddress(address(2));
     }
 
     function test_setPriceFeed() public {
@@ -773,103 +757,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         assertEq(metaInv.price, prices[0] + prices[1] + prices[2]);
     }
 
-    function test_automatedReleaseViaUpkeep() public {
-        address[] memory sellers = new address[](3);
-        sellers[0] = sellerOne;
-        sellers[1] = sellerOne;
-        sellers[2] = sellerTwo;
-
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 100e8;
-        prices[1] = 100e8;
-        prices[2] = 300e8;
-
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices);
-
-        uint256 length = invoiceIds.length - 1;
-
-        uint216 metaInvoiceId = advancedPP.createMetaInvoice(param);
-
-        uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1] + prices[2]);
-
-        vm.prank(admin);
-        vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.setInvoiceReleaseTime(invoiceIds[length], 3 days);
-
-        vm.prank(buyerTwo);
-        advancedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId);
-
-        (bool upkeepNeeded,) = advancedPP.checkUpkeep("");
-        assertFalse(upkeepNeeded);
-
-        vm.warp(block.timestamp + 1 days);
-
-        (upkeepNeeded,) = advancedPP.checkUpkeep("");
-        assertTrue(upkeepNeeded);
-
-        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
-        advancedPP.setInvoiceReleaseTime(invoiceIds[length], 3 days);
-
-        vm.prank(admin);
-        advancedPP.setInvoiceReleaseTime(invoiceIds[length], 3 days);
-
-        vm.prank(buyerOne);
-        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
-        advancedPP.performUpkeep("");
-
-        vm.prank(admin);
-        advancedPP.performUpkeep("");
-
-        for (uint256 i = 0; i < length; i++) {
-            assertEq(advancedPP.getInvoice(invoiceIds[i]).state, RELEASED);
-        }
-
-        assertEq(advancedPP.getInvoice(invoiceIds[length]).state, PAID);
-
-        vm.warp(block.timestamp + 3 days);
-        vm.prank(admin);
-        advancedPP.performUpkeep("");
-
-        assertEq(advancedPP.getInvoice(invoiceIds[length]).state, RELEASED);
-    }
-
-    function test_automatedReleaseAfterDispute() public {
-        address[] memory sellers = new address[](4);
-        sellers[0] = sellerOne;
-        sellers[1] = sellerOne;
-        sellers[2] = sellerTwo;
-        sellers[3] = sellerTwo;
-
-        uint256[] memory prices = new uint256[](4);
-        prices[0] = 100e8;
-        prices[1] = 100e8;
-        prices[2] = 300e8;
-        prices[3] = 300e8;
-
-        (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory param,) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices);
-
-        uint216 metaInvoiceId = advancedPP.createMetaInvoice(param);
-
-        uint256 tokenAmount = advancedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1] + prices[2] + prices[3]);
-
-        vm.prank(buyerTwo);
-        advancedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId);
-
-        for (uint256 k = 0; k < advancedPP.getItems().length; k++) {
-            console.log("invoice", advancedPP.getItems()[k]);
-        }
-        console.log("");
-
-        advancedPP.createDispute(advancedPP.getItems()[3]);
-
-        vm.warp(block.timestamp + 3 days);
-
-        vm.prank(admin);
-        advancedPP.performUpkeep("");
-    }
-
     function test_customEscrowHoldPeriodIsUsedWhenSet() public {
         uint256 price = 100e8;
         uint32 customHold = 7 days;
@@ -988,92 +875,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
         }
     }
 
-    function test_maliciousSeller() public {
-        uint256 price = 100e8;
-        NoReceiveEther e = new NoReceiveEther{ value: 100 ether }();
-        address thisSeller = address(e);
-        assertEq(thisSeller.balance, 100 ether);
-
-        IAdvancedPaymentProcessor.InvoiceCreationParam memory param =
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), thisSeller, price);
-
-        uint216 invoiceId = advancedPP.createSingleInvoice(param);
-
-        uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
-
-        vm.prank(buyerOne);
-        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
-
-        assertEq(advancedPP.getInvoice(invoiceId).withdrawalRetries, 0);
-
-        vm.warp(7 days);
-        uint256 buyerBalanceBefore = buyerOne.balance;
-
-        vm.prank(admin);
-        advancedPP.performUpkeep("");
-
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-
-        assertEq(inv.withdrawalRetries, 3);
-        uint256 buyerBalanceAfter = buyerOne.balance;
-
-        assertEq(buyerBalanceAfter, buyerBalanceBefore + amountInToken);
-        assertEq(inv.balance, 0);
-        assertEq(inv.state, REFUNDED);
-    }
-
-    function test_releaseLocked() public {
-        uint256 price = 100e8;
-        NoReceiveEther a = new NoReceiveEther();
-        NoReceiveEther b = new NoReceiveEther{ value: 100 ether }();
-
-        address thisSeller = address(a);
-        address thisBuyer = address(b);
-        address thisReceiver = address(0xa0);
-
-        IAdvancedPaymentProcessor.InvoiceCreationParam memory param =
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), thisSeller, price);
-
-        uint216 invoiceId = advancedPP.createSingleInvoice(param);
-
-        uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
-
-        vm.prank(thisBuyer);
-        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
-
-        vm.prank(admin);
-        vm.expectRevert(IAdvancedPaymentProcessor.InvalidInvoiceState.selector);
-        advancedPP.releaseLocked(invoiceId, thisReceiver, amountInToken);
-
-        assertEq(advancedPP.getInvoice(invoiceId).withdrawalRetries, 0);
-
-        vm.warp(7 days);
-
-        vm.prank(admin);
-        advancedPP.performUpkeep("");
-
-        IAdvancedPaymentProcessor.Invoice memory inv = advancedPP.getInvoice(invoiceId);
-
-        assertEq(inv.state, LOCKED);
-        assertEq(inv.withdrawalRetries, 6);
-
-        uint256 balanceBefore = thisReceiver.balance;
-
-        vm.prank(admin);
-        vm.expectRevert(IAdvancedPaymentProcessor.EscrowWithdrawFailed.selector);
-        advancedPP.releaseLocked(invoiceId, thisSeller, inv.balance);
-
-        vm.prank(buyerOne);
-        vm.expectRevert(IAdvancedPaymentProcessor.NotAuthorized.selector);
-        advancedPP.releaseLocked(invoiceId, buyerOne, amountInToken);
-
-        vm.prank(admin);
-        advancedPP.releaseLocked(invoiceId, thisReceiver, inv.balance);
-
-        assertEq(thisReceiver.balance, balanceBefore + amountInToken);
-        assertEq(advancedPP.getInvoice(invoiceId).balance, 0);
-    }
-
     function test_USDConversionRoundingDownUnderpaysInvoice() public {
         // Price is $1.00000001 (8 decimals). This should require slightly more than 1 USDC.
         uint256 price = 100_000_001;
@@ -1093,23 +894,6 @@ contract AdvancedPaymentProcessorTest is AdvancedPaymentProcessorSetUp {
 
         // A correct implementation should never accept a payment that converts to less USD than the invoice price.
         assertGe(paidUsd, price);
-    }
-
-    function test_performUpkeepForwarderCanCall() public {
-        uint256 price = 100e8;
-        uint216 invoiceId =
-            advancedPP.createSingleInvoice(getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price));
-        uint256 amountInToken = advancedPP.getTokenValueFromUsd(address(0), price);
-
-        vm.prank(buyerOne);
-        advancedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
-
-        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
-
-        vm.prank(FORWARDER);
-        advancedPP.performUpkeep("");
-
-        assertEq(advancedPP.getInvoice(invoiceId).state, RELEASED);
     }
 
     function test_setInvoiceReleaseTimeOnDisputeResolved() public {
