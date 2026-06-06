@@ -56,6 +56,8 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         config = _configuration;
         nextInvoiceNonce = 1;
         paymentValidityDuration = DEFAULT_PAYMENT_VALIDITY_PERIOD;
+
+        emit ConfigurationInitialized(_configuration);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
@@ -67,38 +69,45 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @inheritdoc IPaymentProcessorStorage
     function setFeeReceiver(address _feeReceiverAddress) external onlyOwner {
         config.feeReceiver = _feeReceiverAddress;
+        emit FeeReceiverUpdated(_feeReceiverAddress);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
     function setAuthorizedAddress(address _authorizedAddress, bool _authorized) external onlyOwner {
         isAuthorized[_authorizedAddress] = _authorized;
+        emit AuthorizationUpdated(_authorizedAddress, _authorized);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
     function setFeeRate(uint96 _newFeeRate) external onlyOwner {
         if (_newFeeRate > BASIS_POINTS) revert InvalidFeeRate();
         config.feeRate = _newFeeRate;
+        emit FeeRateUpdated(_newFeeRate);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
     function setGasThreshold(uint96 _newGasThreshold) external onlyOwner {
         config.gasThreshold = _newGasThreshold;
+        emit GasThresholdUpdated(_newGasThreshold);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
     function setPaymentValidityDuration(uint256 _newValidityDuration) external onlyOwner {
         paymentValidityDuration = _newValidityDuration;
+        emit PaymentValidityDurationUpdated(_newValidityDuration);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
     function setDefaultHoldPeriod(uint96 _newDefaultHoldPeriod) public onlyOwner {
         if (_newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
         config.defaultHoldPeriod = _newDefaultHoldPeriod;
+        emit DefaultHoldPeriodUpdated(_newDefaultHoldPeriod);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
     function setMarketplaceAddress(address _marketplaceAddress) external onlyOwner {
         config.marketplace = _marketplaceAddress;
+        emit MarketplaceUpdated(_marketplaceAddress);
     }
 
     /**

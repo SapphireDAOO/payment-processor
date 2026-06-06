@@ -141,4 +141,53 @@ interface IPaymentProcessorStorage {
      * @return gasThreshold The current gas threshold value.
      */
     function getGasThreshold() external view returns (uint256 gasThreshold);
+
+    /**
+     * @notice Emitted once at construction with the initial configuration parameters.
+     * @param config The configuration the contract was initialized with.
+     */
+    event ConfigurationInitialized(Configuration config);
+
+    /**
+     * @notice Emitted when an address is granted or revoked authorization.
+     * @param account The address whose authorization status changed.
+     * @param authorized The new authorization status.
+     */
+    event AuthorizationUpdated(address indexed account, bool authorized);
+
+    /**
+     * @notice Emitted when the fee receiver address is updated.
+     * @param feeReceiver The new fee receiver address.
+     */
+    event FeeReceiverUpdated(address indexed feeReceiver);
+
+    /**
+     * @notice Emitted when the marketplace address is updated.
+     * @param marketplace The new marketplace address.
+     */
+    event MarketplaceUpdated(address indexed marketplace);
+
+    /**
+     * @notice Emitted when the platform fee rate is updated.
+     * @param feeRate The new fee rate in basis points.
+     */
+    event FeeRateUpdated(uint96 feeRate);
+
+    /**
+     * @notice Emitted when the automated-upkeep gas threshold is updated.
+     * @param gasThreshold The new gas threshold value.
+     */
+    event GasThresholdUpdated(uint96 gasThreshold);
+
+    /**
+     * @notice Emitted when the default hold period is updated.
+     * @param defaultHoldPeriod The new default hold period in seconds.
+     */
+    event DefaultHoldPeriodUpdated(uint96 defaultHoldPeriod);
+
+    /**
+     * @notice Emitted when the payment validity duration is updated.
+     * @param validityDuration The new payment validity window in seconds.
+     */
+    event PaymentValidityDurationUpdated(uint256 validityDuration);
 }
