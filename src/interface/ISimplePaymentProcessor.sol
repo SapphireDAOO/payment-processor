@@ -256,6 +256,7 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Emitted when an invoice payment is made.
      * @param invoiceId The unique ID of the paid invoice.
+     * @param buyer The address that paid the invoice.
      * @param amountPaid The amount paid towards the invoice in wei.
      * @param expiresAt The timestamp by which the seller must accept or reject the invoice.
      *          If no action is taken by then, the buyer will be refunded.
@@ -265,14 +266,16 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Emitted when an invoice is rejected by the seller.
      * @param invoiceId The unique ID of the rejected invoice.
+     * @param amount The escrow balance refunded to the buyer in wei.
      */
-    event InvoiceRejected(uint216 indexed invoiceId);
+    event InvoiceRejected(uint216 indexed invoiceId, uint256 amount);
 
     /**
      * @notice Emitted when an invoice is refunded to the buyer.
      * @param invoiceId The unique ID of the refunded invoice.
+     * @param amount The escrow balance refunded to the buyer in wei.
      */
-    event InvoiceRefunded(uint216 indexed invoiceId);
+    event InvoiceRefunded(uint216 indexed invoiceId, uint256 amount);
 
     /**
      * @notice Emitted when an invoice is accepted by the seller.

@@ -30,5 +30,13 @@ interface IEscrow {
      * @param invoiceId The unique key of the invoice associated with the deposit.
      * @param value The amount of funds deposited in wei.
      */
-    event FundsDeposited(uint216 indexed invoiceId, uint256 indexed value);
+    event Deposited(uint216 indexed invoiceId, uint256 indexed value);
+
+    /**
+     * @notice Emitted when funds are withdrawn from the escrow to a receiver.
+     * @param token The address of the ERC20 token withdrawn, or address(0) for ETH.
+     * @param receiver The address that received the withdrawn funds.
+     * @param amount The amount of ETH (wei) or tokens transferred.
+     */
+    event Withdrawn(address token, address receiver, uint256 amount);
 }
