@@ -27,7 +27,7 @@ contract Escrow is IEscrow {
     /**
      * @notice Initializes the escrow contract and receives the deposited funds.
      * @dev Sets the immutable invoice ID and payment processor address. Any ETH sent with
-     *      deployment is held by the contract and tracked off-chain via the `FundsDeposited` event.
+     *      deployment is held by the contract and tracked off-chain via the `Deposited` event.
      *      ERC20 escrows receive tokens via a direct transfer before or after deployment.
      * @param _invoiceId The unique identifier of the invoice associated with this escrow.
      * @param _paymentProcessorAddress The address of the payment processor contract managing the invoice.
@@ -35,7 +35,7 @@ contract Escrow is IEscrow {
     constructor(uint216 _invoiceId, address _paymentProcessorAddress) payable {
         INVOICE_ID = _invoiceId;
         PAYMENT_PROCESSOR = _paymentProcessorAddress;
-        emit FundsDeposited(_invoiceId, msg.value);
+        emit Deposited(_invoiceId, msg.value);
     }
 
     /// @inheritdoc IEscrow
@@ -52,6 +52,8 @@ contract Escrow is IEscrow {
             (success, ret) = _token.call(abi.encodeWithSelector(transferSelector, _receiver, _amount));
             if (success && ret.length > 0) success = abi.decode(ret, (bool));
         }
+
+        emit Withdrawn(_token, _receiver, _amount);
     }
 
     /**

@@ -45,6 +45,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable ppStorage;
 
+    /// @notice OracleManager used to convert USD-denominated invoice prices into payment-token amounts.
     IOracleManager public oracle;
 
     /// @notice The next available meta-invoice ID to be assigned.
