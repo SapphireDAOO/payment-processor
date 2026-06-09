@@ -20,13 +20,11 @@ interface IOracleManager {
     /// @notice Thrown when the Chainlink price feed returns a zero or negative answer.
     error InvalidPrice();
 
-    /// @notice Thrown when a price feed heartbeat of zero is supplied to setPriceFeed.
-    error InvalidHeartbeat();
-
     /// @notice Configuration for a Chainlink price feed associated with a payment token.
     /// @param aggregator Address of the Chainlink AggregatorV3 contract. address(0) disables the token.
     /// @param heartbeat Maximum acceptable age (in seconds) of a price update before it is considered stale.
     ///        Should match the feed's documented update interval (e.g. 3600 for a 1-hour feed).
+    ///        Set to 0 to disable the freshness check entirely (e.g. mock feeds on local testnets).
     struct PriceFeedConfig {
         address aggregator;
         uint96 heartbeat;
@@ -41,6 +39,7 @@ interface IOracleManager {
      *         Skipped when `sequencerUptimeFeed == address(0)` (L1 or local testnets).
      *      2. Round completeness: reverts with `StalePrice` if `answeredInRound < roundId`.
      *      3. Heartbeat: reverts with `StalePriceFeed` if the update is older than `config.heartbeat`.
+     *         Skipped when `config.heartbeat == 0` (e.g. mock feeds on local testnets).
      * @param _paymentToken The token address (address(0) for native ETH).
      * @return The token's USD price with 8 decimals as returned by the Chainlink aggregator.
      */
@@ -50,6 +49,7 @@ interface IOracleManager {
      * @notice Sets the Chainlink price feed configuration for a specific payment token.
      * @dev Callable only by the owner. Use address(0) for `_token` to set the native currency feed.
      *      Setting `_config.aggregator` to address(0) removes the token from accepted payment methods.
+     *      A `_config.heartbeat` of 0 disables the staleness check for the feed.
      * @param _token The payment token address, or address(0) for native currency.
      * @param _config The price feed configuration containing the aggregator address and heartbeat interval.
      */
