@@ -76,14 +76,13 @@ contract OracleManager is IOracleManager {
             AggregatorV3Interface(config.aggregator).latestRoundData();
         if (answeredInRound < roundId) revert StalePrice();
         if (answer <= 0) revert InvalidPrice();
-        if (block.timestamp > updatedAt + config.heartbeat) revert StalePriceFeed();
+        if (config.heartbeat != 0 && block.timestamp > updatedAt + config.heartbeat) revert StalePriceFeed();
 
         return answer.toUint256(); // 8 decimals from Chainlink
     }
 
     /// @inheritdoc IOracleManager
     function setPriceFeed(address _token, PriceFeedConfig memory _config) external onlyAuthorized {
-        if (_config.aggregator != address(0) && _config.heartbeat == 0) revert InvalidHeartbeat();
         priceFeeds[_token] = _config;
         emit PriceFeedSet(_token, _config.aggregator, _config.heartbeat);
     }

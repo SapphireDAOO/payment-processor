@@ -15,6 +15,4 @@ docs/
 
 .vscode
 lcov.info
-script/Flows.s.sol
-script/Flows2.s.sol
-script/Release.s.sol
+script/test-scripts

@@ -8,6 +8,7 @@ import { AdvancedPaymentProcessor } from "../src/AdvancedPaymentProcessor.sol";
 import { OracleManager } from "../src/OracleManager.sol";
 import { IOracleManager } from "../src/interface/IOracleManager.sol";
 import { MockUsdc, MockWbtc } from "../test/mock/mERC20.sol";
+import { MockV3Aggregator } from "../test/mock/MockV3Aggregator.sol";
 import { Notes } from "../src/Notes.sol";
 import { MultiSig } from "../src/MultiSig.sol";
 
@@ -44,10 +45,17 @@ contract Deploy is Script {
     address constant TESTNET_WBTC_PRICE_FEED = 0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298;
     address constant TESTNET_NATIVE_TOKEN_PRICE_FEED = 0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1;
 
+    // Mock price feed answers (8 decimals) used for local Anvil deployments.
+    uint8 constant MOCK_FEED_DECIMALS = 8;
+    int256 constant MOCK_USDC_PRICE = 1e8;
+    int256 constant MOCK_WBTC_PRICE = 90_000e8;
+    int256 constant MOCK_NATIVE_TOKEN_PRICE = 1960e8;
+
     uint96 constant FEED_HEARTBEAT = 24 hours;
 
     uint256 constant TESTNET_CHAIN_ID = 84532;
     uint256 constant MAINNET_CHAIN_ID = 8453;
+    uint256 constant LOCAL_CHAIN_ID = 31337;
 
     uint256 constant INITIAL_THRESHOLD = 2;
 
@@ -59,7 +67,7 @@ contract Deploy is Script {
         bool isMainnet = block.chainid == MAINNET_CHAIN_ID;
 
         console.log("=== SapphireDAO Payment Processor Deployment ===");
-        console.log("Network:  ", isMainnet ? "Base Mainnet" : "Base Sepolia");
+        console.log("Network:  ", _networkName());
         console.log("Chain ID: ", block.chainid);
         console.log("Deployer: ", msg.sender);
         console.log("");
@@ -122,15 +130,16 @@ contract Deploy is Script {
         ppStorage.setAuthorizedAddress(address(advancedPP), true);
         console.log("Storage authorized: SimplePaymentProcessor, AdvancedPaymentProcessor");
 
+        // Mock feeds (non-mainnet) report a static timestamp, so disable the staleness check with heartbeat 0.
+        uint96 heartbeat = isMainnet ? FEED_HEARTBEAT : 0;
         oracle.setPriceFeed(
-            address(0),
-            IOracleManager.PriceFeedConfig({ aggregator: addr.nativeTokenPriceFeed, heartbeat: FEED_HEARTBEAT })
+            address(0), IOracleManager.PriceFeedConfig({ aggregator: addr.nativeTokenPriceFeed, heartbeat: heartbeat })
         );
         oracle.setPriceFeed(
-            addr.usdc, IOracleManager.PriceFeedConfig({ aggregator: addr.usdcPriceFeed, heartbeat: FEED_HEARTBEAT })
+            addr.usdc, IOracleManager.PriceFeedConfig({ aggregator: addr.usdcPriceFeed, heartbeat: heartbeat })
         );
         oracle.setPriceFeed(
-            addr.wbtc, IOracleManager.PriceFeedConfig({ aggregator: addr.wbtcPriceFeed, heartbeat: FEED_HEARTBEAT })
+            addr.wbtc, IOracleManager.PriceFeedConfig({ aggregator: addr.wbtcPriceFeed, heartbeat: heartbeat })
         );
         console.log("Price feeds set: ETH/USD, USDC/USD, WBTC/USD");
 
@@ -163,19 +172,43 @@ contract Deploy is Script {
                 usdc: USDC,
                 wbtc: WBTC
             });
-        } else {
-            mockUsdc = new MockUsdc("Mock Usdc", "mUsdc");
-            mockWBtc = new MockWbtc("Mock WBtc", "mWBtc");
+        }
+
+        mockUsdc = new MockUsdc("Mock Usdc", "mUsdc");
+        mockWBtc = new MockWbtc("Mock WBtc", "mWBtc");
+
+        // Local Anvil has no Chainlink feeds, so deploy mock aggregators with fixed answers.
+        if (block.chainid == LOCAL_CHAIN_ID) {
+            address usdcFeed = address(new MockV3Aggregator(MOCK_FEED_DECIMALS, MOCK_USDC_PRICE));
+            address wbtcFeed = address(new MockV3Aggregator(MOCK_FEED_DECIMALS, MOCK_WBTC_PRICE));
+            address nativeFeed = address(new MockV3Aggregator(MOCK_FEED_DECIMALS, MOCK_NATIVE_TOKEN_PRICE));
 
             return Addr({
-                usdcPriceFeed: TESTNET_USDC_PRICE_FEED,
-                wbtcPriceFeed: TESTNET_WBTC_PRICE_FEED,
-                nativeTokenPriceFeed: TESTNET_NATIVE_TOKEN_PRICE_FEED,
+                usdcPriceFeed: usdcFeed,
+                wbtcPriceFeed: wbtcFeed,
+                nativeTokenPriceFeed: nativeFeed,
+                // No L2 sequencer locally; address(0) makes OracleManager skip the uptime check.
                 sequencerUptimeFeed: address(0),
                 usdc: address(mockUsdc),
                 wbtc: address(mockWBtc)
             });
         }
+
+        return Addr({
+            usdcPriceFeed: TESTNET_USDC_PRICE_FEED,
+            wbtcPriceFeed: TESTNET_WBTC_PRICE_FEED,
+            nativeTokenPriceFeed: TESTNET_NATIVE_TOKEN_PRICE_FEED,
+            sequencerUptimeFeed: address(0),
+            usdc: address(mockUsdc),
+            wbtc: address(mockWBtc)
+        });
+    }
+
+    /// @notice Human-readable network label for the current chain id.
+    function _networkName() internal view returns (string memory) {
+        if (block.chainid == MAINNET_CHAIN_ID) return "Base Mainnet";
+        if (block.chainid == LOCAL_CHAIN_ID) return "Localhost (Anvil)";
+        return "Base Sepolia";
     }
 }
 
