@@ -330,6 +330,30 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(simplePP.getInvoiceData(invoiceId).state, RELEASED);
     }
 
+    function test_feeRateSnapshotAtCreationIsUsedOnRelease() public {
+        uint256 invoicePrice = 100 ether;
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+
+        assertEq(simplePP.getInvoiceData(invoiceId).feeRate, FEE_RATE);
+        uint256 expectedFee = (invoicePrice * FEE_RATE) / BASIS_POINTS;
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+        vm.prank(sellerOne);
+        simplePP.acceptPayment(invoiceId);
+
+        vm.prank(admin);
+        ppStorage.setFeeRate(uint96(FEE_RATE * 4));
+
+        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
+        vm.prank(sellerOne);
+        simplePP.release(invoiceId);
+
+        assertEq(sellerOne.balance, INITIAL_BALANCE + invoicePrice - expectedFee);
+        assertEq(feeReceiver.balance, expectedFee);
+    }
+
     function test_dynamicHoldReleaseInvoice() public {
         uint32 adminHoldPeriod = 25 days;
 

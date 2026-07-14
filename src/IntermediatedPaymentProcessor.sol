@@ -35,7 +35,7 @@ import {
  */
 contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, EscrowFactory, ReentrancyGuard {
     using { SafeTransferLib.safeTransferETH, SafeTransferLib.safeTransferFrom } for address;
-    using { SafeCastLib.toUint40, SafeCastLib.toUint216 } for uint256;
+    using { SafeCastLib.toUint16, SafeCastLib.toUint40, SafeCastLib.toUint216 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
     using { FixedPointMathLib.mulDiv, FixedPointMathLib.mulDivUp } for uint256;
 
@@ -224,7 +224,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         bool isReleasable = (state == PAID || state == DISPUTE_RESOLVED || state == DISPUTE_DISMISSED)
             && block.timestamp >= i.releaseAt;
         if (!isReleasable) revert InvalidInvoiceState();
-        uint256 fee = _applyBasisPoints(i.balance, ppStorage.getFeeRate());
+        uint256 fee = _applyBasisPoints(i.balance, i.feeRate);
         uint256 sellerNetAmount = i.balance - fee;
         IEscrow(i.escrow).withdraw(i.paymentToken, i.seller, sellerNetAmount);
 
@@ -433,6 +433,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         i.metaInvoiceId = _metaInvoiceId;
         i.state = CREATED;
         i.invoiceNonce = _nonce;
+        i.feeRate = (ppStorage.getFeeRate()).toUint16();
         i.expiresAt = (ppStorage.getPaymentValidityDuration() + block.timestamp).toUint40();
         i.escrowHoldPeriod = _param.escrowHoldPeriod;
 
@@ -496,7 +497,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         internal
         returns (uint256 sellerNetAmount, uint256 fee)
     {
-        fee = _applyBasisPoints(_sellerReceivingValue, ppStorage.getFeeRate());
+        fee = _applyBasisPoints(_sellerReceivingValue, _i.feeRate);
         sellerNetAmount = _sellerReceivingValue - fee;
 
         if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, _i.seller, sellerNetAmount)) {

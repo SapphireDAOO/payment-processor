@@ -757,6 +757,60 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(sellerBalance + releaseableAmount, sellerOne.balance);
     }
 
+    function test_feeRateSnapshotAtCreationIsUsedOnRelease() public {
+        uint256 price = 100e8;
+        uint216 invoiceId = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+        );
+
+        assertEq(intermediatedPP.getInvoice(invoiceId).feeRate, FEE_RATE);
+
+        uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
+        vm.prank(buyerOne);
+        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+
+        // Global fee rate change after creation must not affect this invoice.
+        vm.prank(admin);
+        ppStorage.setFeeRate(uint96(FEE_RATE * 4));
+
+        uint256 sellerBalance = sellerOne.balance;
+        uint256 expectedFee = (tokenValue * FEE_RATE) / BASIS_POINTS;
+
+        vm.warp(block.timestamp + 1 days);
+        intermediatedPP.release(invoiceId);
+
+        assertEq(sellerOne.balance, sellerBalance + tokenValue - expectedFee);
+        assertEq(feeReceiver.balance, expectedFee);
+    }
+
+    function test_feeRateSnapshotAtCreationIsUsedOnDisputeSettlement() public {
+        uint256 price = 100e8;
+        uint216 invoiceId = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+        );
+
+        uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
+        vm.prank(buyerOne);
+        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+
+        intermediatedPP.createDispute(invoiceId);
+
+        // Global fee rate change after creation must not affect this invoice.
+        vm.prank(admin);
+        ppStorage.setFeeRate(uint96(FEE_RATE * 4));
+
+        uint256 sellerShare = 5000;
+        uint256 buyerReceiving = applyBasisPoints(tokenValue, BASIS_POINTS - sellerShare);
+        uint256 sellerReceiving = tokenValue - buyerReceiving;
+        uint256 expectedFee = applyBasisPoints(sellerReceiving, FEE_RATE);
+
+        uint256 sellerBalance = sellerOne.balance;
+        intermediatedPP.handleDispute(invoiceId, DISPUTE_SETTLED, sellerShare);
+
+        assertEq(sellerOne.balance, sellerBalance + sellerReceiving - expectedFee);
+        assertEq(feeReceiver.balance, expectedFee);
+    }
+
     function test_MetaInvoiceTotalPrice() public {
         address[] memory sellers = new address[](3);
         sellers[0] = sellerOne;

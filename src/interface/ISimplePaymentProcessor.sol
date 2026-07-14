@@ -70,6 +70,8 @@ interface ISimplePaymentProcessor {
     /// @param state The current state of the invoice.
     /// @param withdrawalRetries Number of failed `IEscrow.withdraw` attempts by the automation path. Resets are not needed
     ///        because an invoice follows only one terminal path. Packed with `state` in the same slot.
+    /// @param feeRate The platform fee rate (in basis points) captured at invoice creation. Releases always
+    ///        charge this rate, so later changes to the global fee rate do not affect existing invoices.
     /// @param seller The address of the seller of the invoice.
     /// @param buyer The address of the buyer of the invoice.
     /// @param escrow The address of the escrow contract managing the funds for this invoice.
@@ -84,6 +86,7 @@ interface ISimplePaymentProcessor {
         uint40 expiresAt;
         uint8 state;
         uint8 withdrawalRetries;
+        uint16 feeRate;
         address seller;
         address buyer;
         address escrow;
@@ -242,8 +245,10 @@ interface ISimplePaymentProcessor {
     function getInvoiceData(uint216 _invoiceId) external view returns (Invoice memory i);
 
     /**
-     * @notice Calculates the fee based on the provided amount and current fee rate.
-     * @dev Fee rate is expressed in basis points (1% = 100).
+     * @notice Calculates the fee based on the provided amount and the current global fee rate.
+     * @dev Fee rate is expressed in basis points (1% = 100). This quotes the rate that would be
+     *      captured by an invoice created now; releases use the rate snapshotted on the invoice
+     *      at creation, not the current global rate.
      * @param _amount The amount to calculate the fee from.
      * @return feeValue The calculated fee amount.
      */
