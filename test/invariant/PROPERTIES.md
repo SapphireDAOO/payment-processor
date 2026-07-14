@@ -5,12 +5,12 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 ## Scope
 
 - `SimplePaymentProcessor`
-- `AdvancedPaymentProcessor`
+- `IntermediatedPaymentProcessor`
 - `PaymentProcessorStorage`
 - `MultiSig`
 - Handlers:
   - `test/invariant/handlers/SimplePaymentProcessorHandler.sol`
-  - `test/invariant/handlers/AdvancedPaymentProcessorHandler.sol`
+  - `test/invariant/handlers/IntermediatedPaymentProcessorHandler.sol`
   - `test/invariant/handlers/MultiSigHandler.sol`
 
 ## Global Invariants
@@ -18,7 +18,7 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 | Id | Invariant Function | Property |
 | --- | --- | --- |
 | INV-1 | `invariant_consistentId` | `sHandler.getTotalInvoiceCreated() + aHandler.getTotalSingleInvoiceCreated() == PaymentProcessorStorage.totalInvoiceCreated()` |
-| INV-2 | `invariant_consistentMetaInvoiceId` | `aHandler.getTotalMetaInvoiceCreated() == advancedPaymentProcessor.totalMetaInvoiceCreated()` |
+| INV-2 | `invariant_consistentMetaInvoiceId` | `aHandler.getTotalMetaInvoiceCreated() == intermediatedPaymentProcessor.totalMetaInvoiceCreated()` |
 
 ## Simple Processor State Invariants
 
@@ -30,15 +30,15 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 | SIM-4 | `invariant_simpleInvoiceStateConsistency` | If `status` is `REJECTED`, `REFUNDED`, or `RELEASED`: `balance == 0` and escrow balance is zero when escrow exists |
 | SIM-5 | `invariant_simpleInvoiceStateConsistency` | If `status` is `LOCKED`: `escrow != address(0)` and `escrow.balance == price` |
 
-## Advanced Processor State Invariants
+## Intermediated Processor State Invariants
 
 | Id | Invariant Function | Property |
 | --- | --- | --- |
-| ADV-1 | `invariant_advancedInvoiceStateConsistency` | If `state` is `CREATED` or `CANCELED`: `balance == 0`, `amountPaid == 0`, `escrow == address(0)`, `buyer == address(0)` |
-| ADV-2 | `invariant_advancedInvoiceStateConsistency` | For non-created/non-canceled invoices: escrow exists, buyer exists, `amountPaid > 0`, and `balance <= amountPaid` |
-| ADV-3 | `invariant_advancedInvoiceStateConsistency` | If `state` is `RELEASED`, `REFUNDED`, or `DISPUTE_SETTLED`: `balance == 0` |
-| ADV-4 | `invariant_advancedInvoiceStateConsistency` | If `state` is `PAID`/`DISPUTED`/`DISPUTE_RESOLVED`/`DISPUTE_DISMISSED`/`LOCKED`: escrow asset balance equals invoice `balance` (ETH or ERC20) |
-| ADV-5 | `invariant_advancedInvoiceStateConsistency` | If `state` is `LOCKED`: `balance > 0` (funds remain in escrow, not drained) |
+| ADV-1 | `invariant_intermediatedInvoiceStateConsistency` | If `state` is `CREATED` or `CANCELED`: `balance == 0`, `amountPaid == 0`, `escrow == address(0)`, `buyer == address(0)` |
+| ADV-2 | `invariant_intermediatedInvoiceStateConsistency` | For non-created/non-canceled invoices: escrow exists, buyer exists, `amountPaid > 0`, and `balance <= amountPaid` |
+| ADV-3 | `invariant_intermediatedInvoiceStateConsistency` | If `state` is `RELEASED`, `REFUNDED`, or `DISPUTE_SETTLED`: `balance == 0` |
+| ADV-4 | `invariant_intermediatedInvoiceStateConsistency` | If `state` is `PAID`/`DISPUTED`/`DISPUTE_RESOLVED`/`DISPUTE_DISMISSED`/`LOCKED`: escrow asset balance equals invoice `balance` (ETH or ERC20) |
+| ADV-5 | `invariant_intermediatedInvoiceStateConsistency` | If `state` is `LOCKED`: `balance > 0` (funds remain in escrow, not drained) |
 
 ## Meta-Invoice Invariants
 
@@ -51,7 +51,7 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 | Id | Invariant Function | Property |
 | --- | --- | --- |
 | BAL-1 | `invariant_simpleProcessorNativeTokenBalanceIsAlwaysZero` | `address(simplePaymentProcessor).balance == 0` |
-| BAL-2 | `invariant_advancedProcessorNativeTokenBalanceAlwaysZero` | `address(advancedPaymentProcessor).balance == 0` |
+| BAL-2 | `invariant_intermediatedProcessorNativeTokenBalanceAlwaysZero` | `address(intermediatedPaymentProcessor).balance == 0` |
 
 ## MultiSig Invariants
 

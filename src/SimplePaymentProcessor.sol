@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import { Escrow, IEscrow } from "./Escrow.sol";
 
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
-import { AutomationCompatibleInterface } from "./interface/AutomationCompatibleInterface.sol";
+import { IERC165, IReceiver } from "./interface/IReceiver.sol";
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
@@ -30,7 +30,7 @@ import {
  * @notice Lightweight payment processor for single-invoice flows with native payments.
  * @dev Implements basic escrow release and refund. Compliant with ISimplePaymentProcessor.
  */
-contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatibleInterface, ReentrancyGuard {
+contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, ReentrancyGuard {
     using SafeCastLib for uint256;
     using TaskQueueLib for TaskQueueLib.Heap;
 
@@ -49,8 +49,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @notice The window of time allowed for accepting a transaction after creation.
     uint256 public decisionWindow;
 
-    /// @notice Address of the forwarder contract responsible for calling performUpkeep.
+    /// @notice Address of the CRE (Keystone) forwarder contract responsible for delivering workflow reports via `onReport`.
     address private forwarder;
+
+    /// @notice Owner address of the CRE workflow authorized to trigger `onReport`, as reported in the report metadata.
+    address private workflowOwner;
 
     /**
      * @notice Stores the `Invoice` structs, keyed by a unique invoice ID.
@@ -91,17 +94,18 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @inheritdoc ISimplePaymentProcessor
     function createInvoice(uint256 _price, bytes memory _storageRef, bool _share) public returns (uint216 invoiceId) {
         if (_price < minimumInvoiceValue) revert ValueIsTooLow();
+        uint216 newNonce = ppStorage.updateInvoiceNonce(1);
+        invoiceId = _computeInvoiceId(msg.sender, newNonce);
+        if (invoices[invoiceId].state != 0) revert InvoiceAlreadyExists();
+
         Invoice memory i;
         i.seller = msg.sender;
         i.createdAt = (block.timestamp).toUint40();
         i.price = _price;
         i.state = CREATED;
-        i.invoiceNonce = ppStorage.updateInvoiceNonce(1);
+        i.invoiceNonce = newNonce;
+        i.feeRate = (ppStorage.getFeeRate()).toUint16();
         i.invalidateAt = (block.timestamp + ppStorage.getPaymentValidityDuration()).toUint40();
-
-        invoiceId = _computeInvoiceId(msg.sender, i.invoiceNonce);
-
-        if (invoices[invoiceId].state != 0) revert InvoiceAlreadyExists();
 
         invoices[invoiceId] = i;
 
@@ -179,7 +183,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
             revert HoldPeriodHasNotBeenExceeded();
         }
 
-        uint256 fee = calculateFee(i.price);
+        uint256 fee = _calculateFee(i.price, i.feeRate);
         invoices[_invoiceId].state = RELEASED;
         invoices[_invoiceId].balance = 0;
 
@@ -236,21 +240,43 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
         emit LockedPaymentRecovered(_invoiceId, _recipient, _amount);
     }
 
-    /// @inheritdoc AutomationCompatibleInterface
-    function checkUpkeep(bytes calldata) external view returns (bool upkeepNeeded, bytes memory performData) {
-        upkeepNeeded = heap.due();
-        performData = bytes("");
+    /// @inheritdoc ISimplePaymentProcessor
+    function hasDueTasks() external view returns (bool dueTasksExist) {
+        dueTasksExist = heap.due();
     }
 
-    /// @inheritdoc AutomationCompatibleInterface
-    function performUpkeep(bytes calldata) external {
-        if (msg.sender != _owner() && msg.sender != forwarder) {
+    /**
+     * @notice Handles a verified report delivered by the CRE forwarder and processes due invoice tasks.
+     * @dev The report payload is ignored; delivery of a verified report is itself the trigger.
+     *      Reverts with NotAuthorized if the caller is not the configured forwarder, and with
+     *      UnauthorizedWorkflowOwner if the metadata does not carry the authorized workflow owner.
+     * @inheritdoc IReceiver
+     */
+    function onReport(bytes calldata _metadata, bytes calldata) external nonReentrant {
+        if (msg.sender != forwarder) {
             revert NotAuthorized();
         }
 
-        uint256 gasThreshold = ppStorage.getGasThreshold();
+        address reportedWorkflowOwner = _decodeWorkflowOwner(_metadata);
+        if (reportedWorkflowOwner != workflowOwner) {
+            revert UnauthorizedWorkflowOwner(reportedWorkflowOwner);
+        }
 
-        heap.processDueTask(index, _release, gasThreshold);
+        _processDueTasks();
+    }
+
+    /// @inheritdoc ISimplePaymentProcessor
+    function processDueTasks() external nonReentrant {
+        if (msg.sender != _owner()) {
+            revert NotAuthorized();
+        }
+
+        _processDueTasks();
+    }
+
+    /// @inheritdoc IERC165
+    function supportsInterface(bytes4 _interfaceId) external pure returns (bool supported) {
+        return _interfaceId == type(IReceiver).interfaceId || _interfaceId == type(IERC165).interfaceId;
     }
 
     /**
@@ -397,7 +423,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
      * @return status `SUCCESSFUL`.
      */
     function _autoRelease(uint216 _invoiceId, uint256 _pos, Invoice memory _i) internal returns (uint256 status) {
-        uint256 fee = calculateFee(_i.price);
+        uint256 fee = _calculateFee(_i.price, _i.feeRate);
         uint256 sellerAmount = _i.price - fee;
         if (!IEscrow(_i.escrow).withdraw(address(0), _i.seller, sellerAmount)) {
             invoices[_invoiceId].withdrawalRetries = _i.withdrawalRetries + 1;
@@ -413,6 +439,33 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
         emit InvoiceReleased(_invoiceId, sellerAmount, fee);
         return TaskQueueLib.SUCCESSFUL;
+    }
+
+    /**
+     * @notice Processes due invoice tasks from the heap within the configured gas threshold.
+     * @dev Shared by `onReport` (CRE forwarder path) and `processDueTasks` (owner fallback path).
+     */
+    function _processDueTasks() internal {
+        uint256 gasThreshold = ppStorage.getGasThreshold();
+
+        heap.processDueTask(index, _release, gasThreshold);
+    }
+
+    /**
+     * @notice Extracts the workflow owner address from CRE report metadata.
+     * @dev Metadata layout (tightly packed): workflowId (32 bytes), workflowName (10 bytes),
+     *      workflowOwner (20 bytes), reportId (2 bytes). Reads past the end of short metadata
+     *      yield zero bytes, so malformed metadata decodes to an address that fails the
+     *      `onReport` owner check rather than reverting here.
+     * @param _metadata The report metadata delivered by the forwarder.
+     * @return reportedWorkflowOwner The workflow owner address carried in the metadata.
+     */
+    function _decodeWorkflowOwner(bytes calldata _metadata) internal pure returns (address reportedWorkflowOwner) {
+        assembly {
+            // workflowOwner starts at byte 42 (after 32-byte workflowId and 10-byte workflowName);
+            // load 32 bytes and shift right so the 20-byte address occupies the low bits.
+            reportedWorkflowOwner := shr(96, calldataload(add(_metadata.offset, 42)))
+        }
     }
 
     /**
@@ -464,7 +517,19 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
 
     /// @inheritdoc ISimplePaymentProcessor
     function calculateFee(uint256 _amount) public view returns (uint256 feeValue) {
-        return (_amount * ppStorage.getFeeRate()) / BASIS_POINTS;
+        return _calculateFee(_amount, ppStorage.getFeeRate());
+    }
+
+    /**
+     * @notice Calculates the fee for an amount at a specific fee rate.
+     * @dev Used by release paths with the fee rate snapshotted on the invoice at creation,
+     *      so global fee rate changes never affect already-created invoices.
+     * @param _amount The amount to calculate the fee from.
+     * @param _feeRate The fee rate in basis points (1% = 100).
+     * @return feeValue The calculated fee amount.
+     */
+    function _calculateFee(uint256 _amount, uint256 _feeRate) internal pure returns (uint256 feeValue) {
+        return (_amount * _feeRate) / BASIS_POINTS;
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -478,6 +543,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     }
 
     /// @inheritdoc ISimplePaymentProcessor
+    function setWorkflowOwner(address _workflowOwner) external onlyAuthorized {
+        workflowOwner = _workflowOwner;
+    }
+
+    /// @inheritdoc ISimplePaymentProcessor
     function setDecisionWindow(uint256 _newDecisionWindow) external onlyAuthorized {
         if (_newDecisionWindow == 0) revert InvalidDecisionWindow();
         decisionWindow = _newDecisionWindow;
@@ -486,6 +556,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, AutomationCompatible
     /// @inheritdoc ISimplePaymentProcessor
     function getForwarder() external view returns (address forwarderAddress) {
         return forwarder;
+    }
+
+    /// @inheritdoc ISimplePaymentProcessor
+    function getWorkflowOwner() external view returns (address workflowOwnerAddress) {
+        return workflowOwner;
     }
 
     /// @inheritdoc ISimplePaymentProcessor

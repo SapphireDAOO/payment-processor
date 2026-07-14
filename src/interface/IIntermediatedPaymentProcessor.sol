@@ -2,10 +2,10 @@
 pragma solidity 0.8.28;
 
 /**
- *  @title IAdvancedPaymentProcessor
- *  @notice Interface for the advanced payment processor contract with escrow, meta-invoice, and dispute support.
+ *  @title IIntermediatedPaymentProcessor
+ *  @notice Interface for the intermediated payment processor contract with escrow, meta-invoice, and dispute support.
  */
-interface IAdvancedPaymentProcessor {
+interface IIntermediatedPaymentProcessor {
     // ================================================================
     //                              ERRORS
     // ================================================================
@@ -94,6 +94,8 @@ interface IAdvancedPaymentProcessor {
     /// @param state Current state of the invoice.
     /// @param withdrawalRetries Reserved retry counter retained for storage-layout compatibility; unused now that releases are manual. Packed with `state`.
     /// @param escrowHoldPeriod Custom hold duration (in seconds) between payment and release, set at invoice creation. When non-zero, it overrides the storage default.
+    /// @param feeRate The platform fee rate (in basis points) captured at invoice creation. Releases and dispute
+    ///        settlements always charge this rate, so later changes to the global fee rate do not affect existing invoices.
     /// @param metaInvoiceId Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.
     /// @param buyer Address of the buyer.
     /// @param seller Address of the seller.
@@ -111,6 +113,7 @@ interface IAdvancedPaymentProcessor {
         uint8 state;
         uint8 withdrawalRetries;
         uint32 escrowHoldPeriod;
+        uint16 feeRate;
         uint216 metaInvoiceId;
         address buyer;
         address seller;

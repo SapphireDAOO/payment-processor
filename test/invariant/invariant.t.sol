@@ -7,12 +7,15 @@ import { Test } from "forge-std/Test.sol";
 import { BaseSetUp, PaymentProcessorStorage } from "../utils/BaseSetUp.sol";
 
 import { SimplePaymentProcessorSetUp, SimplePaymentProcessor } from "../utils/SimplePaymentProcessorSetUp.sol";
-import { AdvancedPaymentProcessorSetUp, AdvancedPaymentProcessor } from "../utils/AdvancedPaymentProcessorSetUp.sol";
+import {
+    IntermediatedPaymentProcessorSetUp,
+    IntermediatedPaymentProcessor
+} from "../utils/IntermediatedPaymentProcessorSetUp.sol";
 
 import { SimplePaymentProcessorHandler } from "./handlers/SimplePaymentProcessorHandler.sol";
-import { AdvancedPaymentProcessorHandler } from "./handlers/AdvancedPaymentProcessorHandler.sol";
+import { IntermediatedPaymentProcessorHandler } from "./handlers/IntermediatedPaymentProcessorHandler.sol";
 import { ISimplePaymentProcessor } from "../../src/interface/ISimplePaymentProcessor.sol";
-import { IAdvancedPaymentProcessor } from "../../src/interface/IAdvancedPaymentProcessor.sol";
+import { IIntermediatedPaymentProcessor } from "../../src/interface/IIntermediatedPaymentProcessor.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {
@@ -26,7 +29,7 @@ import {
     RELEASED,
     REFUNDED as ADV_REFUNDED,
     LOCKED as ADV_LOCKED
-} from "src/constants/Advanced.sol";
+} from "src/constants/Intermediated.sol";
 
 import {
     CREATED as SIMPLE_CREATED,
@@ -39,23 +42,23 @@ import {
     LOCKED
 } from "src/constants/Simple.sol";
 
-contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp, AdvancedPaymentProcessorSetUp {
+contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp, IntermediatedPaymentProcessorSetUp {
     SimplePaymentProcessorHandler sHandler;
-    AdvancedPaymentProcessorHandler aHandler;
+    IntermediatedPaymentProcessorHandler aHandler;
     address storageAddress;
     address notesAddress;
 
     SimplePaymentProcessor simplePaymentProcessor;
-    AdvancedPaymentProcessor advancedPaymentProcessor;
+    IntermediatedPaymentProcessor intermediatedPaymentProcessor;
 
-    function setUp() public override(SimplePaymentProcessorSetUp, AdvancedPaymentProcessorSetUp) {
+    function setUp() public override(SimplePaymentProcessorSetUp, IntermediatedPaymentProcessorSetUp) {
         (storageAddress, notesAddress) = initialize();
 
         simplePaymentProcessor = _simplePaymentProcessorSetUp(storageAddress, notesAddress);
-        advancedPaymentProcessor = _advancedPaymentProcessorSetUp(storageAddress);
+        intermediatedPaymentProcessor = _intermediatedPaymentProcessorSetUp(storageAddress);
 
         sHandler = new SimplePaymentProcessorHandler(simplePaymentProcessor, buyerOne, sellerOne, admin);
-        aHandler = new AdvancedPaymentProcessorHandler(advancedPaymentProcessor, admin, buyerOne, sellerOne);
+        aHandler = new IntermediatedPaymentProcessorHandler(intermediatedPaymentProcessor, admin, buyerOne, sellerOne);
 
         targetContract(address(aHandler));
         targetContract(address(sHandler));
@@ -68,7 +71,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
     }
 
     function invariant_consistentMetaInvoiceId() external view {
-        assertEq(aHandler.getTotalMetaInvoiceCreated(), advancedPaymentProcessor.totalMetaInvoiceCreated());
+        assertEq(aHandler.getTotalMetaInvoiceCreated(), intermediatedPaymentProcessor.totalMetaInvoiceCreated());
     }
 
     function invariant_simpleInvoiceStateConsistency() external view {
@@ -109,11 +112,11 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
         }
     }
 
-    function invariant_advancedInvoiceStateConsistency() external view {
+    function invariant_intermediatedInvoiceStateConsistency() external view {
         uint256 count = aHandler.getInvoiceCount();
         for (uint256 i = 0; i < count; i++) {
             uint216 invoiceId = aHandler.getInvoiceId(i);
-            IAdvancedPaymentProcessor.Invoice memory inv = advancedPaymentProcessor.getInvoice(invoiceId);
+            IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPaymentProcessor.getInvoice(invoiceId);
 
             if (inv.state == CREATED || inv.state == CANCELED) {
                 assertEq(inv.balance, 0);
@@ -153,14 +156,14 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
         uint256 metaCount = aHandler.getMetaInvoiceCount();
         for (uint256 i = 0; i < metaCount; i++) {
             uint216 metaInvoiceId = aHandler.getMetaInvoiceId(i);
-            IAdvancedPaymentProcessor.MetaInvoice memory metaInv =
-                advancedPaymentProcessor.getMetaInvoice(metaInvoiceId);
+            IIntermediatedPaymentProcessor.MetaInvoice memory metaInv =
+                intermediatedPaymentProcessor.getMetaInvoice(metaInvoiceId);
 
             uint256 subCount = aHandler.getSubInvoiceCount(metaInvoiceId);
             uint256 sum;
             for (uint256 j = 0; j < subCount; j++) {
                 uint216 subId = aHandler.getSubInvoiceId(metaInvoiceId, j);
-                IAdvancedPaymentProcessor.Invoice memory sub = advancedPaymentProcessor.getInvoice(subId);
+                IIntermediatedPaymentProcessor.Invoice memory sub = intermediatedPaymentProcessor.getInvoice(subId);
                 if (sub.state != CANCELED) {
                     sum += sub.price;
                 }
@@ -173,7 +176,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
         assertEq(address(simplePaymentProcessor).balance, 0);
     }
 
-    function invariant_advancedProcessorNativeTokenBalanceAlwaysZero() external view {
-        assertEq(address(advancedPaymentProcessor).balance, 0);
+    function invariant_intermediatedProcessorNativeTokenBalanceAlwaysZero() external view {
+        assertEq(address(intermediatedPaymentProcessor).balance, 0);
     }
 }
