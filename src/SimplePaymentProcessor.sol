@@ -104,6 +104,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, Reentranc
         i.price = _price;
         i.state = CREATED;
         i.invoiceNonce = newNonce;
+        i.feeRate = (ppStorage.getFeeRate()).toUint16();
         i.invalidateAt = (block.timestamp + ppStorage.getPaymentValidityDuration()).toUint40();
 
         invoices[invoiceId] = i;
@@ -182,7 +183,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, Reentranc
             revert HoldPeriodHasNotBeenExceeded();
         }
 
-        uint256 fee = calculateFee(i.price);
+        uint256 fee = _calculateFee(i.price, i.feeRate);
         invoices[_invoiceId].state = RELEASED;
         invoices[_invoiceId].balance = 0;
 
@@ -422,7 +423,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, Reentranc
      * @return status `SUCCESSFUL`.
      */
     function _autoRelease(uint216 _invoiceId, uint256 _pos, Invoice memory _i) internal returns (uint256 status) {
-        uint256 fee = calculateFee(_i.price);
+        uint256 fee = _calculateFee(_i.price, _i.feeRate);
         uint256 sellerAmount = _i.price - fee;
         if (!IEscrow(_i.escrow).withdraw(address(0), _i.seller, sellerAmount)) {
             invoices[_invoiceId].withdrawalRetries = _i.withdrawalRetries + 1;
@@ -516,7 +517,19 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, Reentranc
 
     /// @inheritdoc ISimplePaymentProcessor
     function calculateFee(uint256 _amount) public view returns (uint256 feeValue) {
-        return (_amount * ppStorage.getFeeRate()) / BASIS_POINTS;
+        return _calculateFee(_amount, ppStorage.getFeeRate());
+    }
+
+    /**
+     * @notice Calculates the fee for an amount at a specific fee rate.
+     * @dev Used by release paths with the fee rate snapshotted on the invoice at creation,
+     *      so global fee rate changes never affect already-created invoices.
+     * @param _amount The amount to calculate the fee from.
+     * @param _feeRate The fee rate in basis points (1% = 100).
+     * @return feeValue The calculated fee amount.
+     */
+    function _calculateFee(uint256 _amount, uint256 _feeRate) internal pure returns (uint256 feeValue) {
+        return (_amount * _feeRate) / BASIS_POINTS;
     }
 
     /// @inheritdoc ISimplePaymentProcessor

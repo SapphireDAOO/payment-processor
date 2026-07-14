@@ -44,7 +44,7 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
     uint256 constant MAINNET_CHAIN_ID = 8453;
 
     address constant WTBC_BUYER = 0x03b69Ae9423DF674eAF396c157a03BE9349208f1;
-    address constant USDC_BUYER = 0x5b7AC4a00E5ABf254e5a7FD23c2ee2b34b6a50cE;
+    address constant USDC_BUYER = 0x0cCc149f4c01A2eADa3e9f915CA7628920901623;
     address constant NATIVE_TOKEN_BUYER = 0xBefa750Ed568Cc84970eB4FD506aF4FF599c42D0;
 
     /// @notice Initializes the base setup and deploys the intermediated processor.
