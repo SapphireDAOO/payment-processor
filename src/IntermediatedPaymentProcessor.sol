@@ -5,7 +5,7 @@ import { EscrowFactory } from "./EscrowFactory.sol";
 import { IEscrow } from "./interface/IEscrow.sol";
 import { IOracleManager } from "./interface/IOracleManager.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
-import { IAdvancedPaymentProcessor } from "./interface/IAdvancedPaymentProcessor.sol";
+import { IIntermediatedPaymentProcessor } from "./interface/IIntermediatedPaymentProcessor.sol";
 
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
@@ -25,15 +25,15 @@ import {
     BASIS_POINTS,
     DEFAULT_DECIMAL,
     DEFAULT_MINIMUM_INVOICE_PRICE
-} from "./constants/Advanced.sol";
+} from "./constants/Intermediated.sol";
 
 /**
- * @title AdvancedPaymentProcessor
+ * @title IntermediatedPaymentProcessor
  * @notice Handles the creation, payment, and lifecycle management of single and meta invoices with escrow logic.
  * @dev Releases and refunds are triggered manually by the marketplace; there is no automated upkeep path.
  *      Inherits interfaces for payment processing and escrow deployment.
  */
-contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, ReentrancyGuard {
+contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, EscrowFactory, ReentrancyGuard {
     using { SafeTransferLib.safeTransferETH, SafeTransferLib.safeTransferFrom } for address;
     using { SafeCastLib.toUint40, SafeCastLib.toUint216 } for uint256;
     using { SafeCastLib.toUint256 } for int256;
@@ -83,7 +83,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
     }
 
     /**
-     * @notice Initializes the AdvancedPaymentProcessor contract with core configuration.
+     * @notice Initializes the IntermediatedPaymentProcessor contract with core configuration.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      * @param _oracle The address of the deployed OracleManager contract used for token price conversions.
      */
@@ -94,7 +94,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         minimumPrice = DEFAULT_MINIMUM_INVOICE_PRICE;
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function createSingleInvoice(InvoiceCreationParam memory _param)
         external
         onlyMarketplace
@@ -103,7 +103,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         return _createInvoice(ppStorage.updateInvoiceNonce(1), 0, _param);
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function createMetaInvoice(InvoiceCreationParam[] memory _param)
         external
         onlyMarketplace
@@ -135,7 +135,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         return metaInvoiceId;
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant {
         Invoice memory i = invoices[_invoiceId];
         uint256 priceInToken = getTokenValueFromUsd(_paymentToken, i.price);
@@ -172,7 +172,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         if (refundableAmount > 0) (msg.sender).safeTransferETH(refundableAmount);
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant {
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
@@ -183,7 +183,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         _paySubInvoices(m.subInvoiceIds, _paymentToken, usdPerToken, decimals);
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function createDispute(uint216 _invoiceId) external onlyMarketplace {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != PAID) revert InvalidInvoiceState();
@@ -193,7 +193,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         emit DisputeCreated(_invoiceId);
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external onlyMarketplace {
         Invoice memory i = invoices[_invoiceId];
 
@@ -217,7 +217,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         }
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function release(uint216 _invoiceId) external onlyMarketplace {
         Invoice memory i = invoices[_invoiceId];
         uint8 state = i.state;
@@ -238,7 +238,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         emit PaymentReleased(_invoiceId, i.seller, i.paymentToken, sellerNetAmount, fee);
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != PAID) revert InvalidInvoiceState();
@@ -260,7 +260,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         emit Refunded(_invoiceId, amount);
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function cancelInvoice(uint216 _invoiceId) public onlyMarketplace {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != CREATED) revert InvalidInvoiceState();
@@ -271,7 +271,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         emit InvoiceCanceled(_invoiceId);
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function resolveDispute(uint216 _invoiceId) external onlyMarketplace {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != DISPUTED) revert InvalidInvoiceState();
@@ -281,7 +281,7 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         emit DisputeResolved(_invoiceId);
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external onlyOwner {
         Invoice memory i = invoices[_invoiceId];
 
@@ -295,19 +295,19 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         emit UpdateReleaseTime(_invoiceId, _holdPeriod);
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function setMinimumPrice(uint256 _newMinimumPrice) external onlyOwner {
         minimumPrice = _newMinimumPrice;
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function setOracle(address _oracle) external onlyOwner {
         if (_oracle == address(0)) revert InvalidOracle();
         emit OracleUpdated(address(oracle), _oracle);
         oracle = IOracleManager(_oracle);
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function getTokenValueFromUsd(address _paymentToken, uint256 _usdAmount) public view returns (uint256 tokenValue) {
         uint256 usdPerToken = _usdPerToken(_paymentToken);
         uint8 tokenDecimals = _paymentToken == address(0) ? DEFAULT_DECIMAL : _getDecimals(_paymentToken);
@@ -569,37 +569,37 @@ contract AdvancedPaymentProcessor is IAdvancedPaymentProcessor, EscrowFactory, R
         if (msg.sender != ppStorage.getMarketplace()) revert NotAuthorized();
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function getInvoice(uint216 _invoiceId) external view returns (Invoice memory i) {
         return invoices[_invoiceId];
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function getMetaInvoice(uint216 _metaInvoiceId) public view returns (MetaInvoice memory m) {
         return metaInvoices[_metaInvoiceId];
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function totalUniqueInvoiceCreated() external view returns (uint216 totalInvoices) {
         return ppStorage.totalInvoiceCreated();
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function totalMetaInvoiceCreated() external view returns (uint216 totalMetaInvoices) {
         return nextMetaInvoiceNonce - 1;
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function getMinimumPrice() external view returns (uint256 currentMinimumPrice) {
         return minimumPrice;
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonce) {
         return ppStorage.getNextInvoiceNonce();
     }
 
-    /// @inheritdoc IAdvancedPaymentProcessor
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function getNextMetaInvoiceNonce() external view returns (uint216 nextMetaInvoiceId) {
         return nextMetaInvoiceNonce;
     }

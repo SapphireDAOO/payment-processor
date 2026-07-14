@@ -11,6 +11,7 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     uint256 constant MINIMUM_INVOICE_VALUE = 1 ether;
 
     address constant FORWARDER_TWO = address(0xb0);
+    address constant WORKFLOW_OWNER = address(0xc0ffee);
 
     /// @notice Initializes the base setup and deploys the simple payment processor.
     function setUp() public virtual {
@@ -36,9 +37,20 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
         Notes(_notesAddress).setAuthorized(address(simplePP), true);
         vm.stopPrank();
 
-        vm.prank(_storageAddress);
+        vm.startPrank(_storageAddress);
         simplePP.setForwarderAddress(FORWARDER_TWO);
+        simplePP.setWorkflowOwner(WORKFLOW_OWNER);
+        vm.stopPrank();
 
         simplePaymentProcessor = simplePP;
+    }
+
+    /**
+     * @notice Builds CRE report metadata carrying the given workflow owner.
+     * @param _workflowOwner The workflow owner address to embed in the metadata.
+     * @return metadata Tightly packed metadata: workflowId, workflowName, workflowOwner, reportId.
+     */
+    function _workflowMetadata(address _workflowOwner) internal pure returns (bytes memory metadata) {
+        metadata = abi.encodePacked(bytes32(0), bytes10("invoices"), _workflowOwner, bytes2(0));
     }
 }

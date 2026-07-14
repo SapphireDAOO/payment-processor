@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
-import { AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
+import { IntermediatedPaymentProcessor } from "../../src/IntermediatedPaymentProcessor.sol";
 import { OracleManager } from "../../src/OracleManager.sol";
 import { IOracleManager } from "../../src/interface/IOracleManager.sol";
 import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
@@ -20,8 +20,8 @@ struct Addr {
     address wbtc;
 }
 
-abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
-    AdvancedPaymentProcessor advancedPP;
+abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
+    IntermediatedPaymentProcessor intermediatedPP;
     OracleManager oracle;
     MockUsdc mockUsdc;
     MockWbtc mockWBtc;
@@ -47,23 +47,23 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
     address constant USDC_BUYER = 0x5b7AC4a00E5ABf254e5a7FD23c2ee2b34b6a50cE;
     address constant NATIVE_TOKEN_BUYER = 0xBefa750Ed568Cc84970eB4FD506aF4FF599c42D0;
 
-    /// @notice Initializes the base setup and deploys the advanced processor.
+    /// @notice Initializes the base setup and deploys the intermediated processor.
     function setUp() public virtual {
         (address storageAddress, address notesAddress) = initialize();
 
-        address ca = address(_advancedPaymentProcessorSetUp(storageAddress));
+        address ca = address(_intermediatedPaymentProcessorSetUp(storageAddress));
         vm.prank(admin);
         Notes(notesAddress).setAuthorized(ca, true);
     }
 
     /**
-     * @notice Deploys and configures the AdvancedPaymentProcessor for tests.
+     * @notice Deploys and configures the IntermediatedPaymentProcessor for tests.
      * @param _storageAddress The PaymentProcessorStorage address.
-     * @return advancedPaymentProcessor The deployed processor instance.
+     * @return intermediatedPaymentProcessor The deployed processor instance.
      */
-    function _advancedPaymentProcessorSetUp(address _storageAddress)
+    function _intermediatedPaymentProcessorSetUp(address _storageAddress)
         internal
-        returns (AdvancedPaymentProcessor advancedPaymentProcessor)
+        returns (IntermediatedPaymentProcessor intermediatedPaymentProcessor)
     {
         Addr memory addr = _setUp();
 
@@ -82,18 +82,18 @@ abstract contract AdvancedPaymentProcessorSetUp is BaseSetUp {
             IOracleManager.PriceFeedConfig({ aggregator: address(addr.nativeTokenPriceFeed), heartbeat: 24 hours })
         );
 
-        advancedPP = new AdvancedPaymentProcessor(_storageAddress, address(oracle));
+        intermediatedPP = new IntermediatedPaymentProcessor(_storageAddress, address(oracle));
 
-        PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(advancedPP), true);
+        PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(intermediatedPP), true);
         vm.stopPrank();
 
-        _mintAndApproveTokens(address(advancedPP));
+        _mintAndApproveTokens(address(intermediatedPP));
 
         if (block.chainid == MAINNET_CHAIN_ID) {
-            vm.makePersistent(address(advancedPP), _storageAddress);
+            vm.makePersistent(address(intermediatedPP), _storageAddress);
         }
 
-        advancedPaymentProcessor = advancedPP;
+        intermediatedPaymentProcessor = intermediatedPP;
     }
 
     /**
