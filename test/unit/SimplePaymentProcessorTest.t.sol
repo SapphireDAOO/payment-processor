@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import { ISimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
+import { IERC165, IReceiver } from "../../src/interface/IReceiver.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
 import { console } from "forge-std/console.sol";
 import { IEscrow } from "src/interface/IEscrow.sol";
@@ -29,6 +30,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(ppStorage.getDefaultHoldPeriod(), DEFAULT_HOLD_PERIOD);
         assertEq(simplePP.getMinimumInvoiceValue(), MINIMUM_INVOICE_VALUE);
         assertEq(simplePP.getForwarder(), FORWARDER_TWO);
+        assertEq(simplePP.getWorkflowOwner(), WORKFLOW_OWNER);
     }
 
     function test_setForwarder() public {
@@ -392,8 +394,8 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.warp(block.timestamp + 5 days);
 
-        (bool upkeepNeeded,) = simplePP.checkUpkeep("");
-        assertTrue(upkeepNeeded);
+        bool dueTasksExist = simplePP.hasDueTasks();
+        assertTrue(dueTasksExist);
 
         uint216[] memory o = simplePP.getItems();
 
@@ -404,10 +406,10 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.prank(buyerOne);
         vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
-        simplePP.performUpkeep("");
+        simplePP.processDueTasks();
 
         vm.prank(admin);
-        simplePP.performUpkeep("");
+        simplePP.processDueTasks();
         for (uint256 i = 0; i < numberOfInvoice; i++) {
             console.log("order:", invoiceIds[i], simplePP.getInvoiceData(invoiceIds[i]).state, i);
         }
@@ -427,7 +429,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.warp(block.timestamp + 3 days);
 
         vm.prank(admin);
-        simplePP.performUpkeep("");
+        simplePP.processDueTasks();
 
         uint256 buyerBalanceAfterRefund = address(buyerOne).balance;
 
@@ -465,7 +467,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.warp(block.timestamp + 1 days + 1);
 
         vm.prank(admin);
-        simplePP.performUpkeep("");
+        simplePP.processDueTasks();
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
     }
@@ -481,7 +483,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.acceptPayment(invoiceId);
 
         vm.prank(admin);
-        simplePP.performUpkeep("");
+        simplePP.processDueTasks();
     }
 
     function test_directEscrowWithdrawal() public {
@@ -498,12 +500,12 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         IEscrow(escrow).withdraw(address(0), address(this), escrow.balance);
     }
 
-    function test_checkUpkeepReturnsFalseWhenEmpty() public view {
-        (bool upkeepNeeded,) = simplePP.checkUpkeep("");
-        assertFalse(upkeepNeeded);
+    function test_hasDueTasksReturnsFalseWhenEmpty() public view {
+        bool dueTasksExist = simplePP.hasDueTasks();
+        assertFalse(dueTasksExist);
     }
 
-    function test_performUpkeepForwarderCanCall() public {
+    function test_onReportForwarderCanCall() public {
         uint256 invoicePrice = 10 ether;
 
         vm.prank(sellerOne);
@@ -515,9 +517,46 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.warp(block.timestamp + simplePP.decisionWindow() + 1);
 
         vm.prank(FORWARDER_TWO);
-        simplePP.performUpkeep("");
+        simplePP.onReport(_workflowMetadata(WORKFLOW_OWNER), "");
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
+    }
+
+    function test_onReportRevertsForNonForwarder() public {
+        vm.prank(admin);
+        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
+        simplePP.onReport(_workflowMetadata(WORKFLOW_OWNER), "");
+    }
+
+    function test_onReportRevertsForUnauthorizedWorkflowOwner() public {
+        address rogueOwner = address(0xbad);
+
+        vm.prank(FORWARDER_TWO);
+        vm.expectRevert(abi.encodeWithSelector(ISimplePaymentProcessor.UnauthorizedWorkflowOwner.selector, rogueOwner));
+        simplePP.onReport(_workflowMetadata(rogueOwner), "");
+    }
+
+    function test_onReportRevertsForMalformedMetadata() public {
+        vm.prank(FORWARDER_TWO);
+        vm.expectRevert(abi.encodeWithSelector(ISimplePaymentProcessor.UnauthorizedWorkflowOwner.selector, address(0)));
+        simplePP.onReport("", "");
+    }
+
+    function test_setWorkflowOwner() public {
+        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
+        simplePP.setWorkflowOwner(address(2));
+
+        address newWorkflowOwner = address(0xdead);
+        vm.prank(admin);
+        simplePP.setWorkflowOwner(newWorkflowOwner);
+
+        assertEq(simplePP.getWorkflowOwner(), newWorkflowOwner);
+    }
+
+    function test_supportsInterface() public view {
+        assertTrue(simplePP.supportsInterface(type(IReceiver).interfaceId));
+        assertTrue(simplePP.supportsInterface(type(IERC165).interfaceId));
+        assertFalse(simplePP.supportsInterface(0xffffffff));
     }
 
     function test_rejectPaymentRevertsAfterWindowExpires() public {
@@ -622,7 +661,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         uint256 buyerBefore = buyerOne.balance;
         vm.prank(admin);
-        simplePP.performUpkeep("");
+        simplePP.processDueTasks();
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
         assertEq(simplePP.getInvoiceData(invoiceId).withdrawalRetries, 3);
@@ -649,7 +688,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
 
         vm.prank(admin);
-        simplePP.performUpkeep("");
+        simplePP.processDueTasks();
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, LOCKED);
         assertEq(simplePP.getInvoiceData(invoiceId).withdrawalRetries, 6);

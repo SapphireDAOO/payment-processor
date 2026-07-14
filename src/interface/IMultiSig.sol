@@ -137,7 +137,7 @@ interface IMultiSig {
 
     /**
      * @notice Proposes a new administrative transaction targeting a payment processor.
-     * @param target  Payment processor address (SimplePaymentProcessor or AdvancedPaymentProcessor).
+     * @param target  Payment processor address (SimplePaymentProcessor or IntermediatedPaymentProcessor).
      * @param value   ETH to forward; must be 0 for admin calls.
      * @param data    ABI-encoded payment processor admin function call.
      * @return txHash keccak256 hash of the transaction, used as its identifier.

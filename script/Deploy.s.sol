@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import { Script, console } from "forge-std/Script.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../src/PaymentProcessorStorage.sol";
 import { SimplePaymentProcessor } from "../src/SimplePaymentProcessor.sol";
-import { AdvancedPaymentProcessor } from "../src/AdvancedPaymentProcessor.sol";
+import { IntermediatedPaymentProcessor } from "../src/IntermediatedPaymentProcessor.sol";
 import { OracleManager } from "../src/OracleManager.sol";
 import { IOracleManager } from "../src/interface/IOracleManager.sol";
 import { MockUsdc, MockWbtc } from "../test/mock/mERC20.sol";
@@ -115,20 +115,21 @@ contract Deploy is Script {
         OracleManager oracle = new OracleManager(address(ppStorage), addr.sequencerUptimeFeed);
         console.log("OracleManager deployed:           ", address(oracle));
 
-        AdvancedPaymentProcessor advancedPP = new AdvancedPaymentProcessor(address(ppStorage), address(oracle));
-        console.log("AdvancedPaymentProcessor deployed:", address(advancedPP));
+        IntermediatedPaymentProcessor intermediatedPP =
+            new IntermediatedPaymentProcessor(address(ppStorage), address(oracle));
+        console.log("IntermediatedPaymentProcessor deployed:", address(intermediatedPP));
 
         console.log("");
         console.log("--- Wiring ---");
 
         notes.setAuthorized(msg.sender, true);
         notes.setAuthorized(address(simplePP), true);
-        notes.setAuthorized(address(advancedPP), true);
-        console.log("Notes authorized: deployer, SimplePaymentProcessor, AdvancedPaymentProcessor");
+        notes.setAuthorized(address(intermediatedPP), true);
+        console.log("Notes authorized: deployer, SimplePaymentProcessor, IntermediatedPaymentProcessor");
 
         ppStorage.setAuthorizedAddress(address(simplePP), true);
-        ppStorage.setAuthorizedAddress(address(advancedPP), true);
-        console.log("Storage authorized: SimplePaymentProcessor, AdvancedPaymentProcessor");
+        ppStorage.setAuthorizedAddress(address(intermediatedPP), true);
+        console.log("Storage authorized: SimplePaymentProcessor, IntermediatedPaymentProcessor");
 
         // Mock feeds (non-mainnet) report a static timestamp, so disable the staleness check with heartbeat 0.
         uint96 heartbeat = isMainnet ? FEED_HEARTBEAT : 0;
@@ -155,7 +156,7 @@ contract Deploy is Script {
         console.log("Notes:                   ", address(notes));
         console.log("SimplePaymentProcessor:  ", address(simplePP));
         console.log("OracleManager:           ", address(oracle));
-        console.log("AdvancedPaymentProcessor:", address(advancedPP));
+        console.log("IntermediatedPaymentProcessor:", address(intermediatedPP));
         if (!isMainnet) {
             console.log("MockUsdc:                ", addr.usdc);
             console.log("MockWbtc:                ", addr.wbtc);

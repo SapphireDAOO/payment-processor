@@ -78,9 +78,9 @@ interface IPaymentProcessorStorage {
     function setFeeRate(uint96 _feeRate) external;
 
     /**
-     * @notice Updates the gas threshold used in automated upkeep logic.
+     * @notice Updates the gas threshold used in automated task processing.
      * @dev Only callable by the contract owner. This threshold determines the minimum gas
-     *      required to continue processing during `performUpkeep`.
+     *      required to continue processing during `onReport` / `processDueTasks`.
      * @param _newGasThreshold The new gas threshold value (in units of gas).
      */
     function setGasThreshold(uint96 _newGasThreshold) external;
@@ -136,8 +136,9 @@ interface IPaymentProcessorStorage {
     function getDefaultHoldPeriod() external view returns (uint256 defaultHoldPeriod);
 
     /**
-     * @notice Returns the current gas threshold used to limit the execution loop in automated upkeep.
-     * @dev This threshold is typically used to prevent out-of-gas errors during batch operations in Chainlink Automation.
+     * @notice Returns the current gas threshold used to limit the execution loop in automated task processing.
+     * @dev This threshold is typically used to prevent out-of-gas errors during batch operations
+     *      triggered by the Chainlink CRE workflow.
      * @return gasThreshold The current gas threshold value.
      */
     function getGasThreshold() external view returns (uint256 gasThreshold);

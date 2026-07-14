@@ -52,6 +52,10 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when the escrow withdrawal fails during a manual release, reject, or refund.
     error EscrowWithdrawFailed();
 
+    /// @notice Thrown when a CRE report's metadata does not carry the authorized workflow owner.
+    /// @param _workflowOwner The workflow owner address decoded from the report metadata.
+    error UnauthorizedWorkflowOwner(address _workflowOwner);
+
     // ================================================================
     //                              STRUCTS
     // ================================================================
@@ -177,10 +181,32 @@ interface ISimplePaymentProcessor {
     function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) external;
 
     /**
-     * @notice Updates the address of the forwarder contract used for relayed or automated calls.
+     * @notice Updates the address of the CRE (Keystone) forwarder contract that delivers workflow reports.
+     * @dev Only the configured forwarder may call `onReport`.
      * @param _forwarderAddress The new forwarder contract address to be set.
      */
     function setForwarderAddress(address _forwarderAddress) external;
+
+    /**
+     * @notice Updates the CRE workflow owner authorized to trigger `onReport`.
+     * @dev Reports whose metadata carries a different workflow owner are rejected, so workflows
+     *      deployed by other owners cannot trigger task processing through the shared forwarder.
+     * @param _workflowOwner The address that owns the authorized CRE workflow.
+     */
+    function setWorkflowOwner(address _workflowOwner) external;
+
+    /**
+     * @notice Processes due invoice tasks (auto-release and auto-refund) within the gas threshold.
+     * @dev Owner-only manual fallback for the CRE workflow path (`onReport`).
+     */
+    function processDueTasks() external;
+
+    /**
+     * @notice Returns whether any scheduled invoice task is due for processing.
+     * @dev Read by the CRE workflow each cron tick to decide whether to submit a report onchain.
+     * @return dueTasksExist True when the earliest scheduled task is due.
+     */
+    function hasDueTasks() external view returns (bool dueTasksExist);
 
     /**
      * @notice Updates the decision window sellers have to accept/reject payments after buyer payment.
@@ -224,10 +250,16 @@ interface ISimplePaymentProcessor {
     function calculateFee(uint256 _amount) external view returns (uint256 feeValue);
 
     /**
-     * @notice Returns the address of the configured forwarder contract.
+     * @notice Returns the address of the configured CRE forwarder contract.
      * @return forwarderAddress The configured forwarder address.
      */
     function getForwarder() external view returns (address forwarderAddress);
+
+    /**
+     * @notice Returns the CRE workflow owner authorized to trigger `onReport`.
+     * @return workflowOwnerAddress The authorized workflow owner address.
+     */
+    function getWorkflowOwner() external view returns (address workflowOwnerAddress);
 
     /**
      * @notice Returns the minimum allowed invoice value required for invoice creation.

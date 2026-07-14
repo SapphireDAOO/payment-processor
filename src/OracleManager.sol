@@ -9,7 +9,7 @@ import { PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 /**
  * @title OracleManager
  * @notice Manages Chainlink price feeds and sequencer uptime checks for payment token conversions.
- * @dev Deployed as a standalone contract and referenced by AdvancedPaymentProcessor via IOracleManager.
+ * @dev Deployed as a standalone contract and referenced by IntermediatedPaymentProcessor via IOracleManager.
  *      Ownership is delegated to `PaymentProcessorStorage.owner()`.
  */
 contract OracleManager is IOracleManager {

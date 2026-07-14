@@ -106,7 +106,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         assertEq(NATIVE_TOKEN_BUYER.balance, buyerBalanceBefore + INVOICE_PRICE);
     }
 
-    function test_performUpkeep_autoReleasesAcceptedInvoice() public {
+    function test_processDueTasks_autoReleasesAcceptedInvoice() public {
         vm.prank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, "", false);
 
@@ -122,7 +122,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
 
         vm.prank(admin);
-        simplePP.performUpkeep("");
+        simplePP.processDueTasks();
 
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
 
@@ -130,7 +130,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         assertEq(sellerOne.balance, sellerBalanceBefore + (INVOICE_PRICE - expectedFee));
     }
 
-    function test_performUpkeep_autoRefundsBuyerWhenSellerDoesNotAct() public {
+    function test_processDueTasks_autoRefundsBuyerWhenSellerDoesNotAct() public {
         vm.prank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, "", false);
 
@@ -143,7 +143,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         vm.warp(uint256(inv.expiresAt) + 1);
 
         vm.prank(admin);
-        simplePP.performUpkeep("");
+        simplePP.processDueTasks();
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
         assertEq(NATIVE_TOKEN_BUYER.balance, buyerBalanceBefore + INVOICE_PRICE);

@@ -2,10 +2,10 @@
 pragma solidity 0.8.28;
 
 /**
- *  @title IAdvancedPaymentProcessor
- *  @notice Interface for the advanced payment processor contract with escrow, meta-invoice, and dispute support.
+ *  @title IIntermediatedPaymentProcessor
+ *  @notice Interface for the intermediated payment processor contract with escrow, meta-invoice, and dispute support.
  */
-interface IAdvancedPaymentProcessor {
+interface IIntermediatedPaymentProcessor {
     // ================================================================
     //                              ERRORS
     // ================================================================
