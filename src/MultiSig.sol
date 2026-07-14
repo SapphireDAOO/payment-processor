@@ -10,7 +10,7 @@ import { LibCall } from "solady/utils/LibCall.sol";
  * @notice Multisignature governance contract for privileged payment processor administration.
  *         Replaces a single-owner key with collective authorization across a defined signer set.
  *         Administrative calls (fee updates, decision windows, locked fund recovery, etc.) to
- *         SimplePaymentProcessor, AdvancedPaymentProcessor and PaymentProcessorStorage must pass through this contract.
+ *         SimplePaymentProcessor, IntermediatedPaymentProcessor and PaymentProcessorStorage must pass through this contract.
  */
 contract MultiSig is IMultiSig {
     using LibCall for address;

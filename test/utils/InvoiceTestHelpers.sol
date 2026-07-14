@@ -2,10 +2,13 @@
 pragma solidity 0.8.28;
 
 import { LibString } from "solady/utils/LibString.sol";
-import { IAdvancedPaymentProcessor, AdvancedPaymentProcessor } from "../../src/AdvancedPaymentProcessor.sol";
+import {
+    IIntermediatedPaymentProcessor,
+    IntermediatedPaymentProcessor
+} from "../../src/IntermediatedPaymentProcessor.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 
-import { BASIS_POINTS } from "src/constants/Advanced.sol";
+import { BASIS_POINTS } from "src/constants/Intermediated.sol";
 
 /**
  * @notice Builds a single invoice creation parameter struct.
@@ -16,7 +19,7 @@ import { BASIS_POINTS } from "src/constants/Advanced.sol";
  */
 function getInvoiceCreationParam(uint256 _invoiceNonce, address _seller, uint256 _price)
     pure
-    returns (IAdvancedPaymentProcessor.InvoiceCreationParam memory invoiceParam)
+    returns (IIntermediatedPaymentProcessor.InvoiceCreationParam memory invoiceParam)
 {
     invoiceParam.invoiceId = LibString.toString(_invoiceNonce);
     invoiceParam.seller = _seller;
@@ -33,10 +36,10 @@ function getInvoiceCreationParam(uint256 _invoiceNonce, address _seller, uint256
  */
 function getInvoiceCreationParams(uint256 _invoiceNonce, address[] memory _sellers, uint256[] memory _prices)
     pure
-    returns (IAdvancedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory subInvoiceIds)
+    returns (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory subInvoiceIds)
 {
     uint256 numberOfInvoice = _sellers.length;
-    params = new IAdvancedPaymentProcessor.InvoiceCreationParam[](numberOfInvoice);
+    params = new IIntermediatedPaymentProcessor.InvoiceCreationParam[](numberOfInvoice);
     subInvoiceIds = new uint216[](numberOfInvoice);
 
     for (uint256 i; i < numberOfInvoice; i++) {
@@ -58,13 +61,13 @@ function applyBasisPoints(uint256 _amount, uint256 _basisPoints) pure returns (u
 
 /**
  * @notice Computes the escrow address for a given invoice.
- * @param _pp The advanced payment processor instance.
+ * @param _pp The intermediated payment processor instance.
  * @param _seller The seller address.
  * @param _buyer The buyer address.
  * @param _invoiceId The invoice ID.
  * @return escrowAddress The predicted escrow contract address.
  */
-function getEscrowAddress(AdvancedPaymentProcessor _pp, address _seller, address _buyer, uint216 _invoiceId)
+function getEscrowAddress(IntermediatedPaymentProcessor _pp, address _seller, address _buyer, uint216 _invoiceId)
     view
     returns (address escrowAddress)
 {

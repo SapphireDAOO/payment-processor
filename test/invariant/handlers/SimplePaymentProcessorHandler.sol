@@ -133,9 +133,9 @@ contract SimplePaymentProcessorHandler is Test {
         pp.refundBuyer(invoiceId);
     }
 
-    function performUpkeep() public {
+    function processDueTasks() public {
         vm.prank(admin);
-        pp.performUpkeep("");
+        pp.processDueTasks();
     }
 
     function releaseLocked(uint256 _index) public invoiceExists {

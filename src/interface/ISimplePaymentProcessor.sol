@@ -52,6 +52,10 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when the escrow withdrawal fails during a manual release, reject, or refund.
     error EscrowWithdrawFailed();
 
+    /// @notice Thrown when a CRE report's metadata does not carry the authorized workflow owner.
+    /// @param _workflowOwner The workflow owner address decoded from the report metadata.
+    error UnauthorizedWorkflowOwner(address _workflowOwner);
+
     // ================================================================
     //                              STRUCTS
     // ================================================================
@@ -66,6 +70,8 @@ interface ISimplePaymentProcessor {
     /// @param state The current state of the invoice.
     /// @param withdrawalRetries Number of failed `IEscrow.withdraw` attempts by the automation path. Resets are not needed
     ///        because an invoice follows only one terminal path. Packed with `state` in the same slot.
+    /// @param feeRate The platform fee rate (in basis points) captured at invoice creation. Releases always
+    ///        charge this rate, so later changes to the global fee rate do not affect existing invoices.
     /// @param seller The address of the seller of the invoice.
     /// @param buyer The address of the buyer of the invoice.
     /// @param escrow The address of the escrow contract managing the funds for this invoice.
@@ -80,6 +86,7 @@ interface ISimplePaymentProcessor {
         uint40 expiresAt;
         uint8 state;
         uint8 withdrawalRetries;
+        uint16 feeRate;
         address seller;
         address buyer;
         address escrow;
@@ -177,10 +184,32 @@ interface ISimplePaymentProcessor {
     function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) external;
 
     /**
-     * @notice Updates the address of the forwarder contract used for relayed or automated calls.
+     * @notice Updates the address of the CRE (Keystone) forwarder contract that delivers workflow reports.
+     * @dev Only the configured forwarder may call `onReport`.
      * @param _forwarderAddress The new forwarder contract address to be set.
      */
     function setForwarderAddress(address _forwarderAddress) external;
+
+    /**
+     * @notice Updates the CRE workflow owner authorized to trigger `onReport`.
+     * @dev Reports whose metadata carries a different workflow owner are rejected, so workflows
+     *      deployed by other owners cannot trigger task processing through the shared forwarder.
+     * @param _workflowOwner The address that owns the authorized CRE workflow.
+     */
+    function setWorkflowOwner(address _workflowOwner) external;
+
+    /**
+     * @notice Processes due invoice tasks (auto-release and auto-refund) within the gas threshold.
+     * @dev Owner-only manual fallback for the CRE workflow path (`onReport`).
+     */
+    function processDueTasks() external;
+
+    /**
+     * @notice Returns whether any scheduled invoice task is due for processing.
+     * @dev Read by the CRE workflow each cron tick to decide whether to submit a report onchain.
+     * @return dueTasksExist True when the earliest scheduled task is due.
+     */
+    function hasDueTasks() external view returns (bool dueTasksExist);
 
     /**
      * @notice Updates the decision window sellers have to accept/reject payments after buyer payment.
@@ -216,18 +245,26 @@ interface ISimplePaymentProcessor {
     function getInvoiceData(uint216 _invoiceId) external view returns (Invoice memory i);
 
     /**
-     * @notice Calculates the fee based on the provided amount and current fee rate.
-     * @dev Fee rate is expressed in basis points (1% = 100).
+     * @notice Calculates the fee based on the provided amount and the current global fee rate.
+     * @dev Fee rate is expressed in basis points (1% = 100). This quotes the rate that would be
+     *      captured by an invoice created now; releases use the rate snapshotted on the invoice
+     *      at creation, not the current global rate.
      * @param _amount The amount to calculate the fee from.
      * @return feeValue The calculated fee amount.
      */
     function calculateFee(uint256 _amount) external view returns (uint256 feeValue);
 
     /**
-     * @notice Returns the address of the configured forwarder contract.
+     * @notice Returns the address of the configured CRE forwarder contract.
      * @return forwarderAddress The configured forwarder address.
      */
     function getForwarder() external view returns (address forwarderAddress);
+
+    /**
+     * @notice Returns the CRE workflow owner authorized to trigger `onReport`.
+     * @return workflowOwnerAddress The authorized workflow owner address.
+     */
+    function getWorkflowOwner() external view returns (address workflowOwnerAddress);
 
     /**
      * @notice Returns the minimum allowed invoice value required for invoice creation.
