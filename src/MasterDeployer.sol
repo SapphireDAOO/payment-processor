@@ -80,7 +80,8 @@ contract MasterDeployer is IMasterDeployer {
             )
         );
 
-        notes = Notes(Create2.deploy(0, _params.salt, abi.encodePacked(type(Notes).creationCode, abi.encode(predicted))));
+        notes =
+            Notes(Create2.deploy(0, _params.salt, abi.encodePacked(type(Notes).creationCode, abi.encode(predicted))));
 
         simplePaymentProcessor = SimplePaymentProcessor(
             Create2.deploy(
@@ -97,9 +98,7 @@ contract MasterDeployer is IMasterDeployer {
             Create2.deploy(
                 0,
                 _params.salt,
-                abi.encodePacked(
-                    type(OracleManager).creationCode, abi.encode(predicted, _params.sequencerUptimeFeed)
-                )
+                abi.encodePacked(type(OracleManager).creationCode, abi.encode(predicted, _params.sequencerUptimeFeed))
             )
         );
 
