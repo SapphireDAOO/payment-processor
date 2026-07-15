@@ -4,8 +4,9 @@ pragma solidity 0.8.28;
 import { Test } from "forge-std/Test.sol";
 import { MultiSig } from "../../src/MultiSig.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
+import { IAuthorizedAddressProvider } from "../../src/interface/IMasterDeployer.sol";
 
-abstract contract MultiSigSetUp is Test {
+abstract contract MultiSigSetUp is Test, IAuthorizedAddressProvider {
     MultiSig multisig;
     PaymentProcessorStorage ppStorage;
 
@@ -28,6 +29,12 @@ abstract contract MultiSigSetUp is Test {
 
     function setUp() public virtual {
         _multiSigSetUp();
+    }
+
+    /// @dev PaymentProcessorStorage reads this from its deployer at construction; the multisig
+    ///      tests need no authorized processors.
+    function authorizedAddresses() external pure returns (address[] memory authorized) {
+        authorized = new address[](0);
     }
 
     function _multiSigSetUp() internal virtual returns (MultiSig deployedMultiSig) {

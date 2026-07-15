@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 import { SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { BaseSetUp } from "./BaseSetUp.sol";
 import { Notes } from "src/Notes.sol";
@@ -13,29 +12,33 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     address constant FORWARDER_TWO = address(0xb0);
     address constant WORKFLOW_OWNER = address(0xc0ffee);
 
-    /// @notice Initializes the base setup and deploys the simple payment processor.
+    /// @notice Initializes the base setup and wires the simple payment processor.
     function setUp() public virtual {
         (address storageAddress, address notesAddress) = initialize();
         _simplePaymentProcessorSetUp(storageAddress, notesAddress);
     }
 
+    /// @dev Deploys the processor against the predicted storage address so it can be authorized at
+    ///      storage construction.
+    function _deployAuthorized(address _predictedStorage, address _notesAddress) internal virtual override {
+        super._deployAuthorized(_predictedStorage, _notesAddress);
+        simplePP = new SimplePaymentProcessor(_predictedStorage, MINIMUM_INVOICE_VALUE, _notesAddress);
+        _authorize(address(simplePP));
+    }
+
     /**
-     * @notice Deploys and configures the SimplePaymentProcessor for tests.
+     * @notice Configures the SimplePaymentProcessor deployed during {initialize}.
      * @param _storageAddress The PaymentProcessorStorage address.
      * @param _notesAddress The Notes contract address.
-     * @return simplePaymentProcessor The deployed processor instance.
+     * @return simplePaymentProcessor The configured processor instance.
      */
     function _simplePaymentProcessorSetUp(address _storageAddress, address _notesAddress)
         internal
         virtual
         returns (SimplePaymentProcessor simplePaymentProcessor)
     {
-        vm.startPrank(admin);
-        simplePP = new SimplePaymentProcessor(_storageAddress, MINIMUM_INVOICE_VALUE, _notesAddress);
-
-        PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(simplePP), true);
+        vm.prank(admin);
         Notes(_notesAddress).setAuthorized(address(simplePP), true);
-        vm.stopPrank();
 
         vm.startPrank(_storageAddress);
         simplePP.setForwarderAddress(FORWARDER_TWO);

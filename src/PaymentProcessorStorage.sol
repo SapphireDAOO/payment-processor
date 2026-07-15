@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
+import { IAuthorizedAddressProvider } from "./interface/IMasterDeployer.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 
 /**
@@ -49,6 +50,11 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /**
      * @notice Initializes the contract with the given configuration.
      * @dev Sets the contract owner, stores the initial configuration parameters, and initializes the invoice nonce counter.
+     *      The addresses to authorize are fetched from the deployer (`msg.sender`) via
+     *      {IAuthorizedAddressProvider.authorizedAddresses}, so the deployer must be a contract implementing that
+     *      interface. Keeping the list out of the constructor args keeps it out of the CREATE2 init code, making this
+     *      contract's address predictable before the authorized processors are deployed. Authorization is fixed here,
+     *      at deployment, and cannot be changed afterwards.
      * @param _configuration The initial configuration parameters including owner, gas threshold, and hold period.
      */
     constructor(Configuration memory _configuration) {
@@ -56,6 +62,12 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         config = _configuration;
         nextInvoiceNonce = 1;
         paymentValidityDuration = DEFAULT_PAYMENT_VALIDITY_PERIOD;
+
+        address[] memory authorized = IAuthorizedAddressProvider(msg.sender).authorizedAddresses();
+        for (uint256 i; i < authorized.length; i++) {
+            isAuthorized[authorized[i]] = true;
+            emit AuthorizationUpdated(authorized[i], true);
+        }
 
         emit ConfigurationInitialized(_configuration);
     }
@@ -70,12 +82,6 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     function setFeeReceiver(address _feeReceiverAddress) external onlyOwner {
         config.feeReceiver = _feeReceiverAddress;
         emit FeeReceiverUpdated(_feeReceiverAddress);
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function setAuthorizedAddress(address _authorizedAddress, bool _authorized) external onlyOwner {
-        isAuthorized[_authorizedAddress] = _authorized;
-        emit AuthorizationUpdated(_authorizedAddress, _authorized);
     }
 
     /// @inheritdoc IPaymentProcessorStorage

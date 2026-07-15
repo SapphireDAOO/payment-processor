@@ -88,7 +88,10 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, Reentranc
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
         notes = INotes(_notesAddress);
         decisionWindow = SELLER_DEFAULT_DECISION_WINDOW;
-        setMinimumInvoiceValue(_minimumInvoicePrice);
+        // Assigned directly rather than via setMinimumInvoiceValue: this contract is deployed against a
+        // predicted storage address before the storage contract exists, so the setter's owner check
+        // (which calls into ppStorage) would revert here.
+        minimumInvoiceValue = _minimumInvoicePrice;
     }
 
     /// @inheritdoc ISimplePaymentProcessor

@@ -42,14 +42,6 @@ interface IPaymentProcessorStorage {
     function updateInvoiceNonce(uint216 _by) external returns (uint216 totalInvoices);
 
     /**
-     * @notice Sets or revokes authorization for a specific address.
-     * @dev Only callable by the contract owner.
-     * @param _authorizedAddress The address to authorize or deauthorize.
-     * @param _authorized Whether the address is authorized.
-     */
-    function setAuthorizedAddress(address _authorizedAddress, bool _authorized) external;
-
-    /**
      * @notice Updates the default hold period for all new invoices.
      * @dev Only callable by the contract owner. Reverts with HoldPeriodCanNotBeZero if zero.
      * @param _newDefaultHoldPeriod The new default hold period in seconds.

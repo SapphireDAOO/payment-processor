@@ -3,14 +3,13 @@ pragma solidity 0.8.28;
 
 import { Script, console } from "forge-std/Script.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../src/PaymentProcessorStorage.sol";
-import { SimplePaymentProcessor } from "../src/SimplePaymentProcessor.sol";
-import { IntermediatedPaymentProcessor } from "../src/IntermediatedPaymentProcessor.sol";
+import { MasterDeployer } from "../src/MasterDeployer.sol";
+import { IMasterDeployer } from "../src/interface/IMasterDeployer.sol";
 import { OracleManager } from "../src/OracleManager.sol";
 import { IOracleManager } from "../src/interface/IOracleManager.sol";
 import { MockUsdc, MockWbtc } from "../test/mock/mERC20.sol";
 import { MockV3Aggregator } from "../test/mock/MockV3Aggregator.sol";
 import { Notes } from "../src/Notes.sol";
-import { MultiSig } from "../src/MultiSig.sol";
 
 struct Addr {
     address usdcPriceFeed;
@@ -63,8 +62,12 @@ contract Deploy is Script {
     address constant SIGNER_TWO = 0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4;
     address[] signers = [SIGNER_ONE, SIGNER_TWO];
 
+    // Default CREATE2 salt; bump the version (or set CREATE2_SALT) to redeploy at fresh addresses.
+    bytes32 constant DEFAULT_SALT = keccak256("sapphiredao.payment-processor");
+
     function run() external {
         bool isMainnet = block.chainid == MAINNET_CHAIN_ID;
+        bytes32 salt = vm.envOr("CREATE2_SALT", DEFAULT_SALT);
 
         console.log("=== SapphireDAO Payment Processor Deployment ===");
         console.log("Network:  ", _networkName());
@@ -79,57 +82,66 @@ contract Deploy is Script {
         console.log("MultiSig threshold:  ", INITIAL_THRESHOLD);
         console.log("Signer[0]:           ", SIGNER_ONE);
         console.log("Signer[1]:           ", SIGNER_TWO);
+        console.log("CREATE2 salt:");
+        console.logBytes32(salt);
         console.log("");
         console.log("--- Deploying ---");
 
         vm.startBroadcast();
 
-        MultiSig multisig = new MultiSig(signers, INITIAL_THRESHOLD);
-        console.log("MultiSig deployed:                ", address(multisig));
+        MasterDeployer masterDeployer = new MasterDeployer{ salt: salt }(msg.sender);
+        console.log("MasterDeployer deployed:          ", address(masterDeployer));
 
-        Addr memory addr = _setUp();
+        Addr memory addr = _setUp(salt);
         if (!isMainnet) {
             console.log("MockUsdc deployed:                ", addr.usdc);
             console.log("MockWbtc deployed:                ", addr.wbtc);
         }
 
-        IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
-            owner: msg.sender,
-            feeReceiver: msg.sender,
-            marketplace: msg.sender,
-            feeRate: FEE_RATE,
-            defaultHoldPeriod: DEFAULT_HOLD_PERIOD,
-            gasThreshold: DEFAULT_GAS_THRESHOLD
+        // Owned by the deployer for post-deploy wiring; ownership moves to the MultiSig below.
+        IMasterDeployer.Params memory params = IMasterDeployer.Params({
+            salt: salt,
+            config: IPaymentProcessorStorage.Configuration({
+                owner: msg.sender,
+                feeReceiver: msg.sender,
+                marketplace: msg.sender,
+                feeRate: FEE_RATE,
+                defaultHoldPeriod: DEFAULT_HOLD_PERIOD,
+                gasThreshold: DEFAULT_GAS_THRESHOLD
+            }),
+            minimumInvoiceValue: MINIMUM_INVOICE_VALUE,
+            sequencerUptimeFeed: addr.sequencerUptimeFeed,
+            multiSigSigners: signers,
+            multiSigThreshold: INITIAL_THRESHOLD
         });
 
-        PaymentProcessorStorage ppStorage = new PaymentProcessorStorage(config);
+        address predictedStorage = masterDeployer.predictStorageAddress(salt, params.config);
+        console.log("Predicted PaymentProcessorStorage:", predictedStorage);
+
+        masterDeployer.deployAll(params);
+
+        PaymentProcessorStorage ppStorage = masterDeployer.ppStorage();
+        Notes notes = masterDeployer.notes();
+        OracleManager oracle = masterDeployer.oracleManager();
+        address multisig = address(masterDeployer.multiSig());
+        address simplePP = address(masterDeployer.simplePaymentProcessor());
+        address intermediatedPP = address(masterDeployer.intermediatedPaymentProcessor());
+
+        console.log("MultiSig deployed:                ", multisig);
         console.log("PaymentProcessorStorage deployed: ", address(ppStorage));
-
-        Notes notes = new Notes(address(ppStorage));
         console.log("Notes deployed:                   ", address(notes));
-
-        SimplePaymentProcessor simplePP =
-            new SimplePaymentProcessor(address(ppStorage), MINIMUM_INVOICE_VALUE, address(notes));
-        console.log("SimplePaymentProcessor deployed:  ", address(simplePP));
-
-        OracleManager oracle = new OracleManager(address(ppStorage), addr.sequencerUptimeFeed);
+        console.log("SimplePaymentProcessor deployed:  ", simplePP);
         console.log("OracleManager deployed:           ", address(oracle));
-
-        IntermediatedPaymentProcessor intermediatedPP =
-            new IntermediatedPaymentProcessor(address(ppStorage), address(oracle));
-        console.log("IntermediatedPaymentProcessor deployed:", address(intermediatedPP));
+        console.log("IntermediatedPaymentProcessor deployed:", intermediatedPP);
 
         console.log("");
         console.log("--- Wiring ---");
 
         notes.setAuthorized(msg.sender, true);
-        notes.setAuthorized(address(simplePP), true);
-        notes.setAuthorized(address(intermediatedPP), true);
+        notes.setAuthorized(simplePP, true);
+        notes.setAuthorized(intermediatedPP, true);
         console.log("Notes authorized: deployer, SimplePaymentProcessor, IntermediatedPaymentProcessor");
-
-        ppStorage.setAuthorizedAddress(address(simplePP), true);
-        ppStorage.setAuthorizedAddress(address(intermediatedPP), true);
-        console.log("Storage authorized: SimplePaymentProcessor, IntermediatedPaymentProcessor");
+        console.log("Storage authorized at construction: SimplePaymentProcessor, IntermediatedPaymentProcessor");
 
         // Mock feeds (non-mainnet) report a static timestamp, so disable the staleness check with heartbeat 0.
         uint96 heartbeat = isMainnet ? FEED_HEARTBEAT : 0;
@@ -144,26 +156,27 @@ contract Deploy is Script {
         );
         console.log("Price feeds set: ETH/USD, USDC/USD, WBTC/USD");
 
-        ppStorage.transferOwnership(address(multisig));
-        console.log("Ownership transferred to MultiSig:", address(multisig));
+        ppStorage.transferOwnership(multisig);
+        console.log("Ownership transferred to MultiSig:", multisig);
 
         vm.stopBroadcast();
 
         console.log("");
         console.log("=== Deployment Complete ===");
-        console.log("MultiSig:                ", address(multisig));
+        console.log("MasterDeployer:          ", address(masterDeployer));
+        console.log("MultiSig:                ", multisig);
         console.log("PaymentProcessorStorage: ", address(ppStorage));
         console.log("Notes:                   ", address(notes));
-        console.log("SimplePaymentProcessor:  ", address(simplePP));
+        console.log("SimplePaymentProcessor:  ", simplePP);
         console.log("OracleManager:           ", address(oracle));
-        console.log("IntermediatedPaymentProcessor:", address(intermediatedPP));
+        console.log("IntermediatedPaymentProcessor:", intermediatedPP);
         if (!isMainnet) {
             console.log("MockUsdc:                ", addr.usdc);
             console.log("MockWbtc:                ", addr.wbtc);
         }
     }
 
-    function _setUp() internal returns (Addr memory) {
+    function _setUp(bytes32 _salt) internal returns (Addr memory) {
         if (block.chainid == MAINNET_CHAIN_ID) {
             return Addr({
                 usdcPriceFeed: USDC_USD_PRICE_FEED,
@@ -175,14 +188,19 @@ contract Deploy is Script {
             });
         }
 
-        mockUsdc = new MockUsdc("Mock Usdc", "mUsdc");
-        mockWBtc = new MockWbtc("Mock WBtc", "mWBtc");
+        mockUsdc = new MockUsdc{ salt: _salt }("Mock Usdc", "mUsdc");
+        mockWBtc = new MockWbtc{ salt: _salt }("Mock WBtc", "mWBtc");
+
+        // Under CREATE2 the constructor mints the initial supply to the factory, so mint to the deployer here.
+        mockUsdc.mint(msg.sender, mockUsdc.INITIAL_SUPPLY());
+        mockWBtc.mint(msg.sender, mockWBtc.INITIAL_SUPPLY());
 
         // Local Anvil has no Chainlink feeds, so deploy mock aggregators with fixed answers.
         if (block.chainid == LOCAL_CHAIN_ID) {
-            address usdcFeed = address(new MockV3Aggregator(MOCK_FEED_DECIMALS, MOCK_USDC_PRICE));
-            address wbtcFeed = address(new MockV3Aggregator(MOCK_FEED_DECIMALS, MOCK_WBTC_PRICE));
-            address nativeFeed = address(new MockV3Aggregator(MOCK_FEED_DECIMALS, MOCK_NATIVE_TOKEN_PRICE));
+            address usdcFeed = address(new MockV3Aggregator{ salt: _salt }(MOCK_FEED_DECIMALS, MOCK_USDC_PRICE));
+            address wbtcFeed = address(new MockV3Aggregator{ salt: _salt }(MOCK_FEED_DECIMALS, MOCK_WBTC_PRICE));
+            address nativeFeed =
+                address(new MockV3Aggregator{ salt: _salt }(MOCK_FEED_DECIMALS, MOCK_NATIVE_TOKEN_PRICE));
 
             return Addr({
                 usdcPriceFeed: usdcFeed,
@@ -212,4 +230,3 @@ contract Deploy is Script {
         return "Base Sepolia";
     }
 }
-

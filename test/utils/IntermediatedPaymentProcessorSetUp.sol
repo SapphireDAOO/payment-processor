@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 import { IntermediatedPaymentProcessor } from "../../src/IntermediatedPaymentProcessor.sol";
 import { OracleManager } from "../../src/OracleManager.sol";
 import { IOracleManager } from "../../src/interface/IOracleManager.sol";
@@ -25,6 +24,7 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
     OracleManager oracle;
     MockUsdc mockUsdc;
     MockWbtc mockWBtc;
+    Addr internal addr;
 
     int256 constant MOCK_USDC_PRICE = 1e8;
     int256 constant MOCK_WBTC_PRICE = 90_000e8;
@@ -56,18 +56,25 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
         Notes(notesAddress).setAuthorized(ca, true);
     }
 
+    /// @dev Deploys the oracle and processor against the predicted storage address so the
+    ///      processor can be authorized at storage construction.
+    function _deployAuthorized(address _predictedStorage, address _notesAddress) internal virtual override {
+        super._deployAuthorized(_predictedStorage, _notesAddress);
+        addr = _setUp();
+        oracle = new OracleManager(_predictedStorage, addr.sequencerUptimeFeed);
+        intermediatedPP = new IntermediatedPaymentProcessor(_predictedStorage, address(oracle));
+        _authorize(address(intermediatedPP));
+    }
+
     /**
-     * @notice Deploys and configures the IntermediatedPaymentProcessor for tests.
+     * @notice Configures the IntermediatedPaymentProcessor deployed during {initialize}.
      * @param _storageAddress The PaymentProcessorStorage address.
-     * @return intermediatedPaymentProcessor The deployed processor instance.
+     * @return intermediatedPaymentProcessor The configured processor instance.
      */
     function _intermediatedPaymentProcessorSetUp(address _storageAddress)
         internal
         returns (IntermediatedPaymentProcessor intermediatedPaymentProcessor)
     {
-        Addr memory addr = _setUp();
-
-        oracle = new OracleManager(_storageAddress, addr.sequencerUptimeFeed);
         vm.startPrank(admin);
         oracle.setPriceFeed(
             address(addr.usdc),
@@ -81,10 +88,6 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
             address(0),
             IOracleManager.PriceFeedConfig({ aggregator: address(addr.nativeTokenPriceFeed), heartbeat: 24 hours })
         );
-
-        intermediatedPP = new IntermediatedPaymentProcessor(_storageAddress, address(oracle));
-
-        PaymentProcessorStorage(_storageAddress).setAuthorizedAddress(address(intermediatedPP), true);
         vm.stopPrank();
 
         _mintAndApproveTokens(address(intermediatedPP));
