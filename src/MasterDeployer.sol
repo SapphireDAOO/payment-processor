@@ -106,7 +106,9 @@ contract MasterDeployer is IMasterDeployer {
             Create2.deploy(
                 0,
                 _params.salt,
-                abi.encodePacked(_initCodes.intermediatedPaymentProcessor, abi.encode(predicted, address(oracleManager)))
+                abi.encodePacked(
+                    _initCodes.intermediatedPaymentProcessor, abi.encode(predicted, address(oracleManager))
+                )
             )
         );
 
