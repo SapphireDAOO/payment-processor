@@ -80,15 +80,38 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
     }
 
     /**
+     * @notice Creation code (without constructor args) for each contract in the system.
+     * @dev Supplied by the caller so the deployer contract does not embed the system's bytecode,
+     *      which would put it far past the EIP-170 size limit. The deployer appends the
+     *      abi-encoded constructor args itself.
+     * @param multiSig MultiSig creation code.
+     * @param notes Notes creation code.
+     * @param simplePaymentProcessor SimplePaymentProcessor creation code.
+     * @param oracleManager OracleManager creation code.
+     * @param intermediatedPaymentProcessor IntermediatedPaymentProcessor creation code.
+     * @param ppStorage PaymentProcessorStorage creation code.
+     */
+    struct InitCodes {
+        bytes multiSig;
+        bytes notes;
+        bytes simplePaymentProcessor;
+        bytes oracleManager;
+        bytes intermediatedPaymentProcessor;
+        bytes ppStorage;
+    }
+
+    /**
      * @notice Predicts the PaymentProcessorStorage address for a given salt and configuration.
      * @param _salt The CREATE2 salt.
      * @param _config The storage configuration (part of the init code).
+     * @param _ppStorageCreationCode PaymentProcessorStorage creation code without constructor args.
      * @return predicted The address PaymentProcessorStorage will be deployed at.
      */
-    function predictStorageAddress(bytes32 _salt, IPaymentProcessorStorage.Configuration memory _config)
-        external
-        view
-        returns (address predicted);
+    function predictStorageAddress(
+        bytes32 _salt,
+        IPaymentProcessorStorage.Configuration memory _config,
+        bytes memory _ppStorageCreationCode
+    ) external view returns (address predicted);
 
     /**
      * @notice Deploys the full system: MultiSig, Notes, SimplePaymentProcessor, OracleManager,
@@ -98,7 +121,10 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      *      `_params.config.owner`; post-deploy wiring (notes authorization, price feeds, ownership
      *      transfer to the MultiSig) is the deployer's responsibility.
      * @param _params The deployment parameters.
+     * @param _initCodes The creation code of each contract to deploy.
      * @return ppStorageAddress The deployed PaymentProcessorStorage address.
      */
-    function deployAll(Params calldata _params) external returns (address ppStorageAddress);
+    function deployAll(Params calldata _params, InitCodes calldata _initCodes)
+        external
+        returns (address ppStorageAddress);
 }

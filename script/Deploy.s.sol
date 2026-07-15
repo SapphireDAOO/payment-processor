@@ -5,6 +5,9 @@ import { Script, console } from "forge-std/Script.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../src/PaymentProcessorStorage.sol";
 import { MasterDeployer } from "../src/MasterDeployer.sol";
 import { IMasterDeployer } from "../src/interface/IMasterDeployer.sol";
+import { SimplePaymentProcessor } from "../src/SimplePaymentProcessor.sol";
+import { IntermediatedPaymentProcessor } from "../src/IntermediatedPaymentProcessor.sol";
+import { MultiSig } from "../src/MultiSig.sol";
 import { OracleManager } from "../src/OracleManager.sol";
 import { IOracleManager } from "../src/interface/IOracleManager.sol";
 import { MockUsdc, MockWbtc } from "../test/mock/mERC20.sol";
@@ -115,10 +118,21 @@ contract Deploy is Script {
             multiSigThreshold: INITIAL_THRESHOLD
         });
 
-        address predictedStorage = masterDeployer.predictStorageAddress(salt, params.config);
+        // Creation code is passed in rather than embedded so MasterDeployer stays under the
+        // EIP-170 size limit.
+        IMasterDeployer.InitCodes memory initCodes = IMasterDeployer.InitCodes({
+            multiSig: type(MultiSig).creationCode,
+            notes: type(Notes).creationCode,
+            simplePaymentProcessor: type(SimplePaymentProcessor).creationCode,
+            oracleManager: type(OracleManager).creationCode,
+            intermediatedPaymentProcessor: type(IntermediatedPaymentProcessor).creationCode,
+            ppStorage: type(PaymentProcessorStorage).creationCode
+        });
+
+        address predictedStorage = masterDeployer.predictStorageAddress(salt, params.config, initCodes.ppStorage);
         console.log("Predicted PaymentProcessorStorage:", predictedStorage);
 
-        masterDeployer.deployAll(params);
+        masterDeployer.deployAll(params, initCodes);
 
         PaymentProcessorStorage ppStorage = masterDeployer.ppStorage();
         Notes notes = masterDeployer.notes();

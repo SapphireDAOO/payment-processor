@@ -55,40 +55,40 @@ contract MasterDeployer is IMasterDeployer {
     }
 
     /// @inheritdoc IMasterDeployer
-    function predictStorageAddress(bytes32 _salt, IPaymentProcessorStorage.Configuration memory _config)
-        public
-        view
-        returns (address predicted)
-    {
-        predicted = Create2.computeAddress(_salt, keccak256(_storageInitCode(_config)));
+    function predictStorageAddress(
+        bytes32 _salt,
+        IPaymentProcessorStorage.Configuration memory _config,
+        bytes memory _ppStorageCreationCode
+    ) public view returns (address predicted) {
+        predicted = Create2.computeAddress(_salt, keccak256(_storageInitCode(_ppStorageCreationCode, _config)));
     }
 
     /// @inheritdoc IMasterDeployer
-    function deployAll(Params calldata _params) external returns (address ppStorageAddress) {
+    function deployAll(Params calldata _params, InitCodes calldata _initCodes)
+        external
+        returns (address ppStorageAddress)
+    {
         if (msg.sender != deployer) revert NotDeployer();
         if (address(ppStorage) != address(0)) revert AlreadyDeployed();
 
-        address predicted = predictStorageAddress(_params.salt, _params.config);
+        address predicted = predictStorageAddress(_params.salt, _params.config, _initCodes.ppStorage);
 
         multiSig = MultiSig(
             Create2.deploy(
                 0,
                 _params.salt,
-                abi.encodePacked(
-                    type(MultiSig).creationCode, abi.encode(_params.multiSigSigners, _params.multiSigThreshold)
-                )
+                abi.encodePacked(_initCodes.multiSig, abi.encode(_params.multiSigSigners, _params.multiSigThreshold))
             )
         );
 
-        notes =
-            Notes(Create2.deploy(0, _params.salt, abi.encodePacked(type(Notes).creationCode, abi.encode(predicted))));
+        notes = Notes(Create2.deploy(0, _params.salt, abi.encodePacked(_initCodes.notes, abi.encode(predicted))));
 
         simplePaymentProcessor = SimplePaymentProcessor(
             Create2.deploy(
                 0,
                 _params.salt,
                 abi.encodePacked(
-                    type(SimplePaymentProcessor).creationCode,
+                    _initCodes.simplePaymentProcessor,
                     abi.encode(predicted, _params.minimumInvoiceValue, address(notes))
                 )
             )
@@ -98,7 +98,7 @@ contract MasterDeployer is IMasterDeployer {
             Create2.deploy(
                 0,
                 _params.salt,
-                abi.encodePacked(type(OracleManager).creationCode, abi.encode(predicted, _params.sequencerUptimeFeed))
+                abi.encodePacked(_initCodes.oracleManager, abi.encode(predicted, _params.sequencerUptimeFeed))
             )
         );
 
@@ -106,16 +106,16 @@ contract MasterDeployer is IMasterDeployer {
             Create2.deploy(
                 0,
                 _params.salt,
-                abi.encodePacked(
-                    type(IntermediatedPaymentProcessor).creationCode, abi.encode(predicted, address(oracleManager))
-                )
+                abi.encodePacked(_initCodes.intermediatedPaymentProcessor, abi.encode(predicted, address(oracleManager)))
             )
         );
 
         pendingAuthorized.push(address(simplePaymentProcessor));
         pendingAuthorized.push(address(intermediatedPaymentProcessor));
 
-        ppStorage = PaymentProcessorStorage(Create2.deploy(0, _params.salt, _storageInitCode(_params.config)));
+        ppStorage = PaymentProcessorStorage(
+            Create2.deploy(0, _params.salt, _storageInitCode(_initCodes.ppStorage, _params.config))
+        );
 
         // Authorization is only available during deployment.
         delete pendingAuthorized;
@@ -135,11 +135,11 @@ contract MasterDeployer is IMasterDeployer {
     }
 
     /// @dev PaymentProcessorStorage init code: creation code plus the abi-encoded configuration.
-    function _storageInitCode(IPaymentProcessorStorage.Configuration memory _config)
+    function _storageInitCode(bytes memory _creationCode, IPaymentProcessorStorage.Configuration memory _config)
         private
         pure
         returns (bytes memory initCode)
     {
-        initCode = abi.encodePacked(type(PaymentProcessorStorage).creationCode, abi.encode(_config));
+        initCode = abi.encodePacked(_creationCode, abi.encode(_config));
     }
 }
