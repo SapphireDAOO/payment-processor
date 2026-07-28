@@ -4,7 +4,6 @@ pragma solidity 0.8.28;
 import { Escrow, IEscrow } from "./Escrow.sol";
 
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
-import { IERC165, IReceiver } from "./interface/IReceiver.sol";
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
@@ -29,8 +28,11 @@ import {
  * @title SimplePaymentProcessor
  * @notice Lightweight payment processor for single-invoice flows with native payments.
  * @dev Implements basic escrow release and refund. Compliant with ISimplePaymentProcessor.
+ *      Scheduled invoices are kept in an internal min-heap and processed by `processDueTasks`, which the
+ *      registered {PaymentAutomation} adapter calls on behalf of a keeper network (Chainlink CRE or
+ *      Gelato). This contract holds no keeper configuration of its own.
  */
-contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, ReentrancyGuard {
+contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     using SafeCastLib for uint256;
     using TaskQueueLib for TaskQueueLib.Heap;
 
@@ -49,11 +51,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, Reentranc
     /// @notice The window of time allowed for accepting a transaction after creation.
     uint256 public decisionWindow;
 
-    /// @notice Address of the CRE (Keystone) forwarder contract responsible for delivering workflow reports via `onReport`.
-    address private forwarder;
-
-    /// @notice Owner address of the CRE workflow authorized to trigger `onReport`, as reported in the report metadata.
-    address private workflowOwner;
+    /// @notice Address of the {PaymentAutomation} adapter allowed to drain due tasks on a keeper's behalf.
+    address private automation;
 
     /**
      * @notice Stores the `Invoice` structs, keyed by a unique invoice ID.
@@ -248,38 +247,13 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, Reentranc
         dueTasksExist = heap.due();
     }
 
-    /**
-     * @notice Handles a verified report delivered by the CRE forwarder and processes due invoice tasks.
-     * @dev The report payload is ignored; delivery of a verified report is itself the trigger.
-     *      Reverts with NotAuthorized if the caller is not the configured forwarder, and with
-     *      UnauthorizedWorkflowOwner if the metadata does not carry the authorized workflow owner.
-     * @inheritdoc IReceiver
-     */
-    function onReport(bytes calldata _metadata, bytes calldata) external nonReentrant {
-        if (msg.sender != forwarder) {
-            revert NotAuthorized();
-        }
-
-        address reportedWorkflowOwner = _decodeWorkflowOwner(_metadata);
-        if (reportedWorkflowOwner != workflowOwner) {
-            revert UnauthorizedWorkflowOwner(reportedWorkflowOwner);
-        }
-
-        _processDueTasks();
-    }
-
     /// @inheritdoc ISimplePaymentProcessor
     function processDueTasks() external nonReentrant {
-        if (msg.sender != _owner()) {
+        if (msg.sender != _owner() && msg.sender != automation) {
             revert NotAuthorized();
         }
 
-        _processDueTasks();
-    }
-
-    /// @inheritdoc IERC165
-    function supportsInterface(bytes4 _interfaceId) external pure returns (bool supported) {
-        return _interfaceId == type(IReceiver).interfaceId || _interfaceId == type(IERC165).interfaceId;
+        heap.processDueTask(index, _release, ppStorage.getGasThreshold());
     }
 
     /**
@@ -445,33 +419,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, Reentranc
     }
 
     /**
-     * @notice Processes due invoice tasks from the heap within the configured gas threshold.
-     * @dev Shared by `onReport` (CRE forwarder path) and `processDueTasks` (owner fallback path).
-     */
-    function _processDueTasks() internal {
-        uint256 gasThreshold = ppStorage.getGasThreshold();
-
-        heap.processDueTask(index, _release, gasThreshold);
-    }
-
-    /**
-     * @notice Extracts the workflow owner address from CRE report metadata.
-     * @dev Metadata layout (tightly packed): workflowId (32 bytes), workflowName (10 bytes),
-     *      workflowOwner (20 bytes), reportId (2 bytes). Reads past the end of short metadata
-     *      yield zero bytes, so malformed metadata decodes to an address that fails the
-     *      `onReport` owner check rather than reverting here.
-     * @param _metadata The report metadata delivered by the forwarder.
-     * @return reportedWorkflowOwner The workflow owner address carried in the metadata.
-     */
-    function _decodeWorkflowOwner(bytes calldata _metadata) internal pure returns (address reportedWorkflowOwner) {
-        assembly {
-            // workflowOwner starts at byte 42 (after 32-byte workflowId and 10-byte workflowName);
-            // load 32 bytes and shift right so the 20-byte address occupies the low bits.
-            reportedWorkflowOwner := shr(96, calldataload(add(_metadata.offset, 42)))
-        }
-    }
-
-    /**
      * @notice Computes a unique invoice ID from the contract address, seller, and nonce.
      * @param _seller The address of the invoice creator (seller).
      * @param _invoiceNonce The unique nonce assigned to this invoice.
@@ -541,13 +488,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, Reentranc
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setForwarderAddress(address _forwarderAddress) external onlyAuthorized {
-        forwarder = _forwarderAddress;
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function setWorkflowOwner(address _workflowOwner) external onlyAuthorized {
-        workflowOwner = _workflowOwner;
+    function setAutomation(address _automationAddress) external onlyAuthorized {
+        automation = _automationAddress;
+        emit AutomationUpdated(_automationAddress);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -557,13 +500,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, IReceiver, Reentranc
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getForwarder() external view returns (address forwarderAddress) {
-        return forwarder;
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function getWorkflowOwner() external view returns (address workflowOwnerAddress) {
-        return workflowOwner;
+    function getAutomation() external view returns (address automationAddress) {
+        return automation;
     }
 
     /// @inheritdoc ISimplePaymentProcessor

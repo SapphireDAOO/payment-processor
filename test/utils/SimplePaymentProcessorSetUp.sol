@@ -2,11 +2,13 @@
 pragma solidity 0.8.28;
 
 import { SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
+import { PaymentAutomation } from "../../src/PaymentAutomation.sol";
 import { BaseSetUp } from "./BaseSetUp.sol";
 import { Notes } from "src/Notes.sol";
 
 abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     SimplePaymentProcessor simplePP;
+    PaymentAutomation automation;
     uint256 constant MINIMUM_INVOICE_VALUE = 1 ether;
 
     address constant FORWARDER_TWO = address(0xb0);
@@ -19,10 +21,12 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     }
 
     /// @dev Deploys the processor against the predicted storage address so it can be authorized at
-    ///      storage construction.
+    ///      storage construction. The automation adapter needs no authorization — it only calls
+    ///      `processDueTasks` on the processor.
     function _deployAuthorized(address _predictedStorage, address _notesAddress) internal virtual override {
         super._deployAuthorized(_predictedStorage, _notesAddress);
         simplePP = new SimplePaymentProcessor(_predictedStorage, MINIMUM_INVOICE_VALUE, _notesAddress);
+        automation = new PaymentAutomation(address(simplePP), _predictedStorage);
         _authorize(address(simplePP));
     }
 
@@ -41,8 +45,9 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
         Notes(_notesAddress).setAuthorized(address(simplePP), true);
 
         vm.startPrank(_storageAddress);
-        simplePP.setForwarderAddress(FORWARDER_TWO);
-        simplePP.setWorkflowOwner(WORKFLOW_OWNER);
+        simplePP.setAutomation(address(automation));
+        automation.setForwarderAddress(FORWARDER_TWO);
+        automation.setWorkflowOwner(WORKFLOW_OWNER);
         vm.stopPrank();
 
         simplePaymentProcessor = simplePP;

@@ -5,6 +5,7 @@ import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 import { IAuthorizedAddressProvider, IMasterDeployer } from "./interface/IMasterDeployer.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { SimplePaymentProcessor } from "./SimplePaymentProcessor.sol";
+import { PaymentAutomation } from "./PaymentAutomation.sol";
 import { IntermediatedPaymentProcessor } from "./IntermediatedPaymentProcessor.sol";
 import { OracleManager } from "./OracleManager.sol";
 import { Notes } from "./Notes.sol";
@@ -30,6 +31,9 @@ contract MasterDeployer is IMasterDeployer {
 
     /// @notice The deployed SimplePaymentProcessor.
     SimplePaymentProcessor public simplePaymentProcessor;
+
+    /// @notice The deployed PaymentAutomation adapter driving the SimplePaymentProcessor's due-task queue.
+    PaymentAutomation public paymentAutomation;
 
     /// @notice The deployed OracleManager.
     OracleManager public oracleManager;
@@ -94,6 +98,14 @@ contract MasterDeployer is IMasterDeployer {
             )
         );
 
+        paymentAutomation = PaymentAutomation(
+            Create2.deploy(
+                0,
+                _params.salt,
+                abi.encodePacked(_initCodes.paymentAutomation, abi.encode(address(simplePaymentProcessor), predicted))
+            )
+        );
+
         oracleManager = OracleManager(
             Create2.deploy(
                 0,
@@ -129,6 +141,7 @@ contract MasterDeployer is IMasterDeployer {
             address(ppStorage),
             address(notes),
             address(simplePaymentProcessor),
+            address(paymentAutomation),
             address(oracleManager),
             address(intermediatedPaymentProcessor)
         );

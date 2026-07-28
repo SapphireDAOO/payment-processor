@@ -52,10 +52,6 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when the escrow withdrawal fails during a manual release, reject, or refund.
     error EscrowWithdrawFailed();
 
-    /// @notice Thrown when a CRE report's metadata does not carry the authorized workflow owner.
-    /// @param _workflowOwner The workflow owner address decoded from the report metadata.
-    error UnauthorizedWorkflowOwner(address _workflowOwner);
-
     // ================================================================
     //                              STRUCTS
     // ================================================================
@@ -184,29 +180,25 @@ interface ISimplePaymentProcessor {
     function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) external;
 
     /**
-     * @notice Updates the address of the CRE (Keystone) forwarder contract that delivers workflow reports.
-     * @dev Only the configured forwarder may call `onReport`.
-     * @param _forwarderAddress The new forwarder contract address to be set.
+     * @notice Updates the automation adapter allowed to drain due tasks on a keeper network's behalf.
+     * @dev Only callable by the owner or the storage contract. The adapter (see {IPaymentAutomation})
+     *      holds the Chainlink CRE and Gelato entrypoints; this processor trusts nothing but its address.
+     *      Setting it to the zero address leaves the owner as the only caller of `processDueTasks`.
+     * @param _automationAddress The new automation adapter address to set.
      */
-    function setForwarderAddress(address _forwarderAddress) external;
-
-    /**
-     * @notice Updates the CRE workflow owner authorized to trigger `onReport`.
-     * @dev Reports whose metadata carries a different workflow owner are rejected, so workflows
-     *      deployed by other owners cannot trigger task processing through the shared forwarder.
-     * @param _workflowOwner The address that owns the authorized CRE workflow.
-     */
-    function setWorkflowOwner(address _workflowOwner) external;
+    function setAutomation(address _automationAddress) external;
 
     /**
      * @notice Processes due invoice tasks (auto-release and auto-refund) within the gas threshold.
-     * @dev Owner-only manual fallback for the CRE workflow path (`onReport`).
+     * @dev Callable by the owner, as a manual fallback, or by the registered automation adapter.
+     *      Processing stops once remaining gas drops below the configured gas threshold, so tasks
+     *      left over are picked up on the next call.
      */
     function processDueTasks() external;
 
     /**
      * @notice Returns whether any scheduled invoice task is due for processing.
-     * @dev Read by the CRE workflow each cron tick to decide whether to submit a report onchain.
+     * @dev Read by the automation adapter to decide whether a keeper should trigger processing.
      * @return dueTasksExist True when the earliest scheduled task is due.
      */
     function hasDueTasks() external view returns (bool dueTasksExist);
@@ -255,16 +247,10 @@ interface ISimplePaymentProcessor {
     function calculateFee(uint256 _amount) external view returns (uint256 feeValue);
 
     /**
-     * @notice Returns the address of the configured CRE forwarder contract.
-     * @return forwarderAddress The configured forwarder address.
+     * @notice Returns the address of the registered automation adapter.
+     * @return automationAddress The configured automation adapter address.
      */
-    function getForwarder() external view returns (address forwarderAddress);
-
-    /**
-     * @notice Returns the CRE workflow owner authorized to trigger `onReport`.
-     * @return workflowOwnerAddress The authorized workflow owner address.
-     */
-    function getWorkflowOwner() external view returns (address workflowOwnerAddress);
+    function getAutomation() external view returns (address automationAddress);
 
     /**
      * @notice Returns the minimum allowed invoice value required for invoice creation.
@@ -358,6 +344,12 @@ interface ISimplePaymentProcessor {
      * @param amount The amount of ETH recovered from escrow.
      */
     event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+
+    /**
+     * @notice Emitted when the automation adapter authorized to call `processDueTasks` is updated.
+     * @param automation The new automation adapter address.
+     */
+    event AutomationUpdated(address indexed automation);
 
     /**
      * @notice Emitted when an automated withdrawal fails and the invoice is rescheduled for a retry.

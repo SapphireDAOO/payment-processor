@@ -49,6 +49,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @param ppStorage The deployed PaymentProcessorStorage address.
      * @param notes The deployed Notes address.
      * @param simplePaymentProcessor The deployed SimplePaymentProcessor address.
+     * @param paymentAutomation The deployed PaymentAutomation adapter address.
      * @param oracleManager The deployed OracleManager address.
      * @param intermediatedPaymentProcessor The deployed IntermediatedPaymentProcessor address.
      */
@@ -57,6 +58,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
         address ppStorage,
         address notes,
         address simplePaymentProcessor,
+        address paymentAutomation,
         address oracleManager,
         address intermediatedPaymentProcessor
     );
@@ -87,6 +89,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @param multiSig MultiSig creation code.
      * @param notes Notes creation code.
      * @param simplePaymentProcessor SimplePaymentProcessor creation code.
+     * @param paymentAutomation PaymentAutomation creation code.
      * @param oracleManager OracleManager creation code.
      * @param intermediatedPaymentProcessor IntermediatedPaymentProcessor creation code.
      * @param ppStorage PaymentProcessorStorage creation code.
@@ -95,6 +98,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
         bytes multiSig;
         bytes notes;
         bytes simplePaymentProcessor;
+        bytes paymentAutomation;
         bytes oracleManager;
         bytes intermediatedPaymentProcessor;
         bytes ppStorage;
@@ -114,12 +118,13 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
     ) external view returns (address predicted);
 
     /**
-     * @notice Deploys the full system: MultiSig, Notes, SimplePaymentProcessor, OracleManager,
-     *         IntermediatedPaymentProcessor, and finally PaymentProcessorStorage at its predicted
-     *         address with both processors authorized.
+     * @notice Deploys the full system: MultiSig, Notes, SimplePaymentProcessor, PaymentAutomation,
+     *         OracleManager, IntermediatedPaymentProcessor, and finally PaymentProcessorStorage at
+     *         its predicted address with both processors authorized.
      * @dev Callable once, by the deployer only. Ownership of the storage contract is left with
-     *      `_params.config.owner`; post-deploy wiring (notes authorization, price feeds, ownership
-     *      transfer to the MultiSig) is the deployer's responsibility.
+     *      `_params.config.owner`; post-deploy wiring (notes authorization, registering the automation
+     *      adapter on the Simple processor, price feeds, ownership transfer to the MultiSig) is the
+     *      deployer's responsibility.
      * @param _params The deployment parameters.
      * @param _initCodes The creation code of each contract to deploy.
      * @return ppStorageAddress The deployed PaymentProcessorStorage address.

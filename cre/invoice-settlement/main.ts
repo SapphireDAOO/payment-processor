@@ -21,13 +21,13 @@ import { z } from "zod";
 const configSchema = z.object({
   schedule: z.string(),
   chainSelectorName: z.string(),
-  processorAddress: z.string(),
+  automationAddress: z.string(),
   gasLimit: z.string(),
 });
 
 export type Config = z.infer<typeof configSchema>;
 
-const processorAbi = [
+const automationAbi = [
   {
     type: "function",
     name: "hasDueTasks",
@@ -39,9 +39,13 @@ const processorAbi = [
 
 /**
  * Cron-triggered replacement for the retired Chainlink Automation upkeep:
- * reads SimplePaymentProcessor.hasDueTasks() and, when a task is due, submits
- * a signed report that the CRE forwarder delivers via onReport, draining the
- * due-task heap.
+ * reads PaymentAutomation.hasDueTasks() and, when a task is due, submits a
+ * signed report that the CRE forwarder delivers via onReport. The adapter then
+ * calls processDueTasks() on the processor, draining the due-task heap.
+ *
+ * PaymentAutomation is both the read and the write target: it mirrors the
+ * processor's hasDueTasks() and holds the onReport entrypoint, so the workflow
+ * only needs the one address.
  */
 export const onCronTrigger = (runtime: Runtime<Config>): string => {
   const config = configSchema.parse(runtime.config);
@@ -55,21 +59,21 @@ export const onCronTrigger = (runtime: Runtime<Config>): string => {
   }
 
   const evmClient = new EVMClient(network.chainSelector.selector);
-  const processorAddress = config.processorAddress as Address;
+  const automationAddress = config.automationAddress as Address;
 
   const callResult = evmClient
     .callContract(runtime, {
       call: {
-        to: hexToBase64(processorAddress),
+        to: hexToBase64(automationAddress),
         data: hexToBase64(
-          encodeFunctionData({ abi: processorAbi, functionName: "hasDueTasks" })
+          encodeFunctionData({ abi: automationAbi, functionName: "hasDueTasks" })
         ),
       },
     })
     .result();
 
   const dueTasksExist = decodeFunctionResult({
-    abi: processorAbi,
+    abi: automationAbi,
     functionName: "hasDueTasks",
     data: bytesToHex(callResult.data),
   });
@@ -79,10 +83,10 @@ export const onCronTrigger = (runtime: Runtime<Config>): string => {
     return "skipped";
   }
 
-  runtime.log("Due invoice tasks found; submitting report to processor.");
+  runtime.log("Due invoice tasks found; submitting report to automation adapter.");
 
-  // The processor ignores the report payload — delivery of a verified report
-  // is the trigger — but a payload is required to produce a signed report.
+  // The adapter ignores the report payload — delivery of a verified report is
+  // the trigger — but a payload is required to produce a signed report.
   const reportPayload = encodeAbiParameters(parseAbiParameters("uint256 triggeredAt"), [
     BigInt(Math.floor(runtime.now().getTime() / 1000)),
   ]);
@@ -98,7 +102,7 @@ export const onCronTrigger = (runtime: Runtime<Config>): string => {
 
   const writeResult = evmClient
     .writeReport(runtime, {
-      receiver: processorAddress,
+      receiver: automationAddress,
       report,
       gasConfig: { gasLimit: config.gasLimit },
     })

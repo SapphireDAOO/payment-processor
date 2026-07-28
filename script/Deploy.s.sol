@@ -6,6 +6,7 @@ import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../src/Paymen
 import { MasterDeployer } from "../src/MasterDeployer.sol";
 import { IMasterDeployer } from "../src/interface/IMasterDeployer.sol";
 import { SimplePaymentProcessor } from "../src/SimplePaymentProcessor.sol";
+import { PaymentAutomation } from "../src/PaymentAutomation.sol";
 import { IntermediatedPaymentProcessor } from "../src/IntermediatedPaymentProcessor.sol";
 import { MultiSig } from "../src/MultiSig.sol";
 import { OracleManager } from "../src/OracleManager.sol";
@@ -124,6 +125,7 @@ contract Deploy is Script {
             multiSig: type(MultiSig).creationCode,
             notes: type(Notes).creationCode,
             simplePaymentProcessor: type(SimplePaymentProcessor).creationCode,
+            paymentAutomation: type(PaymentAutomation).creationCode,
             oracleManager: type(OracleManager).creationCode,
             intermediatedPaymentProcessor: type(IntermediatedPaymentProcessor).creationCode,
             ppStorage: type(PaymentProcessorStorage).creationCode
@@ -134,18 +136,28 @@ contract Deploy is Script {
 
         masterDeployer.deployAll(params, initCodes);
 
-        PaymentProcessorStorage ppStorage = masterDeployer.ppStorage();
-        Notes notes = masterDeployer.notes();
-        OracleManager oracle = masterDeployer.oracleManager();
-        address multisig = address(masterDeployer.multiSig());
-        address simplePP = address(masterDeployer.simplePaymentProcessor());
-        address intermediatedPP = address(masterDeployer.intermediatedPaymentProcessor());
+        _wire(masterDeployer, addr, isMainnet);
+
+        vm.stopBroadcast();
+
+        _report(masterDeployer, addr, isMainnet);
+    }
+
+    /// @dev Post-deploy wiring: notes authorization, the automation adapter, price feeds, and the
+    ///      ownership handover to the MultiSig. Split out of `run` to keep its stack frame in bounds.
+    function _wire(MasterDeployer _masterDeployer, Addr memory _addr, bool _isMainnet) internal {
+        address multisig = address(_masterDeployer.multiSig());
+        address simplePP = address(_masterDeployer.simplePaymentProcessor());
+        address automation = address(_masterDeployer.paymentAutomation());
+        address intermediatedPP = address(_masterDeployer.intermediatedPaymentProcessor());
+        Notes notes = _masterDeployer.notes();
 
         console.log("MultiSig deployed:                ", multisig);
-        console.log("PaymentProcessorStorage deployed: ", address(ppStorage));
+        console.log("PaymentProcessorStorage deployed: ", address(_masterDeployer.ppStorage()));
         console.log("Notes deployed:                   ", address(notes));
         console.log("SimplePaymentProcessor deployed:  ", simplePP);
-        console.log("OracleManager deployed:           ", address(oracle));
+        console.log("PaymentAutomation deployed:       ", automation);
+        console.log("OracleManager deployed:           ", address(_masterDeployer.oracleManager()));
         console.log("IntermediatedPaymentProcessor deployed:", intermediatedPP);
 
         console.log("");
@@ -157,37 +169,50 @@ contract Deploy is Script {
         console.log("Notes authorized: deployer, SimplePaymentProcessor, IntermediatedPaymentProcessor");
         console.log("Storage authorized at construction: SimplePaymentProcessor, IntermediatedPaymentProcessor");
 
-        // Mock feeds (non-mainnet) report a static timestamp, so disable the staleness check with heartbeat 0.
-        uint96 heartbeat = isMainnet ? FEED_HEARTBEAT : 0;
-        oracle.setPriceFeed(
-            address(0), IOracleManager.PriceFeedConfig({ aggregator: addr.nativeTokenPriceFeed, heartbeat: heartbeat })
-        );
-        oracle.setPriceFeed(
-            addr.usdc, IOracleManager.PriceFeedConfig({ aggregator: addr.usdcPriceFeed, heartbeat: heartbeat })
-        );
-        oracle.setPriceFeed(
-            addr.wbtc, IOracleManager.PriceFeedConfig({ aggregator: addr.wbtcPriceFeed, heartbeat: heartbeat })
-        );
-        console.log("Price feeds set: ETH/USD, USDC/USD, WBTC/USD");
+        // The keeper entrypoints live on PaymentAutomation; the processor only trusts its address.
+        // The CRE forwarder and workflow owner are still set on PaymentAutomation post-deploy.
+        SimplePaymentProcessor(simplePP).setAutomation(automation);
+        console.log("SimplePaymentProcessor automation set:", automation);
 
-        ppStorage.transferOwnership(multisig);
+        _setPriceFeeds(_masterDeployer.oracleManager(), _addr, _isMainnet);
+
+        _masterDeployer.ppStorage().transferOwnership(multisig);
         console.log("Ownership transferred to MultiSig:", multisig);
+    }
 
-        vm.stopBroadcast();
-
+    /// @dev Prints the final address summary once broadcasting has stopped.
+    function _report(MasterDeployer _masterDeployer, Addr memory _addr, bool _isMainnet) internal view {
         console.log("");
         console.log("=== Deployment Complete ===");
-        console.log("MasterDeployer:          ", address(masterDeployer));
-        console.log("MultiSig:                ", multisig);
-        console.log("PaymentProcessorStorage: ", address(ppStorage));
-        console.log("Notes:                   ", address(notes));
-        console.log("SimplePaymentProcessor:  ", simplePP);
-        console.log("OracleManager:           ", address(oracle));
-        console.log("IntermediatedPaymentProcessor:", intermediatedPP);
-        if (!isMainnet) {
-            console.log("MockUsdc:                ", addr.usdc);
-            console.log("MockWbtc:                ", addr.wbtc);
+        console.log("MasterDeployer:          ", address(_masterDeployer));
+        console.log("MultiSig:                ", address(_masterDeployer.multiSig()));
+        console.log("PaymentProcessorStorage: ", address(_masterDeployer.ppStorage()));
+        console.log("Notes:                   ", address(_masterDeployer.notes()));
+        console.log("SimplePaymentProcessor:  ", address(_masterDeployer.simplePaymentProcessor()));
+        console.log("PaymentAutomation:       ", address(_masterDeployer.paymentAutomation()));
+        console.log("OracleManager:           ", address(_masterDeployer.oracleManager()));
+        console.log("IntermediatedPaymentProcessor:", address(_masterDeployer.intermediatedPaymentProcessor()));
+        if (!_isMainnet) {
+            console.log("MockUsdc:                ", _addr.usdc);
+            console.log("MockWbtc:                ", _addr.wbtc);
         }
+    }
+
+    /// @dev Registers the ETH, USDC and WBTC price feeds on the oracle manager. Mock feeds (non-mainnet)
+    ///      report a static timestamp, so the staleness check is disabled there with heartbeat 0.
+    function _setPriceFeeds(OracleManager _oracle, Addr memory _addr, bool _isMainnet) internal {
+        uint96 heartbeat = _isMainnet ? FEED_HEARTBEAT : 0;
+
+        _oracle.setPriceFeed(
+            address(0), IOracleManager.PriceFeedConfig({ aggregator: _addr.nativeTokenPriceFeed, heartbeat: heartbeat })
+        );
+        _oracle.setPriceFeed(
+            _addr.usdc, IOracleManager.PriceFeedConfig({ aggregator: _addr.usdcPriceFeed, heartbeat: heartbeat })
+        );
+        _oracle.setPriceFeed(
+            _addr.wbtc, IOracleManager.PriceFeedConfig({ aggregator: _addr.wbtcPriceFeed, heartbeat: heartbeat })
+        );
+        console.log("Price feeds set: ETH/USD, USDC/USD, WBTC/USD");
     }
 
     function _setUp(bytes32 _salt) internal returns (Addr memory) {

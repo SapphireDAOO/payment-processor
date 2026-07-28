@@ -2,7 +2,6 @@
 pragma solidity 0.8.28;
 
 import { ISimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
-import { IERC165, IReceiver } from "../../src/interface/IReceiver.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
 import { console } from "forge-std/console.sol";
 import { IEscrow } from "src/interface/IEscrow.sol";
@@ -29,13 +28,12 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(simplePP.getNextInvoiceNonce(), 1);
         assertEq(ppStorage.getDefaultHoldPeriod(), DEFAULT_HOLD_PERIOD);
         assertEq(simplePP.getMinimumInvoiceValue(), MINIMUM_INVOICE_VALUE);
-        assertEq(simplePP.getForwarder(), FORWARDER_TWO);
-        assertEq(simplePP.getWorkflowOwner(), WORKFLOW_OWNER);
+        assertEq(simplePP.getAutomation(), address(automation));
     }
 
-    function test_setForwarder() public {
+    function test_setAutomation() public {
         vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
-        simplePP.setForwarderAddress(address(2));
+        simplePP.setAutomation(address(2));
     }
 
     function test_setMinimumInvoiceValue() public {
@@ -43,12 +41,14 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.setMinimumInvoiceValue(1 ether);
     }
 
-    function test_setForwarderAuthorizedCanSet() public {
-        address newForwarder = address(0xcafe);
+    function test_setAutomationAuthorizedCanSet() public {
+        address newAutomation = address(0xcafe);
         vm.prank(admin);
-        simplePP.setForwarderAddress(newForwarder);
+        vm.expectEmit(true, false, false, false);
+        emit ISimplePaymentProcessor.AutomationUpdated(newAutomation);
+        simplePP.setAutomation(newAutomation);
 
-        assertEq(simplePP.getForwarder(), newForwarder);
+        assertEq(simplePP.getAutomation(), newAutomation);
     }
 
     function test_setMinimumInvoiceValueAuthorizedCanSet() public {
@@ -529,7 +529,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertFalse(dueTasksExist);
     }
 
-    function test_onReportForwarderCanCall() public {
+    function test_processDueTasksAcceptsRegisteredAutomation() public {
         uint256 invoicePrice = 10 ether;
 
         vm.prank(sellerOne);
@@ -540,47 +540,19 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.warp(block.timestamp + simplePP.decisionWindow() + 1);
 
-        vm.prank(FORWARDER_TWO);
-        simplePP.onReport(_workflowMetadata(WORKFLOW_OWNER), "");
+        vm.prank(address(automation));
+        simplePP.processDueTasks();
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
     }
 
-    function test_onReportRevertsForNonForwarder() public {
+    function test_processDueTasksRevertsForDeregisteredAutomation() public {
         vm.prank(admin);
+        simplePP.setAutomation(address(0xcafe));
+
+        vm.prank(address(automation));
         vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
-        simplePP.onReport(_workflowMetadata(WORKFLOW_OWNER), "");
-    }
-
-    function test_onReportRevertsForUnauthorizedWorkflowOwner() public {
-        address rogueOwner = address(0xbad);
-
-        vm.prank(FORWARDER_TWO);
-        vm.expectRevert(abi.encodeWithSelector(ISimplePaymentProcessor.UnauthorizedWorkflowOwner.selector, rogueOwner));
-        simplePP.onReport(_workflowMetadata(rogueOwner), "");
-    }
-
-    function test_onReportRevertsForMalformedMetadata() public {
-        vm.prank(FORWARDER_TWO);
-        vm.expectRevert(abi.encodeWithSelector(ISimplePaymentProcessor.UnauthorizedWorkflowOwner.selector, address(0)));
-        simplePP.onReport("", "");
-    }
-
-    function test_setWorkflowOwner() public {
-        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
-        simplePP.setWorkflowOwner(address(2));
-
-        address newWorkflowOwner = address(0xdead);
-        vm.prank(admin);
-        simplePP.setWorkflowOwner(newWorkflowOwner);
-
-        assertEq(simplePP.getWorkflowOwner(), newWorkflowOwner);
-    }
-
-    function test_supportsInterface() public view {
-        assertTrue(simplePP.supportsInterface(type(IReceiver).interfaceId));
-        assertTrue(simplePP.supportsInterface(type(IERC165).interfaceId));
-        assertFalse(simplePP.supportsInterface(0xffffffff));
+        simplePP.processDueTasks();
     }
 
     function test_rejectPaymentRevertsAfterWindowExpires() public {
