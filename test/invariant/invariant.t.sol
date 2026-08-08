@@ -39,7 +39,7 @@ import {
     CANCELED as SIMPLE_CANCELED,
     REFUNDED,
     RELEASED as SIMPLE_RELEASED,
-    LOCKED
+    BURNED
 } from "src/constants/Simple.sol";
 
 contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp, IntermediatedPaymentProcessorSetUp {
@@ -114,9 +114,11 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
                 }
             }
 
-            if (inv.state == LOCKED) {
+            // Burned invoices had their escrow drained to address(0), so nothing is left behind.
+            if (inv.state == BURNED) {
                 assertTrue(inv.escrow != address(0));
-                assertEq(inv.escrow.balance, inv.price);
+                assertEq(inv.balance, 0);
+                assertEq(inv.escrow.balance, 0);
             }
         }
     }

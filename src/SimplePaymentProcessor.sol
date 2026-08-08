@@ -18,7 +18,7 @@ import {
     CANCELED,
     REFUNDED,
     RELEASED,
-    LOCKED,
+    BURNED,
     BASIS_POINTS,
     SELLER_DEFAULT_DECISION_WINDOW,
     MAX_WITHDRAWAL_RETRIES
@@ -27,10 +27,8 @@ import {
 /**
  * @title SimplePaymentProcessor
  * @notice Lightweight payment processor for single-invoice flows with native payments.
- * @dev Implements basic escrow release and refund. Compliant with ISimplePaymentProcessor.
- *      Scheduled invoices are kept in an internal min-heap and processed by `processDueTasks`, which the
- *      registered {PaymentAutomation} adapter calls on behalf of a keeper network (Chainlink CRE or
- *      Gelato). This contract holds no keeper configuration of its own.
+ * @dev Scheduled invoices sit in an internal min-heap drained by `processDueTasks`, which only the owner
+ *      and the registered {PaymentAutomation} adapter may call.
  */
 contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     using SafeCastLib for uint256;
@@ -49,7 +47,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     uint256 private minimumInvoiceValue;
 
     /// @notice The window of time allowed for accepting a transaction after creation.
-    uint256 public decisionWindow;
+    uint256 private decisionWindow;
 
     /// @notice Address of the {PaymentAutomation} adapter allowed to drain due tasks on a keeper's behalf.
     address private automation;
@@ -78,7 +76,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /**
-     * @notice Initializes the payment processor with owner, fee settings, and default hold period.
+     * @notice Initializes the payment processor with its storage, notes contract, and minimum invoice value.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      * @param _minimumInvoicePrice The new minimum default invoice value to set (in wei).
      * @param _notesAddress Address of the notes contract used for invoice notes.
@@ -94,7 +92,10 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function createInvoice(uint256 _price, bytes memory _storageRef, bool _share) public returns (uint216 invoiceId) {
+    function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storageRef, bool _share)
+        public
+        returns (uint216 invoiceId)
+    {
         if (_price < minimumInvoiceValue) revert ValueIsTooLow();
         uint216 newNonce = ppStorage.updateInvoiceNonce(1);
         invoiceId = _computeInvoiceId(msg.sender, newNonce);
@@ -104,6 +105,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         i.seller = msg.sender;
         i.createdAt = (block.timestamp).toUint40();
         i.price = _price;
+        i.holdPeriod = _holdPeriod;
         i.state = CREATED;
         i.invoiceNonce = newNonce;
         i.feeRate = (ppStorage.getFeeRate()).toUint16();
@@ -133,10 +135,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         _validateInvoiceStateForPaymentDecision(i);
         i.state = ACCEPTED;
 
-        if (i.releaseAt == 0) {
-            i.releaseAt = (ppStorage.getDefaultHoldPeriod() + block.timestamp).toUint40();
-            heap.reschedule(_invoiceId, i.releaseAt, index);
-        }
+        i.releaseAt = (block.timestamp + i.holdPeriod).toUint40();
+        heap.reschedule(_invoiceId, i.releaseAt, index);
 
         invoices[_invoiceId] = i;
 
@@ -204,9 +204,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         }
 
         if (i.withdrawalRetries + 1 > MAX_WITHDRAWAL_RETRIES) {
-            uint256 pos = index[_invoiceId];
-            if (pos > 0 && pos <= heap.data.length) heap.removeAt(pos - 1, index);
-            invoices[_invoiceId].state = LOCKED;
+            _burn(_invoiceId, i);
             return;
         }
 
@@ -224,22 +222,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
             invoices[_invoiceId].balance = 0;
             emit InvoiceRefunded(_invoiceId, i.balance);
         }
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external onlyAuthorized {
-        Invoice memory i = invoices[_invoiceId];
-        if (i.state != LOCKED) revert InvalidInvoiceState(i.state);
-
-        if (i.balance == _amount) {
-            i.state = RELEASED;
-        }
-
-        invoices[_invoiceId].balance -= _amount;
-
-        if (!IEscrow(i.escrow).withdraw(address(0), _recipient, _amount)) revert EscrowWithdrawFailed();
-
-        emit LockedPaymentRecovered(_invoiceId, _recipient, _amount);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -324,17 +306,10 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /**
-     * @notice Attempts to automatically release or refund the specified invoice when its heap task is due.
-     * @dev Called by `performUpkeep` via `processDueTask`. Returns a status code rather than reverting.
-     *      Only PAID or ACCEPTED invoices are ever placed on the heap, so no other states are handled.
-     *      PAID path: retries buyer refund up to MAX_WITHDRAWAL_RETRIES times. On each failure the retry
-     *        counter is incremented and the invoice remains on the heap for the next upkeep cycle.
-     *        Transitions to REFUNDED on success or LOCKED once the ceiling is reached.
-     *      ACCEPTED path: retries seller release up to MAX_WITHDRAWAL_RETRIES times, then falls back to
-     *        buyer refund for another MAX_WITHDRAWAL_RETRIES attempts, using the same counter across both
-     *        phases. Buyer fallback begins once the counter reaches MAX_WITHDRAWAL_RETRIES.
-     *        Transitions to RELEASED, REFUNDED, or LOCKED accordingly.
-     *      Invalid heap position: returns ERROR.
+     * @notice Attempts to automatically release or refund an invoice whose heap task is due.
+     * @dev Returns a status code rather than reverting. Only PAID or ACCEPTED invoices reach the heap.
+     *      `withdrawalRetries` is shared across both ACCEPTED phases, so the buyer fallback takes a
+     *      cumulative ceiling of 2 * MAX_WITHDRAWAL_RETRIES.
      * @param _invoiceId The ID of the invoice to release.
      * @return status `SUCCESSFUL` or `ERROR`.
      */
@@ -353,13 +328,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
     /**
      * @notice Executes an automated buyer refund with retry logic.
-     * @dev Attempts to withdraw `_i.price` to `_i.buyer`. On failure the retry counter is incremented
-     *      and the invoice remains on the heap for the next upkeep cycle. Transitions to REFUNDED on
-     *      success or LOCKED once `withdrawalRetries` reaches `_withdrawRetries`.
+     * @dev A failed withdrawal leaves the invoice on the heap for the next cycle.
      * @param _invoiceId The invoice to refund.
      * @param _pos The invoice's 1-based heap position.
      * @param _i In-memory snapshot of the invoice.
-     * @param _withdrawRetries Retry ceiling; invoice is LOCKED when `withdrawalRetries` reaches this value.
+     * @param _withdrawRetries Cumulative retry ceiling; the funds are burned once reached.
      * @return status `SUCCESSFUL`.
      */
     function _autoRefund(uint216 _invoiceId, uint256 _pos, Invoice memory _i, uint8 _withdrawRetries)
@@ -372,11 +345,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
                 emit WithdrawalRetried(_invoiceId, _i.buyer, _i.price, _i.withdrawalRetries + 1);
                 return TaskQueueLib.SUCCESSFUL;
             }
-            // Max retries exhausted: lock the invoice, funds remain in escrow.
-            heap.removeAt(_pos - 1, index);
-            invoices[_invoiceId].state = LOCKED;
-            invoices[_invoiceId].balance = 0;
+            // Max retries exhausted: burn rather than strand the funds.
             emit TransferFailed(_invoiceId, _i.buyer, _i.price);
+            _burn(_invoiceId, _i);
             return TaskQueueLib.SUCCESSFUL;
         }
 
@@ -389,11 +360,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
     /**
      * @notice Executes an automated seller release with retry logic.
-     * @dev Computes the platform fee, then attempts to withdraw the net seller amount from escrow.
-     *      On failure the retry counter is incremented and the invoice remains on the heap for the
-     *      next upkeep cycle. On success, the fee is collected best-effort (failure emits TransferFailed).
-     *      Transitions to RELEASED on success. Once `withdrawalRetries` reaches MAX_WITHDRAWAL_RETRIES,
-     *      `_release` routes to `_autoRefund` for buyer fallback instead of calling this function again.
+     * @dev Fee collection is best-effort: a failed fee transfer leaves the invoice RELEASED.
      * @param _invoiceId The invoice to release.
      * @param _pos The invoice's 1-based heap position.
      * @param _i In-memory snapshot of the invoice.
@@ -416,6 +383,27 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
         emit InvoiceReleased(_invoiceId, sellerAmount, fee);
         return TaskQueueLib.SUCCESSFUL;
+    }
+
+    /**
+     * @notice Burns an invoice's escrowed funds to address(0) and transitions it to BURNED.
+     * @dev Terminal and unrecoverable. Used once every withdrawal to the intended recipient has failed.
+     * @param _invoiceId The invoice whose escrowed funds are burned.
+     * @param _i In-memory snapshot of the invoice.
+     */
+    function _burn(uint216 _invoiceId, Invoice memory _i) internal {
+        uint256 pos = index[_invoiceId];
+        if (pos > 0 && pos <= heap.data.length) heap.removeAt(pos - 1, index);
+
+        invoices[_invoiceId].state = BURNED;
+        invoices[_invoiceId].balance = 0;
+
+        if (!IEscrow(_i.escrow).withdraw(address(0), address(0), _i.price)) {
+            emit TransferFailed(_invoiceId, address(0), _i.price);
+            return;
+        }
+
+        emit PaymentBurned(_invoiceId, _i.price);
     }
 
     /**
@@ -446,23 +434,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         if (msg.sender != _owner() && msg.sender != address(ppStorage)) {
             revert NotAuthorized();
         }
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function setInvoiceReleaseTime(uint216 _invoiceId, uint40 _holdPeriod) external {
-        if (msg.sender != _owner()) revert NotAuthorized();
-        Invoice memory i = invoices[_invoiceId];
-
-        if (i.state != ACCEPTED) {
-            revert InvalidInvoiceState(i.state);
-        }
-
-        uint256 newReleaseTime = block.timestamp + _holdPeriod;
-
-        invoices[_invoiceId].releaseAt = newReleaseTime.toUint40();
-        heap.reschedule(_invoiceId, newReleaseTime.toUint40(), index);
-
-        emit UpdateHoldPeriod(_invoiceId, newReleaseTime);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -502,6 +473,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     /// @inheritdoc ISimplePaymentProcessor
     function getAutomation() external view returns (address automationAddress) {
         return automation;
+    }
+
+    /// @inheritdoc ISimplePaymentProcessor
+    function getDecisionWindow() external view returns (uint256 decisionWindowValue) {
+        return decisionWindow;
     }
 
     /// @inheritdoc ISimplePaymentProcessor

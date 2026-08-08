@@ -18,8 +18,9 @@ Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flo
 - `src/SimplePaymentProcessor.sol`
   - Native ETH invoices.
   - Seller decision window; scheduled release/refund via heap.
+  - Escrow hold period is set by the seller per invoice at creation and is immutable afterwards — there is no default and no admin override.
   - Manual `release` and `refundBuyer` paths.
-  - `releaseLocked` for admin recovery of stuck funds.
+  - Escrowed funds are burned to `address(0)` when every withdrawal retry to the intended recipient fails.
   - Optional encrypted notes via `Notes`.
   - Holds no keeper configuration; `processDueTasks` is restricted to the owner and the registered `PaymentAutomation`.
 - `src/PaymentAutomation.sol`
@@ -57,7 +58,7 @@ Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flo
 ## Architecture Overview
 
 1. **Invoice creation**
-   - Simple: seller calls `createInvoice` (price in wei).
+   - Simple: seller calls `createInvoice` (price in wei, plus the escrow hold period in seconds).
    - Intermediated: marketplace calls `createSingleInvoice` or `createMetaInvoice` (price in USD, 8 decimals).
 
 2. **Payment**
@@ -67,7 +68,7 @@ Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flo
 3. **Decision + release**
    - Simple: seller has a configurable decision window to `acceptPayment` or `rejectPayment`.
    - Intermediated: marketplace handles disputes via `createDispute` / `handleDispute`.
-   - A hold period delays release after acceptance; expiry is tracked in the heap.
+   - A hold period delays release after acceptance; expiry is tracked in the heap. On the Simple processor that period is fixed by the seller at invoice creation and immutable thereafter — not even the owner can change it — so the buyer knows the exact hold terms before paying. The Intermediated processor still falls back to the storage-level `defaultHoldPeriod`.
 
 4. **Automation (`PaymentAutomation`)**
    - All keeper entrypoints live on `PaymentAutomation`; the processor holds the queue and trusts only that one address, registered via `setAutomation`.
@@ -75,21 +76,22 @@ Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flo
    - Gelato: `checker()` is the Web3 Function resolver; when it reports work it returns calldata for the permissionless `processDueTasks()` exec entrypoint.
    - Both paths converge on `SimplePaymentProcessor.processDueTasks`, which drains due tasks within a gas threshold. Only one network is meant to be active at a time; the second is redundancy, to be switched on if the primary stalls. Running both at once is still safe — whichever fires first drains the queue and the other finds nothing due.
    - `SimplePaymentProcessor.processDueTasks` also stays callable by the owner directly, as a fallback if the adapter is unset or misconfigured.
-   - Failed withdrawals are retried up to `MAX_WITHDRAWAL_RETRIES`; after exhaustion the invoice transitions to `LOCKED`.
+   - Failed withdrawals are retried up to `MAX_WITHDRAWAL_RETRIES`. On the Simple processor, exhausting them burns the escrowed funds to `address(0)` and transitions the invoice to `BURNED` — a terminal, unrecoverable state that guarantees the task queue can never wedge. The Intermediated processor still transitions to `LOCKED` for admin recovery.
 
 5. **Recovery**
-   - `releaseLocked` allows the owner to recover funds from a `LOCKED` invoice to any recipient.
+   - Intermediated: `releaseLocked` allows the owner to recover funds from a `LOCKED` invoice to any recipient.
+   - Simple: there is no recovery path. Funds that reach `BURNED` are destroyed.
 
 ## Invoice State Machines
 
 **SimplePaymentProcessor**
 ```
 CREATED → PAID → ACCEPTED → RELEASED
-                           → LOCKED (retry exhausted)
+                           → BURNED   (retry exhausted, funds to address(0))
                → REJECTED  (seller rejects)
                → REFUNDED  (decision window expired)
          → REFUNDED        (buyer refund after expiry)
-         → LOCKED          (refund retry exhausted)
+         → BURNED          (refund retry exhausted, funds to address(0))
 ```
 
 **IntermediatedPaymentProcessor**
@@ -118,7 +120,7 @@ CREATED → PAID → RELEASED           (automated or manual)
 |---|---|
 | `feeReceiver` | Destination for protocol fees |
 | `feeRate` | Fee in basis points (e.g. 500 = 5%) |
-| `defaultHoldPeriod` | Escrow hold time after acceptance (seconds) |
+| `defaultHoldPeriod` | Escrow hold time after acceptance (seconds). Used by the Intermediated processor only; the Simple processor takes the period per invoice from the seller. |
 | `gasThreshold` | Minimum gas to keep processing the heap in `processDueTasks` |
 | `marketplace` | Authorized caller for Intermediated processor invoice/dispute functions |
 | `authorized` | Allowlist for restricted storage writes |
@@ -128,7 +130,7 @@ CREATED → PAID → RELEASED           (automated or manual)
 ## Using the Simple Processor
 
 ```
-1. Seller   → createInvoice(price, storageRef, share)
+1. Seller   → createInvoice(price, holdPeriod, storageRef, share)
 2. Buyer    → pay{value: price}(invoiceId, storageRef, share)
 3. Seller   → acceptPayment(invoiceId)           // or rejectPayment
 4. Auto     → CRE or Gelato → PaymentAutomation  // releases after hold period
@@ -175,7 +177,7 @@ forge fmt
 
 ## Tests
 
-- Unit tests in `test/unit/` — per-contract coverage including edge cases, retry paths, and LOCKED recovery.
+- Unit tests in `test/unit/` — per-contract coverage including edge cases, retry paths, Simple-processor burns, and Intermediated LOCKED recovery.
 - Invariant tests in `test/invariant/` — property-based fuzzing over invoice state machines.
 - Harness contracts in `test/harness/` — thin wrappers exposing internal library functions for direct testing.
 - Mocks in `test/mock/` — ERC20 tokens and Chainlink `MockV3Aggregator`.
@@ -211,4 +213,4 @@ slither . --exclude-dependencies --json slither-report.json
 - For Gelato, point a Web3 Function at `PaymentAutomation.checker()`. Its exec entrypoint `processDueTasks()` is permissionless by design: it is a no-op when nothing is due, and every state and authorization rule is enforced by the processor.
 - Set `gasThreshold` conservatively; too low a value causes `processDueTasks` to process more invoices per call than intended.
 - Monitor `TransferFailed` events from automated release paths — a blocked fee receiver will silently skip fee collection until the address is updated.
-- Use `releaseLocked` to recover funds from any invoice stuck in the `LOCKED` state.
+- Use `releaseLocked` to recover funds from any Intermediated invoice stuck in the `LOCKED` state. Simple-processor invoices have no equivalent — watch `PaymentBurned` events, as those funds are gone.

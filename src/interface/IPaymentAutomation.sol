@@ -4,10 +4,8 @@ pragma solidity 0.8.28;
 /**
  * @title IPaymentAutomation
  * @notice Interface for the automation adapter that drives the payment processor's due-task queue.
- * @dev The adapter is stateless with respect to invoices: it holds no queue and no funds. It only
- *      reads `hasDueTasks()` from the processor and calls `processDueTasks()` on it, exposing that
- *      pair through the entrypoints each keeper network expects — `onReport` for Chainlink CRE and
- *      `checker` for Gelato Web3 Functions.
+ * @dev Holds no queue and no funds. Exposes `onReport` (Chainlink CRE) and `checker` (Gelato) over the
+ *      processor's `hasDueTasks()` / `processDueTasks()` pair.
  */
 interface IPaymentAutomation {
     // ================================================================
@@ -30,17 +28,14 @@ interface IPaymentAutomation {
 
     /**
      * @notice Drains the processor's due invoice tasks (auto-release and auto-refund).
-     * @dev Permissionless: this is the Gelato exec target named by {checker}, and doubles as the
-     *      manual fallback when neither keeper network is running. The call is a no-op when nothing
-     *      is due, and the processor enforces every state and authorization rule itself, so an
-     *      arbitrary caller can only pay for work the keeper would have done anyway.
+     * @dev Permissionless Gelato exec target named by {checker}; also the manual fallback. A no-op
+     *      when nothing is due, and the processor enforces every state rule itself.
      */
     function processDueTasks() external;
 
     /**
      * @notice Gelato Web3 Function resolver: reports whether the processor has work to do.
-     * @dev Gelato calls this offchain each polling interval and submits `execPayload` to this
-     *      contract when `canExec` is true.
+     * @dev Gelato polls this offchain and submits `execPayload` here when `canExec` is true.
      * @return canExec True when the processor's earliest scheduled task is due.
      * @return execPayload Calldata for {processDueTasks} on this contract.
      */
@@ -48,8 +43,7 @@ interface IPaymentAutomation {
 
     /**
      * @notice Returns whether the processor has any scheduled invoice task due for processing.
-     * @dev Read by the CRE workflow each cron tick to decide whether to submit a report onchain.
-     *      Passes through to the processor so keepers only need this contract's address.
+     * @dev Passes through to the processor so keepers only need this contract's address.
      * @return dueTasksExist True when the processor's earliest scheduled task is due.
      */
     function hasDueTasks() external view returns (bool dueTasksExist);
@@ -63,9 +57,8 @@ interface IPaymentAutomation {
 
     /**
      * @notice Updates the CRE workflow owner authorized to trigger `onReport`.
-     * @dev Only callable by the owner or the storage contract. Reports whose metadata carries a
-     *      different workflow owner are rejected, so workflows deployed by other owners cannot
-     *      trigger task processing through the shared forwarder.
+     * @dev Only callable by the owner or the storage contract. Rejects reports whose metadata carries
+     *      a different workflow owner.
      * @param _workflowOwner The address that owns the authorized CRE workflow.
      */
     function setWorkflowOwner(address _workflowOwner) external;

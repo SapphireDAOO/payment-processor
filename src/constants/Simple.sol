@@ -22,8 +22,8 @@ uint8 constant REFUNDED = 6;
 // Status code representing that a payment has been successfully released to the seller.
 uint8 constant RELEASED = 7;
 
-// Status code representing that an invoice is permanently locked after all automated withdrawal retries failed.
-uint8 constant LOCKED = 8;
+// Status code representing that an invoice's escrowed funds were burned to address(0).
+uint8 constant BURNED = 8;
 
 // Basis points denominator used for percentage calculations (1% = 100).
 uint256 constant BASIS_POINTS = 10_000;

@@ -28,7 +28,7 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 | SIM-2 | `invariant_simpleInvoiceStateConsistency` | If `status` is `PAID`: escrow exists, buyer exists, `balance == price`, and `escrow.balance == balance` |
 | SIM-3 | `invariant_simpleInvoiceStateConsistency` | If `status` is `ACCEPTED`: `balance == price` and `escrow.balance == balance` |
 | SIM-4 | `invariant_simpleInvoiceStateConsistency` | If `status` is `REJECTED`, `REFUNDED`, or `RELEASED`: `balance == 0` and escrow balance is zero when escrow exists |
-| SIM-5 | `invariant_simpleInvoiceStateConsistency` | If `status` is `LOCKED`: `escrow != address(0)` and `escrow.balance == price` |
+| SIM-5 | `invariant_simpleInvoiceStateConsistency` | If `status` is `BURNED`: `escrow != address(0)`, `balance == 0`, and `escrow.balance == 0` (funds were sent to `address(0)`) |
 
 ## Intermediated Processor State Invariants
 

@@ -11,6 +11,8 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     PaymentAutomation automation;
     uint256 constant MINIMUM_INVOICE_VALUE = 1 ether;
 
+    uint32 constant HOLD_PERIOD = 2 days;
+
     address constant FORWARDER_TWO = address(0xb0);
     address constant WORKFLOW_OWNER = address(0xc0ffee);
 

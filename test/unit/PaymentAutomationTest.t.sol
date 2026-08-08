@@ -38,7 +38,7 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         address newForwarder = address(0xcafe);
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, false);
+        vm.expectEmit(address(automation));
         emit IPaymentAutomation.ForwarderUpdated(newForwarder);
         automation.setForwarderAddress(newForwarder);
 
@@ -50,9 +50,9 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         vm.expectRevert(IPaymentAutomation.NotAuthorized.selector);
         automation.setWorkflowOwner(address(2));
 
-        address newWorkflowOwner = address(0xdead);
+        address newWorkflowOwner = address(0xa0);
         vm.prank(admin);
-        vm.expectEmit(true, false, false, false);
+        vm.expectEmit(address(automation));
         emit IPaymentAutomation.WorkflowOwnerUpdated(newWorkflowOwner);
         automation.setWorkflowOwner(newWorkflowOwner);
 
@@ -162,7 +162,7 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         _payInvoice();
         assertFalse(automation.hasDueTasks());
 
-        vm.warp(block.timestamp + simplePP.decisionWindow() + 1);
+        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
         assertTrue(automation.hasDueTasks());
         assertEq(automation.hasDueTasks(), simplePP.hasDueTasks());
     }
@@ -181,7 +181,7 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         uint256 invoicePrice = 10 ether;
 
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
@@ -189,7 +189,7 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.acceptPayment(invoiceId);
 
-        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
+        vm.warp(block.timestamp + HOLD_PERIOD + 1);
 
         (bool canExec,) = automation.checker();
         assertTrue(canExec);
@@ -212,7 +212,7 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         uint256 invoicePrice = 10 ether;
 
         vm.prank(sellerOne);
-        invoiceId = simplePP.createInvoice(invoicePrice, "", false);
+        invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
@@ -221,6 +221,6 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
     /// @dev Same as {_payInvoice}, then warps past the seller's decision window so the task is due.
     function _payInvoiceAndWarpPastDecisionWindow() internal returns (uint216 invoiceId) {
         invoiceId = _payInvoice();
-        vm.warp(block.timestamp + simplePP.decisionWindow() + 1);
+        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
     }
 }

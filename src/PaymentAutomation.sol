@@ -11,16 +11,10 @@ import { CRE_SOURCE, GELATO_SOURCE } from "./constants/Automation.sol";
 /**
  * @title PaymentAutomation
  * @notice Keeper adapter that triggers automated release and refund of due invoices on the payment processor.
- * @dev Owns no queue, no invoice state and no funds. The scheduling heap and every state transition stay in
- *      {SimplePaymentProcessor}; this contract only reads `hasDueTasks()` and calls `processDueTasks()`,
- *      wrapping that pair in the entrypoints two keeper networks expect:
- *      - Chainlink CRE: `onReport`, called by the Keystone forwarder with a DON-signed report. The forwarder
- *        confirms this contract advertises {IReceiver} over ERC-165 before delivering.
- *      - Gelato Web3 Functions: `checker`, polled offchain, which names {processDueTasks} as the exec target.
- *      Only one keeper network is meant to be active at a time; the second is redundancy, to be switched on
- *      if the primary stalls or is decommissioned. Both paths converge on the same processor call, so running
- *      both at once is still safe — whichever fires first drains the queue and the other finds nothing due.
- *      The processor must be pointed back at this contract via `setAutomation` for either path to work.
+ * @dev Owns no queue, no invoice state and no funds — it only reads `hasDueTasks()` and calls
+ *      `processDueTasks()` on {SimplePaymentProcessor}, behind two keeper entrypoints: `onReport`
+ *      (Chainlink CRE) and `checker` (Gelato). Run one network at a time; the other is redundancy.
+ *      Requires `setAutomation` on the processor to point back here.
  */
 contract PaymentAutomation is IPaymentAutomation, IReceiver {
     /// @notice The payment processor whose due-task queue this contract drives.
@@ -46,7 +40,7 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
 
     /**
      * @notice Wires the adapter to the processor it drives and the storage contract it reads the owner from.
-     * @dev Both addresses are immutable; redeploy and re-point the processor via `setAutomation` to change them.
+     * @dev Both addresses are immutable; redeploy and re-point via `setAutomation` to change them.
      * @param _processorAddress The SimplePaymentProcessor address whose due tasks are processed.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      */
@@ -127,9 +121,8 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
     /**
      * @notice Extracts the workflow owner address from CRE report metadata.
      * @dev Metadata layout (tightly packed): workflowId (32 bytes), workflowName (10 bytes),
-     *      workflowOwner (20 bytes), reportId (2 bytes). Reads past the end of short metadata
-     *      yield zero bytes, so malformed metadata decodes to an address that fails the
-     *      `onReport` owner check rather than reverting here.
+     *      workflowOwner (20 bytes), reportId (2 bytes). Short metadata reads as zero bytes and so
+     *      fails the `onReport` owner check rather than reverting here.
      * @param _metadata The report metadata delivered by the forwarder.
      * @return reportedWorkflowOwner The workflow owner address carried in the metadata.
      */

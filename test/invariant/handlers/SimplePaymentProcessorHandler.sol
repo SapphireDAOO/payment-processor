@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../../src/SimplePaymentProcessor.sol";
 import { Test } from "forge-std/Test.sol";
 
-import { CREATED, PAID, ACCEPTED, LOCKED } from "src/constants/Simple.sol";
+import { CREATED, PAID, ACCEPTED } from "src/constants/Simple.sol";
 
 contract SimplePaymentProcessorHandler is Test {
     SimplePaymentProcessor public pp;
@@ -37,12 +37,13 @@ contract SimplePaymentProcessorHandler is Test {
         pp = _sPP;
     }
 
-    function createInvoice(uint256 _price) public {
+    function createInvoice(uint256 _price, uint32 _holdPeriod) public {
         uint256 minValue = pp.getMinimumInvoiceValue();
         if (minValue > INVOICE_PRICE) return;
         _price = bound(_price, minValue, INVOICE_PRICE);
+        _holdPeriod = uint32(bound(uint256(_holdPeriod), 0, 30 days));
         vm.prank(seller);
-        uint216 invoiceId = pp.createInvoice(_price, "", false);
+        uint216 invoiceId = pp.createInvoice(_price, _holdPeriod, "", false);
         price[invoiceId] = _price;
         invoiceIds.push(invoiceId);
         totalInvoiceCreated++;
@@ -103,15 +104,6 @@ contract SimplePaymentProcessorHandler is Test {
         pp.release(invoiceId);
     }
 
-    function setInvoiceReleaseTime(uint256 _index, uint32 _holdPeriod) public invoiceExists {
-        _index = _bound(_index);
-        uint216 invoiceId = invoiceIds[_index];
-        if (pp.getInvoiceData(invoiceId).state != ACCEPTED) return;
-        _holdPeriod = uint32(bound(uint256(_holdPeriod), 1 hours, 30 days));
-        vm.prank(admin);
-        pp.setInvoiceReleaseTime(invoiceId, _holdPeriod);
-    }
-
     function setMinimumInvoiceValue(uint256 _newMin) public {
         _newMin = bound(_newMin, 0, 100 ether);
         vm.prank(admin);
@@ -136,15 +128,6 @@ contract SimplePaymentProcessorHandler is Test {
     function processDueTasks() public {
         vm.prank(admin);
         pp.processDueTasks();
-    }
-
-    function releaseLocked(uint256 _index) public invoiceExists {
-        _index = _bound(_index);
-        uint216 invoiceId = invoiceIds[_index];
-        ISimplePaymentProcessor.Invoice memory inv = pp.getInvoiceData(invoiceId);
-        if (inv.state != LOCKED) return;
-        vm.prank(admin);
-        pp.releaseLocked(invoiceId, inv.buyer, inv.price);
     }
 
     /// @notice Returns the total number of invoices created by the handler.

@@ -60,6 +60,8 @@ interface ISimplePaymentProcessor {
     /// @param invoiceNonce A unique identifier assigned to this invoice, typically sequentially.
     /// @param createdAt The Unix timestamp when the invoice was created.
     /// @param paidAt The Unix timestamp when the payment was completed.
+    /// @param holdPeriod Escrow hold duration (in seconds) set by the seller at creation, counted from
+    ///        acceptance. 0 means funds are releasable as soon as the payment is accepted.
     /// @param releaseAt The timestamp when funds in escrow can be released to the seller.
     /// @param invalidateAt The timestamp after which the invoice is considered invalid if unpaid.
     /// @param expiresAt The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded.
@@ -80,6 +82,7 @@ interface ISimplePaymentProcessor {
         uint40 releaseAt;
         uint40 invalidateAt;
         uint40 expiresAt;
+        uint32 holdPeriod;
         uint8 state;
         uint8 withdrawalRetries;
         uint16 feeRate;
@@ -95,14 +98,19 @@ interface ISimplePaymentProcessor {
     // ================================================================
 
     /**
-     * @notice Creates a new invoice with a specified price.
-     * @dev Optionally stores a reference to the user's off-chain notes file.
+     * @notice Creates a new invoice with a specified price and escrow hold period.
+     * @dev Optionally stores a reference to the user's off-chain notes file. The hold period is fixed here
+     *      and cannot be changed afterwards, including by the owner.
      * @param _price The price of the invoice in wei.
+     * @param _holdPeriod How long (in seconds) funds stay in escrow after the seller accepts payment.
+     *        Pass 0 to make funds releasable immediately on acceptance.
      * @param _storageRef A bytes-encoded reference to the user's notes storage.
      * @param _share Whether the note is shared with the other party.
      * @return invoiceId The unique ID of the newly created invoice.
      */
-    function createInvoice(uint256 _price, bytes memory _storageRef, bool _share) external returns (uint216 invoiceId);
+    function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storageRef, bool _share)
+        external
+        returns (uint216 invoiceId);
 
     /**
      * @notice Pays for an existing invoice and optionally updates the user's notes storage reference.
@@ -119,9 +127,9 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Marks the specified invoice as accepted by the seller.
      * @dev Only callable by the seller within the decision window. Transitions the invoice to
-     *      ACCEPTED, deducts the platform fee from escrow immediately, and sets the `releaseAt`
-     *      timestamp based on the default hold period. The invoice's heap entry is rescheduled
-     *      from `expiresAt` to `releaseAt` for automated fund release after the hold period.
+     *      ACCEPTED and sets `releaseAt` to now plus the `holdPeriod` fixed at invoice creation.
+     *      The invoice's heap entry is rescheduled from `expiresAt` to `releaseAt` for automated
+     *      fund release after the hold period.
      * @param _invoiceId The identifier of the invoice being accepted.
      */
     function acceptPayment(uint216 _invoiceId) external;
@@ -157,20 +165,11 @@ interface ISimplePaymentProcessor {
      * @notice Refunds the buyer of a specific invoice when the seller fails to act in time.
      * @dev Invoice must be in PAID state and the decision window (`expiresAt`) must have elapsed.
      *      Transitions the invoice to REFUNDED, removes it from the heap, zeroes the balance,
-     *      and returns funds to the buyer.
+     *      and returns funds to the buyer. After `MAX_WITHDRAWAL_RETRIES` failures the funds are
+     *      burned to address(0) and the invoice transitions to BURNED instead.
      * @param _invoiceId The ID of the invoice to be refunded.
      */
     function refundBuyer(uint216 _invoiceId) external;
-
-    /**
-     * @notice Sets a custom release time for a specific invoice.
-     * @dev Only callable by the owner. Invoice must be in ACCEPTED state. The new release
-     *      time is computed as `block.timestamp + _holdPeriod`. The invoice's heap entry is
-     *      rescheduled to the new release time.
-     * @param _invoiceId The ID of the invoice.
-     * @param _holdPeriod The hold period from now in seconds.
-     */
-    function setInvoiceReleaseTime(uint216 _invoiceId, uint40 _holdPeriod) external;
 
     /**
      * @notice Updates the minimum allowed invoice value required for creating an invoice.
@@ -181,18 +180,16 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Updates the automation adapter allowed to drain due tasks on a keeper network's behalf.
-     * @dev Only callable by the owner or the storage contract. The adapter (see {IPaymentAutomation})
-     *      holds the Chainlink CRE and Gelato entrypoints; this processor trusts nothing but its address.
-     *      Setting it to the zero address leaves the owner as the only caller of `processDueTasks`.
+     * @dev Only callable by the owner or the storage contract. Set to address(0) to leave the owner as
+     *      the only caller of `processDueTasks`.
      * @param _automationAddress The new automation adapter address to set.
      */
     function setAutomation(address _automationAddress) external;
 
     /**
      * @notice Processes due invoice tasks (auto-release and auto-refund) within the gas threshold.
-     * @dev Callable by the owner, as a manual fallback, or by the registered automation adapter.
-     *      Processing stops once remaining gas drops below the configured gas threshold, so tasks
-     *      left over are picked up on the next call.
+     * @dev Callable by the owner or the registered automation adapter. Stops once remaining gas drops
+     *      below the configured threshold; leftovers are picked up on the next call.
      */
     function processDueTasks() external;
 
@@ -208,20 +205,6 @@ interface ISimplePaymentProcessor {
      * @param _newDecisionWindow The new decision window in seconds.
      */
     function setDecisionWindow(uint256 _newDecisionWindow) external;
-
-    /**
-     * @notice Recovers funds from a LOCKED invoice by withdrawing from its escrow to a specified recipient.
-     * @dev Only callable by the owner or storage contract. The invoice must be in LOCKED state —
-     *      meaning all automated withdrawal retries have been exhausted. Transitions the invoice to
-     *      RELEASED to prevent double-recovery. The caller is responsible for supplying the correct
-     *      `_amount`; use `getInvoiceData` to determine how much remains in escrow. In both PAID-locked
-     *      and ACCEPTED-locked cases the full `price` is in escrow, as the fee is only collected at
-     *      the point of successful release.
-     * @param _invoiceId The ID of the locked invoice.
-     * @param _recipient The address to send the recovered funds to.
-     * @param _amount The amount to withdraw from escrow.
-     */
-    function releaseLocked(uint216 _invoiceId, address _recipient, uint256 _amount) external;
 
     /**
      * @notice Returns the nonce that will be assigned to the next invoice.
@@ -251,6 +234,12 @@ interface ISimplePaymentProcessor {
      * @return automationAddress The configured automation adapter address.
      */
     function getAutomation() external view returns (address automationAddress);
+
+    /**
+     * @notice Returns the window sellers have to accept or reject a payment after the buyer pays.
+     * @return decisionWindowValue The current decision window in seconds.
+     */
+    function getDecisionWindow() external view returns (uint256 decisionWindowValue);
 
     /**
      * @notice Returns the minimum allowed invoice value required for invoice creation.
@@ -321,16 +310,9 @@ interface ISimplePaymentProcessor {
     event InvoiceReleased(uint216 indexed invoiceId, uint256 sellerAmount, uint256 fee);
 
     /**
-     * @notice Emitted when the hold period of a given invoice is updated to a new timestamp.
-     * @param invoiceId The key of the invoice whose hold period was updated.
-     * @param releaseDueTimestamp The new hold period expressed as a UNIX timestamp.
-     */
-    event UpdateHoldPeriod(uint216 indexed invoiceId, uint256 indexed releaseDueTimestamp);
-
-    /**
      * @notice Emitted when an ETH transfer to a recipient fails during reject, refund, or release.
-     * @dev The invoice state and heap entry are already updated before this event; funds remain
-     *      in the escrow contract and can be recovered by the owner via `releaseLocked`.
+     * @dev Best-effort for fee transfers, which stay in escrow. On the final refund attempt it precedes
+     *      `PaymentBurned`.
      * @param invoiceId The invoice whose transfer failed.
      * @param recipient The intended ETH recipient (buyer or seller).
      * @param amount The amount of ETH that could not be delivered.
@@ -338,12 +320,12 @@ interface ISimplePaymentProcessor {
     event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
 
     /**
-     * @notice Emitted when an admin recovers funds from a LOCKED invoice.
-     * @param invoiceId The invoice from which funds were recovered.
-     * @param recipient The address that received the recovered funds.
-     * @param amount The amount of ETH recovered from escrow.
+     * @notice Emitted when an invoice's escrowed funds are burned to address(0).
+     * @dev The funds are permanently destroyed; there is no recovery path.
+     * @param invoiceId The invoice whose escrowed funds were burned.
+     * @param amount The amount of ETH sent to address(0).
      */
-    event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
+    event PaymentBurned(uint216 indexed invoiceId, uint256 amount);
 
     /**
      * @notice Emitted when the automation adapter authorized to call `processDueTasks` is updated.
