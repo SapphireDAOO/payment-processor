@@ -12,6 +12,7 @@ Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flo
 - Scheduler: min-heap (`TaskQueueLib`) with gas-aware processing
 - Automation: `PaymentAutomation` adapter fronting the scheduler, driven by Chainlink CRE (`onReport`, see `cre/`) or Gelato (`checker`)
 - Oracle: standalone `OracleManager` with sequencer uptime and heartbeat validation
+- Circuit breaker: system-wide pause in `PaymentProcessorStorage`, plus a 24h emergency pause a designated EOA can trigger
 
 ## Contract Map
 
@@ -40,6 +41,7 @@ Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flo
 - `src/PaymentProcessorStorage.sol`
   - Shared configuration: fee receiver, fee rate, default hold period, gas threshold, marketplace, and authorization list.
   - Ownable; authorizes processor contracts.
+  - System-wide pause read by both processors, with an owner pause and a self-expiring emergency pause.
 - `src/Escrow.sol`
   - Minimal per-invoice escrow; only the payment processor can withdraw.
   - Zero-amount withdrawals succeed without performing a transfer.
@@ -78,7 +80,14 @@ Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flo
    - `SimplePaymentProcessor.processDueTasks` also stays callable by the owner directly, as a fallback if the adapter is unset or misconfigured.
    - Failed withdrawals are retried up to `MAX_WITHDRAWAL_RETRIES`. On the Simple processor, exhausting them burns the escrowed funds to `address(0)` and transitions the invoice to `BURNED` — a terminal, unrecoverable state that guarantees the task queue can never wedge. The Intermediated processor still transitions to `LOCKED` for admin recovery.
 
-5. **Recovery**
+5. **Pause**
+   - `PaymentProcessorStorage.isPaused()` is the single switch both processors read. While paused, every value-moving entrypoint on both reverts with `ContractPaused` — creation, payment, acceptance, rejection, release, refund, disputes, and the keeper's `processDueTasks`. Only `cancelInvoice` stays open, since it moves no funds.
+   - `pause` / `unpause` are owner-only and never expire.
+   - `emergencyPause` is callable by the single EOA set via `setEmergencyPauser`. It halts the system for `EMERGENCY_PAUSE_DURATION` (24h) and then lapses on its own unless the owner calls `approveEmergencyPause` within the window, which converts it into an indefinite pause.
+   - Once a pause lapses the pauser can trigger a fresh one, so the role is trusted not to halt the system on a loop. Revoke it with `setEmergencyPauser(address(0))` if the key is compromised.
+   - `PaymentAutomation.checker()` and `hasDueTasks()` report no work while paused, so keepers do not spend gas on calls that would revert.
+
+6. **Recovery**
    - Intermediated: `releaseLocked` allows the owner to recover funds from a `LOCKED` invoice to any recipient.
    - Simple: there is no recovery path. Funds that reach `BURNED` are destroyed.
 
@@ -111,6 +120,7 @@ CREATED → PAID → RELEASED           (automated or manual)
 - **Access control** — Storage owner manages configuration. `IntermediatedPaymentProcessor` restricts invoice creation and dispute handling to the marketplace address. `OracleManager` writes are restricted to the storage owner.
 - **Heartbeat validation** — `OracleManager.setPriceFeed` rejects a heartbeat of 0 when registering a live aggregator. Pass `aggregator = address(0)` to remove a token.
 - **Notes** — `Notes` stores encrypted ciphertext. Notes with `share = true` are readable by any caller; the `opened` mapping tracks read status per account.
+- **Pause** — A full freeze. Funds already in escrow stay there until the pause is lifted; buyers cannot refund and sellers cannot be paid while it is in effect. Keep that in mind when choosing how long to leave one running.
 
 ## Configuration
 
@@ -124,6 +134,7 @@ CREATED → PAID → RELEASED           (automated or manual)
 | `gasThreshold` | Minimum gas to keep processing the heap in `processDueTasks` |
 | `marketplace` | Authorized caller for Intermediated processor invoice/dispute functions |
 | `authorized` | Allowlist for restricted storage writes |
+| `emergencyPauser` | EOA allowed to call `emergencyPause`; set via `setEmergencyPauser`, unset by default |
 
 `OracleManager` must have a `PriceFeedConfig` registered for each payment token (including `address(0)` for native ETH) before the Intermediated processor can accept payments.
 
@@ -214,3 +225,4 @@ slither . --exclude-dependencies --json slither-report.json
 - Set `gasThreshold` conservatively; too low a value causes `processDueTasks` to process more invoices per call than intended.
 - Monitor `TransferFailed` events from automated release paths — a blocked fee receiver will silently skip fee collection until the address is updated.
 - Use `releaseLocked` to recover funds from any Intermediated invoice stuck in the `LOCKED` state. Simple-processor invoices have no equivalent — watch `PaymentBurned` events, as those funds are gone.
+- Set `setEmergencyPauser` to a key that can act fast; until it is set, `emergencyPause` is callable by nobody. A pause traps in-flight funds, so treat the 24h window as a deadline to either approve or `unpause`.
