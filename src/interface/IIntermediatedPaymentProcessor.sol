@@ -72,6 +72,9 @@ interface IIntermediatedPaymentProcessor {
     /// @notice Thrown when a dispute resolution type is invalid.
     error InvalidDisputeResolution();
 
+    /// @notice Thrown when a value-moving entrypoint is called while the system is paused.
+    error ContractPaused();
+
     /// @notice Thrown when the seller's payout share exceeds the allowed limit (10000 BPS).
     error InvalidSellersPayoutShare();
 

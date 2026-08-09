@@ -1363,4 +1363,105 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         intermediatedPP.payMetaInvoice(_invoiceId, address(mockUsdc));
         vm.stopPrank();
     }
+
+    // ================================================================
+    //                              PAUSE
+    // ================================================================
+
+    function test_pauseBlocksEveryValueMovingEntrypoint() public {
+        uint256 price = 10e8;
+
+        uint216 invoiceId = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+        );
+
+        uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
+        vm.prank(buyerTwo);
+        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+
+        // Build args before arming expectRevert: inner staticcalls would otherwise consume it.
+        IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price);
+        IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params =
+            new IIntermediatedPaymentProcessor.InvoiceCreationParam[](1);
+        params[0] = param;
+
+        vm.prank(admin);
+        ppStorage.pause();
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+        intermediatedPP.createSingleInvoice(param);
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+        intermediatedPP.createMetaInvoice(params);
+
+        vm.prank(buyerTwo);
+        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+
+        vm.prank(buyerTwo);
+        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+        intermediatedPP.payMetaInvoiceWithValue(invoiceId);
+
+        vm.prank(buyerTwo);
+        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+        intermediatedPP.payMetaInvoice(invoiceId, address(0));
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+        intermediatedPP.createDispute(invoiceId);
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+        intermediatedPP.handleDispute(invoiceId, DISPUTE_RESOLVED, BASIS_POINTS);
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+        intermediatedPP.release(invoiceId);
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+        intermediatedPP.refund(invoiceId, BASIS_POINTS);
+    }
+
+    function test_pauseLeavesCancelInvoiceOpen() public {
+        uint216 invoiceId = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, 10e8)
+        );
+
+        vm.prank(admin);
+        ppStorage.pause();
+
+        intermediatedPP.cancelInvoice(invoiceId);
+
+        assertEq(intermediatedPP.getInvoice(invoiceId).state, CANCELED);
+    }
+
+    function test_unpauseRestoresNormalFlow() public {
+        vm.startPrank(admin);
+        ppStorage.pause();
+        ppStorage.unpause();
+        vm.stopPrank();
+
+        uint216 invoiceId = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, 10e8)
+        );
+
+        assertEq(intermediatedPP.getInvoice(invoiceId).state, CREATED);
+    }
+
+    function test_lapsedEmergencyPauseStopsBlocking() public {
+        address pauser = address(0x9a);
+        vm.prank(admin);
+        ppStorage.setEmergencyPauser(pauser);
+
+        vm.prank(pauser);
+        ppStorage.emergencyPause();
+
+        IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, 10e8);
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+        intermediatedPP.createSingleInvoice(param);
+
+        vm.warp(block.timestamp + ppStorage.EMERGENCY_PAUSE_DURATION());
+
+        intermediatedPP.createSingleInvoice(param);
+    }
 }

@@ -83,6 +83,15 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /**
+     * @notice Blocks the call while the system is paused.
+     * @dev Reverts with ContractPaused. `cancelInvoice` is exempt: it moves no funds.
+     */
+    modifier whenNotPaused() {
+        _whenNotPaused();
+        _;
+    }
+
+    /**
      * @notice Initializes the IntermediatedPaymentProcessor contract with core configuration.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      * @param _oracle The address of the deployed OracleManager contract used for token price conversions.
@@ -98,6 +107,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     function createSingleInvoice(InvoiceCreationParam memory _param)
         external
         onlyMarketplace
+        whenNotPaused
         returns (uint216 invoiceId)
     {
         return _createInvoice(ppStorage.updateInvoiceNonce(1), 0, _param);
@@ -107,6 +117,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     function createMetaInvoice(InvoiceCreationParam[] memory _param)
         external
         onlyMarketplace
+        whenNotPaused
         returns (uint216 metaInvoiceId)
     {
         uint256 length = _param.length;
@@ -136,7 +147,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant {
+    function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
         uint256 priceInToken = getTokenValueFromUsd(_paymentToken, i.price);
 
@@ -155,7 +166,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @dev Caller must send exactly the oracle-converted total. Any dust from integer rounding is refunded.
      * @param _invoiceId The meta-invoice ID to pay.
      */
-    function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant {
+    function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant whenNotPaused {
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
 
@@ -173,7 +184,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant {
+    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant whenNotPaused {
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
 
@@ -184,7 +195,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function createDispute(uint216 _invoiceId) external onlyMarketplace {
+    function createDispute(uint216 _invoiceId) external onlyMarketplace whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != PAID) revert InvalidInvoiceState();
 
@@ -194,7 +205,11 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare) external onlyMarketplace {
+    function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare)
+        external
+        onlyMarketplace
+        whenNotPaused
+    {
         Invoice memory i = invoices[_invoiceId];
 
         if (i.state != DISPUTED) revert InvalidInvoiceState();
@@ -218,7 +233,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function release(uint216 _invoiceId) external onlyMarketplace {
+    function release(uint216 _invoiceId) external onlyMarketplace whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
         uint8 state = i.state;
         bool isReleasable = (state == PAID || state == DISPUTE_RESOLVED || state == DISPUTE_DISMISSED)
@@ -239,7 +254,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace {
+    function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != PAID) revert InvalidInvoiceState();
         if (_refundShare == 0 || _refundShare > BASIS_POINTS) revert InvalidSellersPayoutShare();
@@ -559,6 +574,11 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      */
     function _onlyOwner() internal view {
         if (msg.sender != _owner()) revert NotAuthorized();
+    }
+
+    /// @dev Reverts with ContractPaused while the storage contract reports a pause.
+    function _whenNotPaused() internal view {
+        if (ppStorage.isPaused()) revert ContractPaused();
     }
 
     /**
