@@ -17,6 +17,9 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @notice Total basis points used for percentage calculations. 10_000 = 100%.
     uint256 public constant BASIS_POINTS = 10_000;
 
+    /// @notice How long an emergency pause holds without owner approval.
+    uint256 public constant EMERGENCY_PAUSE_DURATION = 24 hours;
+
     /**
      * @notice The next available unique invoice nonce.
      * @dev Used to track and increment standalone or sub-invoice nonces.
@@ -37,6 +40,15 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
      *  @dev Struct containing modifiable parameters used throughout the contract.
      */
     Configuration private config;
+
+    /// @notice Address allowed to trigger an emergency pause.
+    address private emergencyPauser;
+
+    /// @notice Start of an unresolved emergency pause; 0 when none is pending.
+    uint40 private emergencyPausedAt;
+
+    /// @notice Owner-initiated pause, which never expires on its own.
+    bool private ownerPaused;
 
     /**
      * @notice Ensures that only authorized addresses can call the function.
@@ -114,6 +126,68 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     function setMarketplaceAddress(address _marketplaceAddress) external onlyOwner {
         config.marketplace = _marketplaceAddress;
         emit MarketplaceUpdated(_marketplaceAddress);
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function pause() external onlyOwner {
+        if (isPaused()) revert AlreadyPaused();
+        ownerPaused = true;
+        emit Paused(msg.sender);
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function unpause() external onlyOwner {
+        if (!ownerPaused && emergencyPausedAt == 0) revert NotPaused();
+        ownerPaused = false;
+        emergencyPausedAt = 0;
+        emit Unpaused(msg.sender);
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function emergencyPause() external {
+        if (msg.sender != emergencyPauser) revert NotAuthorized();
+
+        bool emergencyPaused = _emergencyPauseActive();
+        if (ownerPaused || emergencyPaused) revert AlreadyPaused();
+
+        emergencyPausedAt = uint40(block.timestamp);
+        emit EmergencyPaused(msg.sender, block.timestamp + EMERGENCY_PAUSE_DURATION);
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function approveEmergencyPause() external onlyOwner {
+        if (!_emergencyPauseActive()) revert NoActiveEmergencyPause();
+        ownerPaused = true;
+        emergencyPausedAt = 0;
+        emit EmergencyPauseApproved(msg.sender);
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function setEmergencyPauser(address _emergencyPauser) external onlyOwner {
+        emergencyPauser = _emergencyPauser;
+        emit EmergencyPauserUpdated(_emergencyPauser);
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function isPaused() public view returns (bool pausedState) {
+        return ownerPaused || _emergencyPauseActive();
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function getEmergencyPauser() external view returns (address emergencyPauserAddress) {
+        return emergencyPauser;
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function getEmergencyPauseExpiry() external view returns (uint256 expiry) {
+        uint40 startedAt = emergencyPausedAt;
+        return startedAt == 0 ? 0 : startedAt + EMERGENCY_PAUSE_DURATION;
+    }
+
+    /// @dev True while a pending emergency pause is still within its window.
+    function _emergencyPauseActive() internal view returns (bool active) {
+        uint40 startedAt = emergencyPausedAt;
+        return startedAt != 0 && block.timestamp < startedAt + EMERGENCY_PAUSE_DURATION;
     }
 
     /**

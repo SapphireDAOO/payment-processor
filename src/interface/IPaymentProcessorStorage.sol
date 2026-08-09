@@ -16,6 +16,15 @@ interface IPaymentProcessorStorage {
     /// @notice Thrown when the provided fee rate exceeds the maximum allowed (10,000 basis points = 100%).
     error InvalidFeeRate();
 
+    /// @notice Thrown when pausing a system that is already paused, or that has an unresolved emergency pause.
+    error AlreadyPaused();
+
+    /// @notice Thrown when unpausing a system that is not paused.
+    error NotPaused();
+
+    /// @notice Thrown when approving an emergency pause that is absent or already expired.
+    error NoActiveEmergencyPause();
+
     /// @notice Holds core configuration parameters for the contract.
     /// @param owner The address authorized to modify configuration parameters.
     /// @param feeRate Platform fee rate in basis points (BPS). i.e 100 BPS = 1%; 10,000 BPS = 100%.
@@ -84,6 +93,57 @@ interface IPaymentProcessorStorage {
      * @param _newValidityDuration The new validity window in seconds.
      */
     function setPaymentValidityDuration(uint256 _newValidityDuration) external;
+
+    /**
+     * @notice Halts every value-moving entrypoint on both payment processors.
+     * @dev Only callable by the contract owner. Stays in effect until `unpause`.
+     */
+    function pause() external;
+
+    /**
+     * @notice Lifts a pause and clears any unresolved emergency pause.
+     * @dev Only callable by the contract owner.
+     */
+    function unpause() external;
+
+    /**
+     * @notice Halts both payment processors for `EMERGENCY_PAUSE_DURATION` without owner involvement.
+     * @dev Only callable by the emergency pauser. Lapses automatically unless the owner calls
+     *      `approveEmergencyPause` within the window. The pauser may trigger a fresh one once it lapses.
+     */
+    function emergencyPause() external;
+
+    /**
+     * @notice Converts an active emergency pause into an indefinite pause.
+     * @dev Only callable by the contract owner, and only while the emergency pause has not expired.
+     */
+    function approveEmergencyPause() external;
+
+    /**
+     * @notice Sets the address allowed to call `emergencyPause`.
+     * @dev Only callable by the contract owner. Set to address(0) to revoke.
+     * @param _emergencyPauser The new emergency pauser address.
+     */
+    function setEmergencyPauser(address _emergencyPauser) external;
+
+    /**
+     * @notice Returns whether the payment processors are currently paused.
+     * @dev True for an owner pause, or an emergency pause that has not yet expired.
+     * @return pausedState True when paused.
+     */
+    function isPaused() external view returns (bool pausedState);
+
+    /**
+     * @notice Returns the address allowed to call `emergencyPause`.
+     * @return emergencyPauser The emergency pauser address.
+     */
+    function getEmergencyPauser() external view returns (address emergencyPauser);
+
+    /**
+     * @notice Returns the timestamp at which an unresolved emergency pause lapses.
+     * @return expiry The expiry timestamp, or 0 when no emergency pause is pending.
+     */
+    function getEmergencyPauseExpiry() external view returns (uint256 expiry);
 
     /**
      * @notice Returns the nonce that will be assigned to the next invoice.
@@ -183,4 +243,35 @@ interface IPaymentProcessorStorage {
      * @param validityDuration The new payment validity window in seconds.
      */
     event PaymentValidityDurationUpdated(uint256 validityDuration);
+
+    /**
+     * @notice Emitted when the owner pauses the payment processors.
+     * @param account The owner that paused.
+     */
+    event Paused(address indexed account);
+
+    /**
+     * @notice Emitted when the owner lifts a pause.
+     * @param account The owner that unpaused.
+     */
+    event Unpaused(address indexed account);
+
+    /**
+     * @notice Emitted when the emergency pauser halts the payment processors.
+     * @param account The emergency pauser.
+     * @param expiry The timestamp at which the pause lapses without owner approval.
+     */
+    event EmergencyPaused(address indexed account, uint256 expiry);
+
+    /**
+     * @notice Emitted when the owner converts an emergency pause into an indefinite pause.
+     * @param account The owner that approved.
+     */
+    event EmergencyPauseApproved(address indexed account);
+
+    /**
+     * @notice Emitted when the emergency pauser address is updated.
+     * @param emergencyPauser The new emergency pauser address.
+     */
+    event EmergencyPauserUpdated(address indexed emergencyPauser);
 }
