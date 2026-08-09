@@ -52,6 +52,9 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when the escrow withdrawal fails during a manual release, reject, or refund.
     error EscrowWithdrawFailed();
 
+    /// @notice Thrown when a value-moving entrypoint is called while the system is paused.
+    error ContractPaused();
+
     // ================================================================
     //                              STRUCTS
     // ================================================================

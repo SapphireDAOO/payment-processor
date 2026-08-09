@@ -76,6 +76,15 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /**
+     * @notice Blocks the call while the system is paused.
+     * @dev Reverts with ContractPaused. `cancelInvoice` is exempt: it moves no funds.
+     */
+    modifier whenNotPaused() {
+        _whenNotPaused();
+        _;
+    }
+
+    /**
      * @notice Initializes the payment processor with its storage, notes contract, and minimum invoice value.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      * @param _minimumInvoicePrice The new minimum default invoice value to set (in wei).
@@ -94,14 +103,16 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     /// @inheritdoc ISimplePaymentProcessor
     function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storageRef, bool _share)
         public
+        whenNotPaused
         returns (uint216 invoiceId)
     {
         if (_price < minimumInvoiceValue) revert ValueIsTooLow();
         uint216 newNonce = ppStorage.updateInvoiceNonce(1);
         invoiceId = _computeInvoiceId(msg.sender, newNonce);
-        if (invoices[invoiceId].state != 0) revert InvoiceAlreadyExists();
 
-        Invoice memory i;
+        Invoice storage i = invoices[invoiceId];
+        if (i.state != 0) revert InvoiceAlreadyExists();
+
         i.seller = msg.sender;
         i.createdAt = (block.timestamp).toUint40();
         i.price = _price;
@@ -110,8 +121,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         i.invoiceNonce = newNonce;
         i.feeRate = (ppStorage.getFeeRate()).toUint16();
         i.invalidateAt = (block.timestamp + ppStorage.getPaymentValidityDuration()).toUint40();
-
-        invoices[invoiceId] = i;
 
         if (_storageRef.length != 0) notes.createNote(invoiceId, msg.sender, _storageRef, _share);
 
@@ -124,13 +133,14 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     function pay(uint216 _invoiceId, bytes memory _storageRef, bool _share)
         public
         payable
+        whenNotPaused
         returns (address escrowAddress)
     {
         return _payWithValue(_invoiceId, _storageRef, _share, msg.value);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function acceptPayment(uint216 _invoiceId) public {
+    function acceptPayment(uint216 _invoiceId) public whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
         _validateInvoiceStateForPaymentDecision(i);
         i.state = ACCEPTED;
@@ -144,7 +154,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function rejectPayment(uint216 _invoiceId) public {
+    function rejectPayment(uint216 _invoiceId) public whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
         _validateInvoiceStateForPaymentDecision(i);
 
@@ -171,7 +181,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function release(uint216 _invoiceId) public {
+    function release(uint216 _invoiceId) public whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
 
         if (i.state == RELEASED) revert InvalidInvoiceState(i.state);
@@ -197,7 +207,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function refundBuyer(uint216 _invoiceId) public nonReentrant {
+    function refundBuyer(uint216 _invoiceId) public nonReentrant whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != PAID || block.timestamp < i.expiresAt) {
             revert InvoiceNotEligibleForRefund();
@@ -230,7 +240,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function processDueTasks() external nonReentrant {
+    function processDueTasks() external nonReentrant whenNotPaused {
         if (msg.sender != _owner() && msg.sender != automation) {
             revert NotAuthorized();
         }
@@ -424,6 +434,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
      */
     function _owner() internal view returns (address ownerAddress) {
         ownerAddress = PaymentProcessorStorage(address(ppStorage)).owner();
+    }
+
+    /// @dev Reverts with ContractPaused while the storage contract reports a pause.
+    function _whenNotPaused() internal view {
+        if (ppStorage.isPaused()) revert ContractPaused();
     }
 
     /**

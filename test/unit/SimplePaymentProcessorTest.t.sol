@@ -789,6 +789,98 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(fee, expected);
     }
 
+    // ================================================================
+    //                              PAUSE
+    // ================================================================
+
+    function test_pauseBlocksEveryValueMovingEntrypoint() public {
+        uint256 invoicePrice = 10 ether;
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        vm.prank(admin);
+        ppStorage.pause();
+
+        vm.prank(sellerOne);
+        vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
+        simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+
+        vm.prank(buyerTwo);
+        vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        vm.prank(sellerOne);
+        vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
+        simplePP.acceptPayment(invoiceId);
+
+        vm.prank(sellerOne);
+        vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
+        simplePP.rejectPayment(invoiceId);
+
+        vm.prank(sellerOne);
+        vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
+        simplePP.release(invoiceId);
+
+        vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
+        simplePP.refundBuyer(invoiceId);
+
+        vm.prank(admin);
+        vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
+        simplePP.processDueTasks();
+    }
+
+    function test_pauseLeavesCancelInvoiceOpen() public {
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(10 ether, HOLD_PERIOD, "", false);
+
+        vm.prank(admin);
+        ppStorage.pause();
+
+        vm.prank(sellerOne);
+        simplePP.cancelInvoice(invoiceId);
+
+        assertEq(simplePP.getInvoiceData(invoiceId).state, CANCELED);
+    }
+
+    function test_unpauseRestoresNormalFlow() public {
+        uint256 invoicePrice = 10 ether;
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+
+        vm.startPrank(admin);
+        ppStorage.pause();
+        ppStorage.unpause();
+        vm.stopPrank();
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        assertEq(simplePP.getInvoiceData(invoiceId).state, PAID);
+    }
+
+    function test_lapsedEmergencyPauseStopsBlocking() public {
+        address pauser = address(0x9a);
+        vm.prank(admin);
+        ppStorage.setEmergencyPauser(pauser);
+
+        vm.prank(pauser);
+        ppStorage.emergencyPause();
+
+        vm.prank(sellerOne);
+        vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
+        simplePP.createInvoice(10 ether, HOLD_PERIOD, "", false);
+
+        vm.warp(block.timestamp + ppStorage.EMERGENCY_PAUSE_DURATION());
+
+        vm.prank(sellerOne);
+        simplePP.createInvoice(10 ether, HOLD_PERIOD, "", false);
+    }
+
     function _burnInvoiceViaFailedRefunds(uint256 _price) internal returns (uint216 invoiceId) {
         NoReceiveEther noReceiveBuyer = new NoReceiveEther{ value: _price }();
 
