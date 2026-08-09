@@ -204,6 +204,55 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
     }
 
     // ================================================================
+    //                              PAUSE
+    // ================================================================
+
+    function test_checkerReportsNoWorkWhilePaused() public {
+        _payInvoiceAndWarpPastDecisionWindow();
+
+        (bool canExec,) = automation.checker();
+        assertTrue(canExec);
+
+        vm.prank(admin);
+        ppStorage.pause();
+
+        // Keepers must see no work rather than burn gas on a call that reverts.
+        (canExec,) = automation.checker();
+        assertFalse(canExec);
+        assertFalse(automation.hasDueTasks());
+        assertTrue(simplePP.hasDueTasks());
+    }
+
+    function test_processDueTasksRevertsWhilePaused() public {
+        _payInvoiceAndWarpPastDecisionWindow();
+
+        vm.prank(admin);
+        ppStorage.pause();
+
+        vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
+        automation.processDueTasks();
+
+        vm.prank(FORWARDER_TWO);
+        vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
+        automation.onReport(_workflowMetadata(WORKFLOW_OWNER), "");
+    }
+
+    function test_unpauseResumesKeeperProcessing() public {
+        uint216 invoiceId = _payInvoiceAndWarpPastDecisionWindow();
+
+        vm.startPrank(admin);
+        ppStorage.pause();
+        ppStorage.unpause();
+        vm.stopPrank();
+
+        (bool canExec,) = automation.checker();
+        assertTrue(canExec);
+
+        automation.processDueTasks();
+        assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
+    }
+
+    // ================================================================
     //                            HELPERS
     // ================================================================
 

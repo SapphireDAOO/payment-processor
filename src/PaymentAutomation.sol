@@ -82,13 +82,13 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
 
     /// @inheritdoc IPaymentAutomation
     function checker() external view returns (bool canExec, bytes memory execPayload) {
-        canExec = processor.hasDueTasks();
+        canExec = _hasDueTasks();
         execPayload = abi.encodeCall(IPaymentAutomation.processDueTasks, ());
     }
 
     /// @inheritdoc IPaymentAutomation
     function hasDueTasks() external view returns (bool dueTasksExist) {
-        return processor.hasDueTasks();
+        return _hasDueTasks();
     }
 
     /// @inheritdoc IERC165
@@ -132,6 +132,11 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
             // load 32 bytes and shift right so the 20-byte address occupies the low bits.
             reportedWorkflowOwner := shr(96, calldataload(add(_metadata.offset, 42)))
         }
+    }
+
+    /// @dev A paused system rejects `processDueTasks`, so report no work rather than let keepers revert.
+    function _hasDueTasks() internal view returns (bool dueTasksExist) {
+        return !ppStorage.isPaused() && processor.hasDueTasks();
     }
 
     /**

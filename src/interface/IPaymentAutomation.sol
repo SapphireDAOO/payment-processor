@@ -43,7 +43,8 @@ interface IPaymentAutomation {
 
     /**
      * @notice Returns whether the processor has any scheduled invoice task due for processing.
-     * @dev Passes through to the processor so keepers only need this contract's address.
+     * @dev Passes through to the processor so keepers only need this contract's address. False while
+     *      the system is paused, so keepers do not spend gas on calls that would revert.
      * @return dueTasksExist True when the processor's earliest scheduled task is due.
      */
     function hasDueTasks() external view returns (bool dueTasksExist);
