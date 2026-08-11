@@ -152,12 +152,14 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         uint256 priceInToken = getTokenValueFromUsd(_paymentToken, i.price);
 
         if (_paymentToken == address(0)) {
-            if (msg.value != priceInToken) revert InvalidNativePayment();
+            if (msg.value < priceInToken) revert InvalidNativePayment();
         } else {
             if (msg.value != 0) revert InvalidNativePayment();
         }
 
-        _pay(i, _invoiceId, _paymentToken, priceInToken);
+        uint256 amountPaid = _pay(i, _invoiceId, _paymentToken, priceInToken);
+        _refundExtra(priceInToken, amountPaid);
+        
         invoices[_invoiceId] = i;
     }
 
@@ -178,8 +180,11 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         uint256 amountPaid = _paySubInvoices(m.subInvoiceIds, address(0), usdPerToken, DEFAULT_DECIMAL);
         if (amountPaid == 0) revert InvalidInvoiceState();
 
-        uint256 refundableAmount = priceInToken - amountPaid;
+        _refundExtra(priceInToken, amountPaid);
+    }
 
+    function _refundExtra(uint256 _priceInToken, uint256 _amountPaid) internal {
+        uint256 refundableAmount = _priceInToken - _amountPaid;
         if (refundableAmount > 0) (msg.sender).safeTransferETH(refundableAmount);
     }
 
