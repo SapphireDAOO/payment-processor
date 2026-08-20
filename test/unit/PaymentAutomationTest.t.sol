@@ -187,7 +187,7 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
         vm.prank(sellerOne);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         vm.warp(block.timestamp + HOLD_PERIOD + 1);
 

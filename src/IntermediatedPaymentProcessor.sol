@@ -12,6 +12,8 @@ import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { SafeTransferLib } from "solady/utils/SafeTransferLib.sol";
 import { ReentrancyGuard } from "solady/utils/ReentrancyGuard.sol";
 
+import { FeeAuthorizationLib } from "./libraries/FeeAuthorizationLib.sol";
+
 import {
     CREATED,
     PAID,
@@ -147,9 +149,16 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function payInvoice(uint216 _invoiceId, address _paymentToken) external payable nonReentrant whenNotPaused {
+    function payInvoice(uint216 _invoiceId, address _paymentToken, address _feeReceiver, bytes memory _data)
+        external
+        payable
+        nonReentrant
+        whenNotPaused
+    {
         Invoice memory i = invoices[_invoiceId];
         uint256 priceInToken = getTokenValueFromUsd(_paymentToken, i.price);
+
+        _validateFeeAuthorization(_invoiceId, _feeReceiver, _data);
 
         if (_paymentToken == address(0)) {
             if (msg.value < priceInToken) revert InvalidNativePayment();
@@ -157,7 +166,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
             if (msg.value != 0) revert InvalidNativePayment();
         }
 
-        uint256 amountPaid = _pay(i, _invoiceId, _paymentToken, priceInToken);
+        uint256 amountPaid = _pay(i, _invoiceId, _paymentToken, priceInToken, _feeReceiver);
         _refundExtra(priceInToken, amountPaid);
 
         invoices[_invoiceId] = i;
@@ -246,8 +255,9 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         invoices[_invoiceId].state = RELEASED;
         invoices[_invoiceId].balance = 0;
 
-        if (!IEscrow(i.escrow).withdraw(i.paymentToken, ppStorage.getFeeReceiver(), fee)) {
-            emit TransferFailed(_invoiceId, ppStorage.getFeeReceiver(), fee);
+        address feeReceiver = _feeReceiverFor(i.feeReceiver);
+        if (!IEscrow(i.escrow).withdraw(i.paymentToken, feeReceiver, fee)) {
+            emit TransferFailed(_invoiceId, feeReceiver, fee);
         }
 
         emit PaymentReleased(_invoiceId, i.seller, i.paymentToken, sellerNetAmount, fee);
@@ -359,10 +369,13 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @param _paymentToken The token address (address(0) for native ETH).
      * @param _tokenPrice The oracle-converted price in the payment token's units.
      */
-    function _pay(Invoice memory _i, uint216 _invoiceId, address _paymentToken, uint256 _tokenPrice)
-        internal
-        returns (uint256 amountPaid)
-    {
+    function _pay(
+        Invoice memory _i,
+        uint216 _invoiceId,
+        address _paymentToken,
+        uint256 _tokenPrice,
+        address _feeReceiver
+    ) internal returns (uint256 amountPaid) {
         if (block.timestamp > _i.expiresAt) revert InvoiceExpired();
         if (msg.sender == _i.seller) revert BuyerCannotBeSeller();
         if (_i.state != CREATED) revert InvalidInvoiceState();
@@ -385,6 +398,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         _i.balance = _tokenPrice;
         _i.amountPaid = _tokenPrice;
         _i.paymentToken = _paymentToken;
+        _i.feeReceiver = _feeReceiver;
 
         if (_paymentToken != address(0)) {
             _paymentToken.safeTransferFrom(msg.sender, escrowAddress, _tokenPrice);
@@ -394,7 +408,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
             _i.releaseAt = (block.timestamp + _i.escrowHoldPeriod).toUint40();
         }
 
-        emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, _tokenPrice, _i.releaseAt);
+        emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, _tokenPrice, _i.releaseAt, _feeReceiver);
         return _i.amountPaid;
     }
 
@@ -421,7 +435,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
                 uint256 price = i.price.mulDiv(10 ** _decimals, _tokenUsdPrice);
                 if (price == 0) continue;
 
-                amountPaid += _pay(i, subInvoiceId, _paymentToken, price);
+                amountPaid += _pay(i, subInvoiceId, _paymentToken, price, address(0));
                 invoices[subInvoiceId] = i;
             }
         }
@@ -520,9 +534,33 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
             if (_revertOnFail) revert EscrowWithdrawFailed();
         }
 
-        if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, ppStorage.getFeeReceiver(), fee)) {
+        if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, _feeReceiverFor(_i.feeReceiver), fee)) {
             if (_revertOnFail) revert EscrowWithdrawFailed();
         }
+    }
+
+    /**
+     * @notice Reverts unless `_feeReceiver` was authorized by the configured fee signer for this invoice.
+     * @param _invoiceId The invoice the fee receiver is being attached to.
+     * @param _feeReceiver The fee receiver supplied by the caller.
+     * @param _data The fee signer's ECDSA signature over the authorization digest.
+     */
+    function _validateFeeAuthorization(uint216 _invoiceId, address _feeReceiver, bytes memory _data) internal view {
+        if (_feeReceiver == address(0)) revert InvalidFeeReceiver();
+        if (!FeeAuthorizationLib.isAuthorized(ppStorage.getFeeSigner(), _invoiceId, _feeReceiver, _data)) {
+            revert InvalidFeeAuthorization();
+        }
+    }
+
+    /**
+     * @notice Resolves the address that should receive an invoice's platform fee.
+     * @dev Sub-invoices are paid through the meta-invoice entrypoints, which carry no per-invoice fee
+     *      receiver, so a zero receiver falls back to the global one held in storage.
+     * @param _feeReceiver The fee receiver stored on the invoice; zero when it has none.
+     * @return feeReceiver The address to send the fee to.
+     */
+    function _feeReceiverFor(address _feeReceiver) internal view returns (address feeReceiver) {
+        return _feeReceiver == address(0) ? ppStorage.getFeeReceiver() : _feeReceiver;
     }
 
     /**

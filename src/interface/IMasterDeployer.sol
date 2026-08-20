@@ -68,6 +68,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @param salt The CREATE2 salt used for every deployment.
      * @param config The initial PaymentProcessorStorage configuration.
      * @param minimumInvoiceValue Minimum invoice value (in wei) for the SimplePaymentProcessor.
+     * @param weth Wrapped native token the SimplePaymentProcessor pays platform fees in.
      * @param sequencerUptimeFeed Chainlink sequencer uptime feed; address(0) disables the check.
      * @param multiSigSigners Initial MultiSig signers.
      * @param multiSigThreshold Initial MultiSig approval threshold.
@@ -76,6 +77,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
         bytes32 salt;
         IPaymentProcessorStorage.Configuration config;
         uint256 minimumInvoiceValue;
+        address weth;
         address sequencerUptimeFeed;
         address[] multiSigSigners;
         uint256 multiSigThreshold;

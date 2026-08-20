@@ -5,10 +5,12 @@ import { SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { PaymentAutomation } from "../../src/PaymentAutomation.sol";
 import { BaseSetUp } from "./BaseSetUp.sol";
 import { Notes } from "src/Notes.sol";
+import { MockWeth } from "../mock/MockWeth.sol";
 
 abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     SimplePaymentProcessor simplePP;
     PaymentAutomation automation;
+    MockWeth weth;
     uint256 constant MINIMUM_INVOICE_VALUE = 1 ether;
 
     uint32 constant HOLD_PERIOD = 2 days;
@@ -27,7 +29,8 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     ///      `processDueTasks` on the processor.
     function _deployAuthorized(address _predictedStorage, address _notesAddress) internal virtual override {
         super._deployAuthorized(_predictedStorage, _notesAddress);
-        simplePP = new SimplePaymentProcessor(_predictedStorage, MINIMUM_INVOICE_VALUE, _notesAddress);
+        weth = new MockWeth();
+        simplePP = new SimplePaymentProcessor(_predictedStorage, MINIMUM_INVOICE_VALUE, _notesAddress, address(weth));
         automation = new PaymentAutomation(address(simplePP), _predictedStorage);
         _authorize(address(simplePP));
     }

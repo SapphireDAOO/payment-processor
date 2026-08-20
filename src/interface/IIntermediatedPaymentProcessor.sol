@@ -52,6 +52,12 @@ interface IIntermediatedPaymentProcessor {
     /// @notice Thrown when an invoice is created with a zero escrow hold period.
     error HoldPeriodCanNotBeZero();
 
+    /// @notice Thrown when the fee receiver is not authorized by a signature from the configured fee signer.
+    error InvalidFeeAuthorization();
+
+    /// @notice Thrown when the zero address is supplied as the fee receiver.
+    error InvalidFeeReceiver();
+
     /// @notice Thrown if the buyer and seller are the same address.
     error BuyerCannotBeSeller();
 
@@ -107,6 +113,8 @@ interface IIntermediatedPaymentProcessor {
     /// @param seller Address of the seller.
     /// @param escrow Address of the escrow contract holding the funds.
     /// @param paymentToken Token used for payment. Address zero for native currency.
+    /// @param feeReceiver Address that receives the platform fee for this invoice, authorized by the fee signer
+    ///        when the buyer paid. Zero for sub-invoices paid as part of a meta-invoice.
     /// @param amountPaid Total amount paid by the buyer for this invoice, in the payment token (use native token if `paymentToken == address(0)`).
     /// @param price Invoice amount expressed in USD (8 decimals).
     /// @param balance Current balance of the escrow associated with the order, accounting for total amount paid minus refunds or releases.
@@ -125,6 +133,7 @@ interface IIntermediatedPaymentProcessor {
         address seller;
         address escrow;
         address paymentToken;
+        address feeReceiver;
         uint256 amountPaid;
         uint256 price;
         uint256 balance;
@@ -173,10 +182,18 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Pays a single invoice using native ETH or an approved ERC20 token.
+     * @dev `_feeReceiver` is recorded on the invoice and paid the platform fee on release or dispute
+     *      settlement, so it must be authorized by the fee signer via `_data`.
      * @param _invoiceId The ID of the invoice to be paid.
      * @param _paymentToken The token address used for payment (or zero address for ETH).
+     * @param _feeReceiver The address to pay this invoice's platform fee to.
+     * @param _data The fee signer's 65-byte ECDSA signature over
+     *        `keccak256(abi.encode(address(this), block.chainid, _invoiceId, _feeReceiver))`,
+     *        as an EIP-191 `personal_sign` digest.
      */
-    function payInvoice(uint216 _invoiceId, address _paymentToken) external payable;
+    function payInvoice(uint216 _invoiceId, address _paymentToken, address _feeReceiver, bytes memory _data)
+        external
+        payable;
 
     /**
      * @notice Pays all sub-invoices in a meta-invoice using native ETH.
@@ -362,9 +379,16 @@ interface IIntermediatedPaymentProcessor {
      * @param escrowAddress The address of the escrow contract created to hold the payment.
      * @param amount The amount paid, denominated in the token’s smallest unit.
      * @param releaseAt The UNIX timestamp (in seconds) when the escrowed funds become releasable.
+     * @param feeReceiver The address recorded to be paid this invoice's platform fee. Zero for a
+     *        sub-invoice paid through a meta-invoice, which falls back to the global fee receiver.
      */
     event InvoicePaid(
-        uint216 indexed invoiceId, address paymentToken, address escrowAddress, uint256 amount, uint40 releaseAt
+        uint216 indexed invoiceId,
+        address paymentToken,
+        address escrowAddress,
+        uint256 amount,
+        uint40 releaseAt,
+        address feeReceiver
     );
 
     /**

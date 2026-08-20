@@ -36,7 +36,9 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
         uint256 amountInToken = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(NATIVE_TOKEN_BUYER);
-        intermediatedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: amountInToken }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
 
@@ -87,7 +89,9 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
         );
 
         vm.prank(USDC_BUYER);
-        intermediatedPP.payInvoice(invoiceId, address(USDC));
+        intermediatedPP.payInvoice(
+            invoiceId, address(USDC), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
 
@@ -176,7 +180,9 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(USDC), price);
 
         vm.prank(USDC_BUYER);
-        intermediatedPP.payInvoice(invoiceId, address(USDC));
+        intermediatedPP.payInvoice(
+            invoiceId, address(USDC), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         intermediatedPP.createDispute(invoiceId);
 
@@ -213,7 +219,9 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
         uint256 fee = applyBasisPoints(tokenValue, FEE_RATE);
 
         vm.prank(WTBC_BUYER);
-        intermediatedPP.payInvoice(invoiceId, WBTC);
+        intermediatedPP.payInvoice(
+            invoiceId, WBTC, feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         vm.warp(block.timestamp + 1 days);
         intermediatedPP.release(invoiceId);

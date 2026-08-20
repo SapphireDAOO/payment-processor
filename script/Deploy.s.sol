@@ -13,6 +13,7 @@ import { OracleManager } from "../src/OracleManager.sol";
 import { IOracleManager } from "../src/interface/IOracleManager.sol";
 import { MockUsdc, MockWbtc } from "../test/mock/mERC20.sol";
 import { MockV3Aggregator } from "../test/mock/MockV3Aggregator.sol";
+import { MockWeth } from "../test/mock/MockWeth.sol";
 import { Notes } from "../src/Notes.sol";
 
 struct Addr {
@@ -22,6 +23,7 @@ struct Addr {
     address sequencerUptimeFeed;
     address usdc;
     address wbtc;
+    address weth;
 }
 
 contract Deploy is Script {
@@ -36,6 +38,9 @@ contract Deploy is Script {
     // Base mainnet tokens
     address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address constant WBTC = 0x0555E30da8f98308EdB960aa94C0Db47230d2B9c;
+
+    /// @dev Canonical wrapped-native predeploy, identical on Base mainnet and Base Sepolia.
+    address constant WETH = 0x4200000000000000000000000000000000000006;
 
     // Base mainnet Chainlink price feeds
     address constant USDC_USD_PRICE_FEED = 0x7e860098F58bBFC8648a4311b374B1D669a2bc6B;
@@ -113,6 +118,7 @@ contract Deploy is Script {
                 gasThreshold: DEFAULT_GAS_THRESHOLD
             }),
             minimumInvoiceValue: MINIMUM_INVOICE_VALUE,
+            weth: addr.weth,
             sequencerUptimeFeed: addr.sequencerUptimeFeed,
             multiSigSigners: signers,
             multiSigThreshold: INITIAL_THRESHOLD
@@ -170,7 +176,7 @@ contract Deploy is Script {
 
         // The keeper entrypoints live on PaymentAutomation; the processor only trusts its address.
         // The CRE forwarder and workflow owner are still set on PaymentAutomation post-deploy.
-        SimplePaymentProcessor(simplePP).setAutomation(automation);
+        SimplePaymentProcessor(payable(simplePP)).setAutomation(automation);
         console.log("SimplePaymentProcessor automation set:", automation);
 
         _setPriceFeeds(_masterDeployer.oracleManager(), _addr, _isMainnet);
@@ -222,7 +228,8 @@ contract Deploy is Script {
                 nativeTokenPriceFeed: NATIVE_TOKEN_USD_PRICE_FEED,
                 sequencerUptimeFeed: MAINNET_SEQUENCER_UPTIME_FEED,
                 usdc: USDC,
-                wbtc: WBTC
+                wbtc: WBTC,
+                weth: WETH
             });
         }
 
@@ -247,7 +254,8 @@ contract Deploy is Script {
                 // No L2 sequencer locally; address(0) makes OracleManager skip the uptime check.
                 sequencerUptimeFeed: address(0),
                 usdc: address(mockUsdc),
-                wbtc: address(mockWBtc)
+                wbtc: address(mockWBtc),
+                weth: address(new MockWeth{ salt: _salt }())
             });
         }
 
@@ -257,7 +265,8 @@ contract Deploy is Script {
             nativeTokenPriceFeed: TESTNET_NATIVE_TOKEN_PRICE_FEED,
             sequencerUptimeFeed: address(0),
             usdc: address(mockUsdc),
-            wbtc: address(mockWBtc)
+            wbtc: address(mockWBtc),
+            weth: WETH
         });
     }
 

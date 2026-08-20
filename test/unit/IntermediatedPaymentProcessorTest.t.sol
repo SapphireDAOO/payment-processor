@@ -6,6 +6,7 @@ import {
     IntermediatedPaymentProcessor
 } from "../../src/IntermediatedPaymentProcessor.sol";
 import { IOracleManager } from "../../src/interface/IOracleManager.sol";
+import { IPaymentProcessorStorage } from "../../src/interface/IPaymentProcessorStorage.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { console } from "forge-std/console.sol";
 
@@ -15,6 +16,7 @@ import {
     getInvoiceCreationParam,
     getInvoiceCreationParams,
     applyBasisPoints,
+    TEST_ESCROW_HOLD_PERIOD,
     getEscrowAddress
 } from "../utils/InvoiceTestHelpers.sol";
 
@@ -183,20 +185,28 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         vm.startPrank(buyerOne);
 
         vm.expectRevert(IIntermediatedPaymentProcessor.UnsupportedToken.selector);
-        intermediatedPP.payInvoice(invoiceId, address(12));
+        intermediatedPP.payInvoice(
+            invoiceId, address(12), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         vm.expectRevert(IIntermediatedPaymentProcessor.InvalidNativePayment.selector);
-        intermediatedPP.payInvoice{ value: 0.001 ether }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: 0.001 ether }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
         vm.stopPrank();
 
         uint256 amountInToken = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(sellerOne);
         vm.expectRevert(IIntermediatedPaymentProcessor.BuyerCannotBeSeller.selector);
-        intermediatedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: amountInToken }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: amountInToken }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
 
@@ -210,7 +220,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         vm.warp(15 days);
         vm.expectRevert(IIntermediatedPaymentProcessor.InvoiceExpired.selector);
-        intermediatedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: amountInToken }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
     }
 
     function test_nativeTokenPaymentForMetaInvoice() public {
@@ -291,11 +303,15 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         );
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice(invoiceId, address(mockUsdc));
+        intermediatedPP.payInvoice(
+            invoiceId, address(mockUsdc), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         vm.prank(buyerOne);
         vm.expectRevert(IIntermediatedPaymentProcessor.InvalidInvoiceState.selector);
-        intermediatedPP.payInvoice(invoiceId, address(mockUsdc));
+        intermediatedPP.payInvoice(
+            invoiceId, address(mockUsdc), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
 
@@ -412,7 +428,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         intermediatedPP.createDispute(invoiceId);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         vm.warp(block.timestamp + 25 hours);
 
@@ -467,7 +485,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(mockUsdc), price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice(invoiceId, address(mockUsdc));
+        intermediatedPP.payInvoice(
+            invoiceId, address(mockUsdc), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         uint256 basisPoint = BASIS_POINTS;
         uint8 dismissed = DISPUTE_DISMISSED;
@@ -513,7 +533,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         );
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice(invoiceId, address(mockUsdc));
+        intermediatedPP.payInvoice(
+            invoiceId, address(mockUsdc), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         vm.expectRevert(IIntermediatedPaymentProcessor.InvalidInvoiceState.selector);
         intermediatedPP.resolveDispute(invoiceId);
@@ -538,7 +560,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         intermediatedPP.release(invoiceId);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         vm.warp(block.timestamp + 1 days);
 
@@ -646,7 +670,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         intermediatedPP.refund(invoiceId, refundShare);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
         uint256 buyerBalance = buyerOne.balance;
 
         vm.expectRevert(IIntermediatedPaymentProcessor.InvalidSellersPayoutShare.selector);
@@ -674,7 +700,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         );
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice(invoiceId, address(mockUsdc));
+        intermediatedPP.payInvoice(
+            invoiceId, address(mockUsdc), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         uint256 tokenValue = intermediatedPP.getInvoice(invoiceId).balance;
         uint256 refundShare = 3000;
@@ -708,7 +736,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         );
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice(invoiceId, address(mockUsdc));
+        intermediatedPP.payInvoice(
+            invoiceId, address(mockUsdc), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         uint256 tokenValue = intermediatedPP.getInvoice(invoiceId).balance;
         uint256 buyerUsdcBefore = mockUsdc.balanceOf(buyerOne);
@@ -728,7 +758,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         uint256 buyerBalance = buyerOne.balance;
 
@@ -762,7 +794,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         // Global fee rate change after creation must not affect this invoice.
         vm.prank(admin);
@@ -786,7 +820,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         intermediatedPP.createDispute(invoiceId);
 
@@ -841,7 +877,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 paidAt = block.timestamp;
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: amountInToken }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
 
@@ -871,7 +909,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 amountInToken = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: amountInToken }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         // warp past default hold (1 day) but not past custom hold (7 days)
         vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
@@ -893,7 +933,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 amountInToken = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: amountInToken }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         vm.warp(block.timestamp + customHold + 1);
         intermediatedPP.release(invoiceId);
@@ -943,7 +985,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         // Buyer pays using USDC; token amount is rounded down in getTokenValueFromUsd.
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice(invoiceId, address(mockUsdc));
+        intermediatedPP.payInvoice(
+            invoiceId, address(mockUsdc), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
 
@@ -962,7 +1006,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         intermediatedPP.createDispute(invoiceId);
         intermediatedPP.resolveDispute(invoiceId);
@@ -984,7 +1030,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         intermediatedPP.createDispute(invoiceId);
         intermediatedPP.handleDispute(invoiceId, DISPUTE_DISMISSED, 0);
@@ -1022,7 +1070,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
 
         vm.prank(buyerTwo);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
 
@@ -1107,7 +1157,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         uint256 balanceBefore = sellerOne.balance;
         vm.warp(block.timestamp + 1 days);
@@ -1132,7 +1184,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         intermediatedPP.createDispute(invoiceId);
 
@@ -1158,7 +1212,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(mockUsdc), _price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice(invoiceId, address(mockUsdc));
+        intermediatedPP.payInvoice(
+            invoiceId, address(mockUsdc), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
         assertEq(inv.state, PAID);
@@ -1211,7 +1267,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         uint256 expectedRefund = (tokenValue * _refundShare) / BASIS_POINTS;
         uint256 buyerBefore = buyerOne.balance;
@@ -1235,7 +1293,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         intermediatedPP.createDispute(invoiceId);
 
@@ -1270,7 +1330,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         uint256 expectedReleaseAt = block.timestamp + _holdPeriod;
 
@@ -1297,7 +1359,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         vm.prank(buyerOne);
         vm.expectRevert(IIntermediatedPaymentProcessor.InvalidNativePayment.selector);
-        intermediatedPP.payInvoice{ value: _wrongValue }(invoiceId, address(mockUsdc));
+        intermediatedPP.payInvoice{ value: _wrongValue }(
+            invoiceId, address(mockUsdc), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
     }
 
     function test_resolveDisputeAndRelease(uint256 _price) public {
@@ -1310,7 +1374,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
 
         vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
         uint256 originalReleaseAt = inv.releaseAt;
@@ -1361,7 +1427,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
         vm.prank(buyerTwo);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         // Build args before arming expectRevert: inner staticcalls would otherwise consume it.
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
@@ -1381,7 +1449,9 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         vm.prank(buyerTwo);
         vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
 
         vm.prank(buyerTwo);
         vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
@@ -1447,5 +1517,127 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         vm.warp(block.timestamp + ppStorage.EMERGENCY_PAUSE_DURATION());
 
         intermediatedPP.createSingleInvoice(param);
+    }
+
+    function test_payInvoiceRequiresAnAuthorizedFeeReceiver() public {
+        uint256 price = 100e8;
+        uint216 invoiceId = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+        );
+
+        uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
+        address attackerFeeReceiver = address(0xbad);
+
+        vm.startPrank(buyerOne);
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidFeeReceiver.selector);
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), address(0), _feeSig(address(intermediatedPP), invoiceId, address(0))
+        );
+
+        // A valid signature for one receiver does not authorize another.
+        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidFeeAuthorization.selector);
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), attackerFeeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
+
+        // Nor does a signature bound to a different invoice.
+        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidFeeAuthorization.selector);
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId + 1, feeReceiver)
+        );
+
+        // Nor does one signed for the other processor.
+        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidFeeAuthorization.selector);
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(ppStorage), invoiceId, feeReceiver)
+        );
+
+        vm.expectEmit(address(intermediatedPP));
+        emit IIntermediatedPaymentProcessor.InvoicePaid(
+            invoiceId,
+            address(0),
+            intermediatedPP.getEscrowAddress(sellerOne, buyerOne, invoiceId),
+            tokenValue,
+            uint40(block.timestamp + TEST_ESCROW_HOLD_PERIOD),
+            feeReceiver
+        );
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
+        vm.stopPrank();
+
+        assertEq(intermediatedPP.getInvoice(invoiceId).feeReceiver, feeReceiver);
+    }
+
+    function test_releasePaysTheInvoicesAuthorizedFeeReceiver() public {
+        uint256 price = 100e8;
+        address invoiceFeeReceiver = address(0xfee5);
+
+        uint216 invoiceId = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+        );
+
+        uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
+
+        vm.prank(buyerOne);
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), invoiceFeeReceiver, _feeSig(address(intermediatedPP), invoiceId, invoiceFeeReceiver)
+        );
+
+        uint256 fee = applyBasisPoints(intermediatedPP.getInvoice(invoiceId).balance, FEE_RATE);
+        uint256 globalFeeReceiverBalance = feeReceiver.balance;
+
+        vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
+        intermediatedPP.release(invoiceId);
+
+        assertEq(invoiceFeeReceiver.balance, fee);
+        assertEq(feeReceiver.balance, globalFeeReceiverBalance, "global fee receiver should not be paid");
+    }
+
+    function test_metaInvoiceSubInvoicesFallBackToTheGlobalFeeReceiver() public {
+        address[] memory sellers = new address[](2);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 100e8;
+        prices[1] = 50e8;
+
+        (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory subInvoiceIds) =
+            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices);
+
+        uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(params);
+
+        uint256 totalValue = intermediatedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
+
+        vm.prank(buyerOne);
+        intermediatedPP.payMetaInvoiceWithValue{ value: totalValue }(metaInvoiceId);
+
+        assertEq(intermediatedPP.getInvoice(subInvoiceIds[0]).feeReceiver, address(0));
+
+        uint256 fee = applyBasisPoints(intermediatedPP.getInvoice(subInvoiceIds[0]).balance, FEE_RATE);
+        uint256 globalFeeReceiverBalance = feeReceiver.balance;
+
+        vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
+        intermediatedPP.release(subInvoiceIds[0]);
+
+        assertEq(feeReceiver.balance, globalFeeReceiverBalance + fee);
+    }
+
+    function test_setFeeSigner() public {
+        vm.expectRevert();
+        ppStorage.setFeeSigner(address(0xa11ce));
+
+        vm.startPrank(admin);
+        vm.expectRevert(IPaymentProcessorStorage.InvalidFeeSigner.selector);
+        ppStorage.setFeeSigner(address(0));
+
+        vm.expectEmit(address(ppStorage));
+        emit IPaymentProcessorStorage.FeeSignerUpdated(address(0xa11ce));
+        ppStorage.setFeeSigner(address(0xa11ce));
+        vm.stopPrank();
+
+        assertEq(ppStorage.getFeeSigner(), address(0xa11ce));
     }
 }

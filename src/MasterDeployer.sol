@@ -88,14 +88,14 @@ contract MasterDeployer is IMasterDeployer {
         notes = Notes(Create2.deploy(0, _params.salt, abi.encodePacked(_initCodes.notes, abi.encode(predicted))));
 
         simplePaymentProcessor = SimplePaymentProcessor(
-            Create2.deploy(
-                0,
-                _params.salt,
-                abi.encodePacked(
-                    _initCodes.simplePaymentProcessor,
-                    abi.encode(predicted, _params.minimumInvoiceValue, address(notes))
-                )
-            )
+            payable(Create2.deploy(
+                    0,
+                    _params.salt,
+                    abi.encodePacked(
+                        _initCodes.simplePaymentProcessor,
+                        abi.encode(predicted, _params.minimumInvoiceValue, address(notes), _params.weth)
+                    )
+                ))
         );
 
         paymentAutomation = PaymentAutomation(

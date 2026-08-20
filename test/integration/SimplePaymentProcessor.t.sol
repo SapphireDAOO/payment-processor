@@ -69,11 +69,11 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         simplePP.pay{ value: INVOICE_PRICE }(invoiceId, "", false);
 
         uint256 expectedFee = simplePP.calculateFee(INVOICE_PRICE);
-        uint256 feeReceiverBefore = feeReceiver.balance;
+        uint256 feeReceiverBefore = weth.balanceOf(feeReceiver);
         uint256 sellerBalanceBefore = sellerOne.balance;
 
         vm.prank(sellerOne);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         vm.warp(block.timestamp + HOLD_PERIOD + 1);
 
@@ -85,7 +85,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         assertEq(inv.state, RELEASED);
         assertEq(inv.balance, 0);
         assertEq(inv.escrow.balance, 0);
-        assertEq(feeReceiver.balance, feeReceiverBefore + expectedFee);
+        assertEq(weth.balanceOf(feeReceiver), feeReceiverBefore + expectedFee);
         assertEq(sellerOne.balance, sellerBalanceBefore + (INVOICE_PRICE - expectedFee));
     }
 
@@ -114,7 +114,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         simplePP.pay{ value: INVOICE_PRICE }(invoiceId, "", false);
 
         vm.prank(sellerOne);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         uint256 expectedFee = simplePP.calculateFee(INVOICE_PRICE);
         uint256 sellerBalanceBefore = sellerOne.balance;

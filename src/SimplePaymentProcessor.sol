@@ -7,7 +7,9 @@ import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProc
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
+import { FeeAuthorizationLib } from "src/libraries/FeeAuthorizationLib.sol";
 import { INotes } from "./interface/INotes.sol";
+import { IWETH } from "./interface/IWETH.sol";
 import { ReentrancyGuard } from "solady/utils/ReentrancyGuard.sol";
 
 import {
@@ -43,6 +45,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable ppStorage;
 
+    /// @notice Wrapped native token the platform fee is paid in.
+    IWETH public immutable weth;
+
     /// @notice The minimum allowed value (in wei) required to create a new invoice.
     uint256 private minimumInvoiceValue;
 
@@ -51,6 +56,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
     /// @notice Address of the {PaymentAutomation} adapter allowed to drain due tasks on a keeper's behalf.
     address private automation;
+
+    /// @dev True only while a fee is in flight from escrow to `weth`, so `receive` accepts nothing else.
+    bool transient wrappingFee;
 
     /**
      * @notice Stores the `Invoice` structs, keyed by a unique invoice ID.
@@ -90,14 +98,28 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
      * @param _minimumInvoicePrice The new minimum default invoice value to set (in wei).
      * @param _notesAddress Address of the notes contract used for invoice notes.
      */
-    constructor(address _paymentProcessorStorageAddress, uint256 _minimumInvoicePrice, address _notesAddress) {
+    constructor(
+        address _paymentProcessorStorageAddress,
+        uint256 _minimumInvoicePrice,
+        address _notesAddress,
+        address _wethAddress
+    ) {
         ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
         notes = INotes(_notesAddress);
+        weth = IWETH(_wethAddress);
         decisionWindow = SELLER_DEFAULT_DECISION_WINDOW;
         // Assigned directly rather than via setMinimumInvoiceValue: this contract is deployed against a
         // predicted storage address before the storage contract exists, so the setter's owner check
         // (which calls into ppStorage) would revert here.
         minimumInvoiceValue = _minimumInvoicePrice;
+    }
+
+    /**
+     * @notice Accepts the native fee pulled out of an escrow on its way to being wrapped.
+     * @dev Reverts on every other transfer, so native currency cannot be stranded here.
+     */
+    receive() external payable {
+        if (!wrappingFee) revert UnexpectedNativeTransfer();
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -140,17 +162,19 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function acceptPayment(uint216 _invoiceId) public whenNotPaused {
+    function acceptPayment(uint216 _invoiceId, address _feeReceiver, bytes memory _data) public whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
         _validateInvoiceStateForPaymentDecision(i);
+        _validateFeeAuthorization(_invoiceId, _feeReceiver, _data);
         i.state = ACCEPTED;
+        i.feeReceiver = _feeReceiver;
 
         i.releaseAt = (block.timestamp + i.holdPeriod).toUint40();
         heap.reschedule(_invoiceId, i.releaseAt, index);
 
         invoices[_invoiceId] = i;
 
-        emit InvoiceAccepted(_invoiceId);
+        emit InvoiceAccepted(_invoiceId, _feeReceiver);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
@@ -202,7 +226,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         heap.removeAt(index[_invoiceId] - 1, index);
 
         if (!IEscrow(i.escrow).withdraw(address(0), msg.sender, i.price - fee)) revert EscrowWithdrawFailed();
-        if (!IEscrow(i.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), fee)) revert EscrowWithdrawFailed();
+        address feeReceiver = _feeReceiverFor(i.feeReceiver);
+        if (!_payFeeInWeth(i.escrow, feeReceiver, fee)) revert EscrowWithdrawFailed();
         emit InvoiceReleased(_invoiceId, i.price - fee, fee);
     }
 
@@ -223,8 +248,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         bool success = IEscrow(i.escrow).withdraw(address(0), i.buyer, i.price);
 
         if (!success) {
-            invoices[_invoiceId].state = PAID;
-            invoices[_invoiceId].balance = i.price;
             invoices[_invoiceId].withdrawalRetries += 1;
         } else {
             uint256 pos = index[_invoiceId];
@@ -391,8 +414,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         invoices[_invoiceId].state = RELEASED;
         invoices[_invoiceId].balance = 0;
         heap.removeAt(_pos - 1, index);
-        if (!IEscrow(_i.escrow).withdraw(address(0), ppStorage.getFeeReceiver(), fee)) {
-            emit TransferFailed(_invoiceId, ppStorage.getFeeReceiver(), fee);
+        address feeReceiver = _feeReceiverFor(_i.feeReceiver);
+        if (!_payFeeInWeth(_i.escrow, feeReceiver, fee)) {
+            emit TransferFailed(_invoiceId, feeReceiver, fee);
         }
 
         emit InvoiceReleased(_invoiceId, sellerAmount, fee);
@@ -426,6 +450,49 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
      * @param _invoiceNonce The unique nonce assigned to this invoice.
      * @return invoiceId The 216-bit invoice ID.
      */
+    /**
+     * @notice Reverts unless `_feeReceiver` was authorized by the configured fee signer for this invoice.
+     * @param _invoiceId The invoice the fee receiver is being attached to.
+     * @param _feeReceiver The fee receiver supplied by the caller.
+     * @param _data The fee signer's ECDSA signature over the authorization digest.
+     */
+    function _validateFeeAuthorization(uint216 _invoiceId, address _feeReceiver, bytes memory _data) internal view {
+        if (_feeReceiver == address(0)) revert InvalidFeeReceiver();
+        if (!FeeAuthorizationLib.isAuthorized(ppStorage.getFeeSigner(), _invoiceId, _feeReceiver, _data)) {
+            revert InvalidFeeAuthorization();
+        }
+    }
+
+    /**
+     * @notice Resolves the address that should receive an invoice's platform fee.
+     * @dev Falls back to the global fee receiver when the invoice carries none.
+     * @param _feeReceiver The fee receiver stored on the invoice; zero when it has none.
+     * @return feeReceiver The address to send the fee to.
+     */
+    /**
+     * @notice Pulls the platform fee out of escrow, wraps it into WETH, and sends it to the fee receiver.
+     * @dev Escrows hold native currency, so the fee lands here and is wrapped in the same call. Paying
+     *      as an ERC20 means a receiver that rejects native transfers is still paid.
+     * @param _escrow The escrow holding the invoice's funds.
+     * @param _feeReceiver The address to pay the wrapped fee to.
+     * @param _fee The fee amount, in native currency.
+     * @return success True when the fee reached `_feeReceiver` as WETH.
+     */
+    function _payFeeInWeth(address _escrow, address _feeReceiver, uint256 _fee) internal returns (bool success) {
+        wrappingFee = true;
+        success = IEscrow(_escrow).withdraw(address(0), address(this), _fee);
+        wrappingFee = false;
+
+        if (!success) return false;
+
+        weth.deposit{ value: _fee }();
+        return weth.transfer(_feeReceiver, _fee);
+    }
+
+    function _feeReceiverFor(address _feeReceiver) internal view returns (address feeReceiver) {
+        return _feeReceiver == address(0) ? ppStorage.getFeeReceiver() : _feeReceiver;
+    }
+
     function _computeInvoiceId(address _seller, uint256 _invoiceNonce) internal view returns (uint216 invoiceId) {
         invoiceId =
             (uint256(keccak256(abi.encode(address(this), _seller, _invoiceNonce))) & ((1 << 216) - 1)).toUint216();

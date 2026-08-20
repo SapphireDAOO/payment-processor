@@ -22,6 +22,9 @@ interface IPaymentProcessorStorage {
     /// @notice Thrown when approving an emergency pause that is absent or already expired.
     error NoActiveEmergencyPause();
 
+    /// @notice Thrown when setting the fee signer to the zero address.
+    error InvalidFeeSigner();
+
     /// @notice Holds core configuration parameters for the contract.
     /// @param owner The address authorized to modify configuration parameters.
     /// @param feeRate Platform fee rate in basis points (BPS). i.e 100 BPS = 1%; 10,000 BPS = 100%.
@@ -54,6 +57,15 @@ interface IPaymentProcessorStorage {
      * @param _intermediatedPlatformsOperatorWallet The new platform operator wallet address.
      */
     function setIntermediatedPlatformsOperator(address _intermediatedPlatformsOperatorWallet) external;
+
+    /**
+     * @notice Sets the key whose signature authorizes the fee receiver supplied when an invoice is
+     *         accepted or paid.
+     * @dev Callable only by the contract owner. Must be an EOA: the processors recover it with ECDSA,
+     *      so it cannot be the MultiSig that owns this contract.
+     * @param _feeSigner The new fee signer address.
+     */
+    function setFeeSigner(address _feeSigner) external;
 
     /**
      * @notice Sets the address that will receive fees collected from transactions.
@@ -167,6 +179,12 @@ interface IPaymentProcessorStorage {
     function getFeeReceiver() external view returns (address feeReceiver);
 
     /**
+     * @notice Returns the key whose signature authorizes a per-invoice fee receiver.
+     * @return feeSigner The fee signer address.
+     */
+    function getFeeSigner() external view returns (address feeSigner);
+
+    /**
      * @notice Returns the address of the authorized Intermediated Platforms Operator.
      * @return intermediatedPlatformsOperator The Intermediated Platforms Operator address.
      */
@@ -198,6 +216,12 @@ interface IPaymentProcessorStorage {
      * @param feeReceiver The new fee receiver address.
      */
     event FeeReceiverUpdated(address indexed feeReceiver);
+
+    /**
+     * @notice Emitted when the fee signer is updated.
+     * @param feeSigner The new fee signer address.
+     */
+    event FeeSignerUpdated(address indexed feeSigner);
 
     /**
      * @notice Emitted when the Intermediated Platforms Operator address is updated.

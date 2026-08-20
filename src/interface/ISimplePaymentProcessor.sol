@@ -49,6 +49,15 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when the hold period for an invoice has not yet been exceeded.
     error HoldPeriodHasNotBeenExceeded();
 
+    /// @notice Thrown when the fee receiver is not authorized by a signature from the configured fee signer.
+    error InvalidFeeAuthorization();
+
+    /// @notice Thrown when the zero address is supplied as the fee receiver.
+    error InvalidFeeReceiver();
+
+    /// @notice Thrown when native currency is sent to the processor outside of a fee being wrapped.
+    error UnexpectedNativeTransfer();
+
     /// @notice Thrown when the escrow withdrawal fails during a manual release, reject, or refund.
     error EscrowWithdrawFailed();
 
@@ -63,6 +72,8 @@ interface ISimplePaymentProcessor {
     /// @param invoiceNonce A unique identifier assigned to this invoice, typically sequentially.
     /// @param createdAt The Unix timestamp when the invoice was created.
     /// @param paidAt The Unix timestamp when the payment was completed.
+    /// @param feeReceiver Address that receives the platform fee for this invoice, authorized by the fee
+    ///        signer when the seller accepted the payment.
     /// @param holdPeriod Escrow hold duration (in seconds) set by the seller at creation, counted from
     ///        acceptance. 0 means funds are releasable as soon as the payment is accepted.
     /// @param releaseAt The timestamp when funds in escrow can be released to the seller.
@@ -92,6 +103,7 @@ interface ISimplePaymentProcessor {
         address seller;
         address buyer;
         address escrow;
+        address feeReceiver;
         uint256 price;
         uint256 balance;
     }
@@ -132,10 +144,15 @@ interface ISimplePaymentProcessor {
      * @dev Only callable by the seller within the decision window. Transitions the invoice to
      *      ACCEPTED and sets `releaseAt` to now plus the `holdPeriod` fixed at invoice creation.
      *      The invoice's heap entry is rescheduled from `expiresAt` to `releaseAt` for automated
-     *      fund release after the hold period.
+     *      fund release after the hold period. `_feeReceiver` is recorded on the invoice and paid the
+     *      platform fee on release, so it must be authorized by the fee signer via `_data`.
      * @param _invoiceId The identifier of the invoice being accepted.
+     * @param _feeReceiver The address to pay this invoice's platform fee to.
+     * @param _data The fee signer's 65-byte ECDSA signature over
+     *        `keccak256(abi.encode(address(this), block.chainid, _invoiceId, _feeReceiver))`,
+     *        as an EIP-191 `personal_sign` digest.
      */
-    function acceptPayment(uint216 _invoiceId) external;
+    function acceptPayment(uint216 _invoiceId, address _feeReceiver, bytes memory _data) external;
 
     /**
      * @notice Marks the specified invoice as rejected and refunds the payer.
@@ -295,8 +312,9 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Emitted when an invoice is accepted by the seller.
      * @param invoiceId The unique ID of the accepted invoice.
+     * @param feeReceiver The address recorded to be paid this invoice's platform fee on release.
      */
-    event InvoiceAccepted(uint216 indexed invoiceId);
+    event InvoiceAccepted(uint216 indexed invoiceId, address indexed feeReceiver);
 
     /**
      * @notice Emitted when an invoice is canceled.

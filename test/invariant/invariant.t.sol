@@ -66,8 +66,12 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
         simplePaymentProcessor = _simplePaymentProcessorSetUp(storageAddress, notesAddress);
         intermediatedPaymentProcessor = _intermediatedPaymentProcessorSetUp(storageAddress);
 
-        sHandler = new SimplePaymentProcessorHandler(simplePaymentProcessor, buyerOne, sellerOne, admin);
-        aHandler = new IntermediatedPaymentProcessorHandler(intermediatedPaymentProcessor, admin, buyerOne, sellerOne);
+        sHandler = new SimplePaymentProcessorHandler(
+            simplePaymentProcessor, buyerOne, sellerOne, admin, feeReceiver, FEE_SIGNER_PK
+        );
+        aHandler = new IntermediatedPaymentProcessorHandler(
+            intermediatedPaymentProcessor, admin, buyerOne, sellerOne, feeReceiver, FEE_SIGNER_PK
+        );
 
         targetContract(address(aHandler));
         targetContract(address(sHandler));

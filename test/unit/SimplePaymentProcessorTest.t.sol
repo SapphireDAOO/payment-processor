@@ -194,19 +194,19 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.expectRevert(NotAuthorized.selector);
         vm.prank(sellerTwo);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         vm.warp(block.number + 10);
 
         vm.expectRevert(abi.encodeWithSelector(ISimplePaymentProcessor.InvalidInvoiceState.selector, CREATED));
         vm.prank(sellerOne);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
         vm.prank(sellerOne);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
         ISimplePaymentProcessor.Invoice memory i = simplePP.getInvoiceData(invoiceId);
 
         assertEq(i.state, ACCEPTED);
@@ -223,7 +223,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.AcceptanceWindowExceeded.selector);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
     }
 
     function test_payerRefundDecisionWindow() public {
@@ -308,7 +308,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         // // ACCEPT
         vm.prank(sellerOne);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         //RELEASE
         vm.expectRevert(NotAuthorized.selector);
@@ -340,7 +340,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
         vm.prank(sellerOne);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         vm.prank(admin);
         ppStorage.setFeeRate(uint96(FEE_RATE * 4));
@@ -350,7 +350,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.release(invoiceId);
 
         assertEq(sellerOne.balance, INITIAL_BALANCE + invoicePrice - expectedFee);
-        assertEq(feeReceiver.balance, expectedFee);
+        assertEq(weth.balanceOf(feeReceiver), expectedFee);
     }
 
     function test_sellerChosenHoldPeriodGovernsRelease() public {
@@ -372,7 +372,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         // ACCEPT
         vm.prank(sellerOne);
         uint256 acceptedAt = block.timestamp;
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         assertEq(simplePP.getInvoiceData(invoiceId).releaseAt, acceptedAt + sellerHoldPeriod);
 
@@ -393,7 +393,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
         vm.prank(sellerOne);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         assertEq(simplePP.getInvoiceData(invoiceId).releaseAt, block.timestamp);
         assertTrue(simplePP.hasDueTasks());
@@ -425,7 +425,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
             // ACCEPT
             vm.prank(sellerOne);
-            simplePP.acceptPayment(invoiceId);
+            simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
             invoiceIds[i] = invoiceId;
         }
 
@@ -517,7 +517,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         vm.prank(admin);
         simplePP.processDueTasks();
@@ -640,7 +640,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
         vm.prank(address(noReceiveSeller));
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         vm.warp(block.timestamp + HOLD_PERIOD + 1);
 
@@ -668,7 +668,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
         vm.prank(address(noReceiveSeller));
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         vm.warp(block.timestamp + HOLD_PERIOD + 1);
 
@@ -726,10 +726,10 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(buyerOne);
         simplePP.pay{ value: _invoicePrice }(invoiceId, "", false);
 
-        uint256 feeReceiverBefore = feeReceiver.balance;
+        uint256 feeReceiverBefore = weth.balanceOf(feeReceiver);
 
         vm.prank(sellerOne);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         uint256 expectedFee = simplePP.calculateFee(_invoicePrice);
 
@@ -743,7 +743,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
         assertEq(inv.state, RELEASED);
         assertEq(sellerOne.balance, sellerBefore + (_invoicePrice - expectedFee));
-        assertEq(feeReceiver.balance, feeReceiverBefore + expectedFee);
+        assertEq(weth.balanceOf(feeReceiver), feeReceiverBefore + expectedFee);
     }
 
     function test_rejectPayment(uint256 _invoicePrice) public {
@@ -814,7 +814,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
-        simplePP.acceptPayment(invoiceId);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
@@ -899,5 +899,117 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.refundBuyer(invoiceId);
         simplePP.refundBuyer(invoiceId);
         vm.stopPrank();
+    }
+
+    function test_acceptPaymentRequiresAnAuthorizedFeeReceiver() public {
+        uint256 invoicePrice = 100 ether;
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        address attackerFeeReceiver = address(0xbad);
+
+        vm.startPrank(sellerOne);
+
+        vm.expectRevert(ISimplePaymentProcessor.InvalidFeeReceiver.selector);
+        simplePP.acceptPayment(invoiceId, address(0), _feeSig(address(simplePP), invoiceId, address(0)));
+
+        // A valid signature for one receiver does not authorize another.
+        vm.expectRevert(ISimplePaymentProcessor.InvalidFeeAuthorization.selector);
+        simplePP.acceptPayment(invoiceId, attackerFeeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
+
+        // Nor does a signature bound to a different invoice.
+        vm.expectRevert(ISimplePaymentProcessor.InvalidFeeAuthorization.selector);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId + 1, feeReceiver));
+
+        vm.expectRevert(ISimplePaymentProcessor.InvalidFeeAuthorization.selector);
+        simplePP.acceptPayment(invoiceId, feeReceiver, hex"");
+
+        vm.expectEmit(address(simplePP));
+        emit ISimplePaymentProcessor.InvoiceAccepted(invoiceId, feeReceiver);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
+        vm.stopPrank();
+
+        assertEq(simplePP.getInvoiceData(invoiceId).feeReceiver, feeReceiver);
+    }
+
+    function test_releasePaysTheInvoicesAuthorizedFeeReceiver() public {
+        uint256 invoicePrice = 100 ether;
+        address invoiceFeeReceiver = address(0xfee5);
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        vm.prank(sellerOne);
+        simplePP.acceptPayment(invoiceId, invoiceFeeReceiver, _feeSig(address(simplePP), invoiceId, invoiceFeeReceiver));
+
+        uint256 fee = simplePP.calculateFee(invoicePrice);
+        uint256 globalFeeReceiverBalance = weth.balanceOf(feeReceiver);
+
+        vm.warp(block.timestamp + HOLD_PERIOD + 1);
+        vm.prank(sellerOne);
+        simplePP.release(invoiceId);
+
+        assertEq(weth.balanceOf(invoiceFeeReceiver), fee);
+        assertEq(weth.balanceOf(feeReceiver), globalFeeReceiverBalance, "global fee receiver should not be paid");
+    }
+
+    function test_feeIsPaidAsWrappedNativeToken() public {
+        uint256 invoicePrice = 100 ether;
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        vm.prank(sellerOne);
+        simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
+
+        uint256 fee = simplePP.calculateFee(invoicePrice);
+        uint256 nativeBefore = feeReceiver.balance;
+
+        vm.warp(block.timestamp + HOLD_PERIOD + 1);
+        vm.prank(sellerOne);
+        simplePP.release(invoiceId);
+
+        assertEq(weth.balanceOf(feeReceiver), fee);
+        assertEq(feeReceiver.balance, nativeBefore, "fee receiver should not be paid natively");
+        assertEq(address(weth).balance, fee, "wrapper should hold the native fee");
+        assertEq(address(simplePP).balance, 0, "processor should hold no native currency");
+    }
+
+    function test_feeReachesAReceiverThatRejectsNativeTransfers() public {
+        uint256 invoicePrice = 100 ether;
+        address rejectingReceiver = address(new NoReceiveEther());
+
+        vm.prank(sellerOne);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+
+        vm.prank(buyerOne);
+        simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
+
+        vm.prank(sellerOne);
+        simplePP.acceptPayment(invoiceId, rejectingReceiver, _feeSig(address(simplePP), invoiceId, rejectingReceiver));
+
+        vm.warp(block.timestamp + HOLD_PERIOD + 1);
+        vm.prank(sellerOne);
+        simplePP.release(invoiceId);
+
+        assertEq(weth.balanceOf(rejectingReceiver), simplePP.calculateFee(invoicePrice));
+    }
+
+    function test_processorRejectsStrayNativeTransfers() public {
+        vm.deal(buyerOne, 1 ether);
+        vm.prank(buyerOne);
+        (bool ok,) = address(simplePP).call{ value: 1 ether }("");
+
+        assertFalse(ok, "processor should reject unsolicited native currency");
+        assertEq(address(simplePP).balance, 0);
     }
 }

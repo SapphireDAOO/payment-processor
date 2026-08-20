@@ -30,6 +30,12 @@ contract IntermediatedPaymentProcessorHandler is Test {
     address buyer;
     address seller;
 
+    /// @notice Fee receiver supplied when paying an invoice.
+    address feeReceiver;
+
+    /// @notice Key the processor recovers to authorize `feeReceiver`.
+    uint256 feeSignerPk;
+
     uint256 private totalSingleInvoiceCreated;
     uint256 private totalMetaInvoiceCreated;
 
@@ -50,12 +56,16 @@ contract IntermediatedPaymentProcessorHandler is Test {
         IntermediatedPaymentProcessor _intermediatedPaymentProcessor,
         address _adminAddress,
         address _buyerAddress,
-        address _sellerAddress
+        address _sellerAddress,
+        address _feeReceiverAddress,
+        uint256 _feeSignerPk
     ) {
         intermediatedPP = _intermediatedPaymentProcessor;
         admin = _adminAddress;
         buyer = _buyerAddress;
         seller = _sellerAddress;
+        feeReceiver = _feeReceiverAddress;
+        feeSignerPk = _feeSignerPk;
     }
 
     modifier onlyExistingInvoice() {
@@ -121,7 +131,9 @@ contract IntermediatedPaymentProcessorHandler is Test {
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), inv.price);
 
         vm.prank(buyer);
-        intermediatedPP.payInvoice{ value: tokenValue }(invoiceId, address(0));
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
     }
 
     function makeMetaInvoicePayment(uint256 _index) public {
@@ -275,5 +287,21 @@ contract IntermediatedPaymentProcessorHandler is Test {
 
     function getSubInvoiceId(uint216 _metaInvoiceId, uint256 _index) external view returns (uint216 invoiceId) {
         return subInvoice[_metaInvoiceId][_index];
+    }
+
+    /// @dev Signs a fee-receiver authorization as the processors' configured fee signer.
+    function _feeSig(address _processor, uint216 _invoiceId, address _receiver)
+        internal
+        view
+        returns (bytes memory signature)
+    {
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19Ethereum Signed Message:\n32",
+                keccak256(abi.encode(_processor, block.chainid, _invoiceId, _receiver))
+            )
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(feeSignerPk, digest);
+        return abi.encodePacked(r, s, v);
     }
 }

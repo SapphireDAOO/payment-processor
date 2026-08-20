@@ -44,6 +44,9 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @notice Address allowed to trigger an emergency pause.
     address private emergencyPauser;
 
+    /// @notice Key whose signature authorizes the fee receiver supplied when an invoice is accepted or paid.
+    address private feeSigner;
+
     /// @notice Start of an unresolved emergency pause; 0 when none is pending.
     uint40 private emergencyPausedAt;
 
@@ -119,6 +122,13 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     function setIntermediatedPlatformsOperator(address _intermediatedPlatformsOperatorWallet) external onlyOwner {
         config.intermediatedPlatformsOperator = _intermediatedPlatformsOperatorWallet;
         emit IntermediatedPlatformsOperatorUpdated(_intermediatedPlatformsOperatorWallet);
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function setFeeSigner(address _feeSigner) external onlyOwner {
+        if (_feeSigner == address(0)) revert InvalidFeeSigner();
+        feeSigner = _feeSigner;
+        emit FeeSignerUpdated(_feeSigner);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
@@ -216,6 +226,11 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @inheritdoc IPaymentProcessorStorage
     function getFeeReceiver() external view returns (address feeReceiver) {
         return config.feeReceiver;
+    }
+
+    /// @inheritdoc IPaymentProcessorStorage
+    function getFeeSigner() external view returns (address feeSignerAddress) {
+        return feeSigner;
     }
 
     /// @inheritdoc IPaymentProcessorStorage

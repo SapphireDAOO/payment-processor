@@ -15,6 +15,12 @@ contract SimplePaymentProcessorHandler is Test {
     address seller;
     address buyer;
 
+    /// @notice Fee receiver supplied when accepting an invoice.
+    address feeReceiver;
+
+    /// @notice Key the processor recovers to authorize `feeReceiver`.
+    uint256 feeSignerPk;
+
     uint256 constant INVOICE_PRICE = 1000 ether;
 
     uint256 constant BUYERS_INITIAL_FUND = 10_000 ether;
@@ -28,11 +34,20 @@ contract SimplePaymentProcessorHandler is Test {
         _;
     }
 
-    constructor(SimplePaymentProcessor _sPP, address _buyersAddr, address _sellersAddr, address _adminAddr) {
+    constructor(
+        SimplePaymentProcessor _sPP,
+        address _buyersAddr,
+        address _sellersAddr,
+        address _adminAddr,
+        address _feeReceiverAddr,
+        uint256 _feeSignerPk
+    ) {
         totalInvoiceCreated = 0;
         seller = _sellersAddr;
         buyer = _buyersAddr;
         admin = _adminAddr;
+        feeReceiver = _feeReceiverAddr;
+        feeSignerPk = _feeSignerPk;
 
         pp = _sPP;
     }
@@ -76,7 +91,7 @@ contract SimplePaymentProcessorHandler is Test {
         if (i.state != PAID) return;
         if (block.timestamp > i.expiresAt) return;
         vm.prank(seller);
-        pp.acceptPayment(invoiceId);
+        pp.acceptPayment(invoiceId, feeReceiver, _feeSig(address(pp), invoiceId, feeReceiver));
     }
 
     function rejectPayment(uint256 _index) public invoiceExists {
@@ -152,5 +167,21 @@ contract SimplePaymentProcessorHandler is Test {
     /// @notice Returns the invoice id at a given index.
     function getInvoiceId(uint256 _index) external view returns (uint216 invoiceId) {
         return invoiceIds[_index];
+    }
+
+    /// @dev Signs a fee-receiver authorization as the processor's configured fee signer.
+    function _feeSig(address _processor, uint216 _invoiceId, address _receiver)
+        internal
+        view
+        returns (bytes memory signature)
+    {
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19Ethereum Signed Message:\n32",
+                keccak256(abi.encode(_processor, block.chainid, _invoiceId, _receiver))
+            )
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(feeSignerPk, digest);
+        return abi.encodePacked(r, s, v);
     }
 }

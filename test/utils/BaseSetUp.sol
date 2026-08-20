@@ -17,6 +17,10 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider {
     address internal sellerTwo = address(5);
     address internal feeReceiver = address(6);
 
+    /// @dev Key the processors recover to authorize a per-invoice fee receiver.
+    uint256 internal constant FEE_SIGNER_PK = uint256(keccak256("payment-processor.test.fee-signer"));
+    address internal feeSigner = vm.addr(FEE_SIGNER_PK);
+
     uint256 constant INITIAL_BALANCE = 100_000 ether;
     uint256 public constant FEE_RATE = 500;
 
@@ -65,6 +69,9 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider {
         delete pendingAuthorized;
         assertEq(address(ppStorage), predictedStorage, "storage deployed away from prediction");
 
+        vm.prank(admin);
+        ppStorage.setFeeSigner(feeSigner);
+
         storageAddress = address(ppStorage);
         notesAddress = address(notes);
     }
@@ -77,6 +84,37 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider {
      * @param _notesAddress The deployed Notes address.
      */
     function _deployAuthorized(address _predictedStorage, address _notesAddress) internal virtual { }
+
+    /**
+     * @notice Signs a fee-receiver authorization for `_processor` as the configured fee signer.
+     * @param _processor The processor the signature is bound to.
+     * @param _invoiceId The invoice the fee receiver is attached to.
+     * @param _feeReceiver The fee receiver being authorized.
+     * @return signature The 65-byte ECDSA signature to pass as the call's `_data`.
+     */
+    function _feeSig(address _processor, uint216 _invoiceId, address _feeReceiver)
+        internal
+        view
+        returns (bytes memory signature)
+    {
+        bytes32 digest = _feeDigest(_processor, _invoiceId, _feeReceiver);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(FEE_SIGNER_PK, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    /// @dev Mirrors {FeeAuthorizationLib.digest}, which reads `address(this)` from its caller.
+    function _feeDigest(address _processor, uint216 _invoiceId, address _feeReceiver)
+        private
+        view
+        returns (bytes32 digest)
+    {
+        return keccak256(
+            abi.encodePacked(
+                "\x19Ethereum Signed Message:\n32",
+                keccak256(abi.encode(_processor, block.chainid, _invoiceId, _feeReceiver))
+            )
+        );
+    }
 
     /// @notice Registers an address to be authorized when PaymentProcessorStorage deploys.
     function _authorize(address _processor) internal {
