@@ -30,8 +30,8 @@ import {
 /**
  * @title IntermediatedPaymentProcessor
  * @notice Handles the creation, payment, and lifecycle management of single and meta invoices with escrow logic.
- * @dev Releases and refunds are triggered manually by the marketplace; there is no automated upkeep path.
- *      Inherits interfaces for payment processing and escrow deployment.
+ * @dev Releases and refunds are triggered manually by the Intermediated Platforms Operator; there is no
+ *      automated upkeep path. Inherits interfaces for payment processing and escrow deployment.
  */
 contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, EscrowFactory, ReentrancyGuard {
     using { SafeTransferLib.safeTransferETH, SafeTransferLib.safeTransferFrom } for address;
@@ -65,11 +65,11 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     mapping(uint216 metaInvoiceId => MetaInvoice invoice) private metaInvoices;
 
     /**
-     * @notice Restricts function access to the authorized marketplace address.
-     * @dev Reverts with NotAuthorized() if the caller is not the marketplace.
+     * @notice Restricts function access to the authorized Intermediated Platforms Operator.
+     * @dev Reverts with NotAuthorized() if the caller is not the Intermediated Platforms Operator.
      */
-    modifier onlyMarketplace() {
-        _onlyMarketplace();
+    modifier onlyIntermediatedPlatformsOperator() {
+        _onlyIntermediatedPlatformsOperator();
         _;
     }
 
@@ -106,7 +106,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     /// @inheritdoc IIntermediatedPaymentProcessor
     function createSingleInvoice(InvoiceCreationParam memory _param)
         external
-        onlyMarketplace
+        onlyIntermediatedPlatformsOperator
         whenNotPaused
         returns (uint216 invoiceId)
     {
@@ -116,7 +116,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     /// @inheritdoc IIntermediatedPaymentProcessor
     function createMetaInvoice(InvoiceCreationParam[] memory _param)
         external
-        onlyMarketplace
+        onlyIntermediatedPlatformsOperator
         whenNotPaused
         returns (uint216 metaInvoiceId)
     {
@@ -195,7 +195,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function createDispute(uint216 _invoiceId) external onlyMarketplace whenNotPaused {
+    function createDispute(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != PAID) revert InvalidInvoiceState();
 
@@ -207,7 +207,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     /// @inheritdoc IIntermediatedPaymentProcessor
     function handleDispute(uint216 _invoiceId, uint8 _resolution, uint256 _sellerShare)
         external
-        onlyMarketplace
+        onlyIntermediatedPlatformsOperator
         whenNotPaused
     {
         Invoice memory i = invoices[_invoiceId];
@@ -233,7 +233,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function release(uint216 _invoiceId) external onlyMarketplace whenNotPaused {
+    function release(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
         uint8 state = i.state;
         bool isReleasable = (state == PAID || state == DISPUTE_RESOLVED || state == DISPUTE_DISMISSED)
@@ -254,7 +254,11 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function refund(uint216 _invoiceId, uint256 _refundShare) external onlyMarketplace whenNotPaused {
+    function refund(uint216 _invoiceId, uint256 _refundShare)
+        external
+        onlyIntermediatedPlatformsOperator
+        whenNotPaused
+    {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != PAID) revert InvalidInvoiceState();
         if (_refundShare == 0 || _refundShare > BASIS_POINTS) revert InvalidSellersPayoutShare();
@@ -276,7 +280,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function cancelInvoice(uint216 _invoiceId) public onlyMarketplace {
+    function cancelInvoice(uint216 _invoiceId) public onlyIntermediatedPlatformsOperator {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != CREATED) revert InvalidInvoiceState();
         invoices[_invoiceId].state = CANCELED;
@@ -287,7 +291,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function resolveDispute(uint216 _invoiceId) external onlyMarketplace {
+    function resolveDispute(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator {
         Invoice memory i = invoices[_invoiceId];
         if (i.state != DISPUTED) revert InvalidInvoiceState();
         i.state = DISPUTE_RESOLVED;
@@ -387,9 +391,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         }
 
         if (_i.releaseAt == 0) {
-            uint256 holdPeriod =
-                _i.escrowHoldPeriod != 0 ? uint256(_i.escrowHoldPeriod) : ppStorage.getDefaultHoldPeriod();
-            _i.releaseAt = (block.timestamp + holdPeriod).toUint40();
+            _i.releaseAt = (block.timestamp + _i.escrowHoldPeriod).toUint40();
         }
 
         emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, _tokenPrice, _i.releaseAt);
@@ -439,6 +441,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         if (_param.seller == address(0)) revert InvalidSeller();
         if (_param.price == 0) revert PriceCannotBeZero();
         if (_param.price < minimumPrice) revert PriceIsTooLow();
+        if (_param.escrowHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
         Invoice memory i;
         i.seller = _param.seller;
         i.price = _param.price;
@@ -593,12 +596,12 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /**
-     * @notice Ensures that the caller is the registered marketplace address.
+     * @notice Ensures that the caller is the registered Intermediated Platforms Operator.
      * @dev Reverts with `NotAuthorized` if `msg.sender` is not equal to
-     *      the marketplace address stored in `ppStorage`.
+     *      the Intermediated Platforms Operator address stored in `ppStorage`.
      */
-    function _onlyMarketplace() internal view {
-        if (msg.sender != ppStorage.getMarketplace()) revert NotAuthorized();
+    function _onlyIntermediatedPlatformsOperator() internal view {
+        if (msg.sender != ppStorage.getIntermediatedPlatformsOperator()) revert NotAuthorized();
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor

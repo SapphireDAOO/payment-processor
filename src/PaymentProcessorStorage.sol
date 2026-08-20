@@ -116,16 +116,9 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setDefaultHoldPeriod(uint96 _newDefaultHoldPeriod) public onlyOwner {
-        if (_newDefaultHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
-        config.defaultHoldPeriod = _newDefaultHoldPeriod;
-        emit DefaultHoldPeriodUpdated(_newDefaultHoldPeriod);
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function setMarketplaceAddress(address _marketplaceAddress) external onlyOwner {
-        config.marketplace = _marketplaceAddress;
-        emit MarketplaceUpdated(_marketplaceAddress);
+    function setIntermediatedPlatformsOperator(address _intermediatedPlatformsOperatorWallet) external onlyOwner {
+        config.intermediatedPlatformsOperator = _intermediatedPlatformsOperatorWallet;
+        emit IntermediatedPlatformsOperatorUpdated(_intermediatedPlatformsOperatorWallet);
     }
 
     /// @inheritdoc IPaymentProcessorStorage
@@ -226,13 +219,8 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getMarketplace() external view returns (address marketplace) {
-        return config.marketplace;
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function getDefaultHoldPeriod() external view returns (uint256 defaultHoldPeriod) {
-        return config.defaultHoldPeriod;
+    function getIntermediatedPlatformsOperator() external view returns (address intermediatedPlatformsOperator) {
+        return config.intermediatedPlatformsOperator;
     }
 
     /// @inheritdoc IPaymentProcessorStorage

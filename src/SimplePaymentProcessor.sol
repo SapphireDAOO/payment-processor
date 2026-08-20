@@ -209,6 +209,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     /// @inheritdoc ISimplePaymentProcessor
     function refundBuyer(uint216 _invoiceId) public nonReentrant whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
+        // shouldn't be expired at
+        // paid or the requires have reached
         if (i.state != PAID || block.timestamp < i.expiresAt) {
             revert InvoiceNotEligibleForRefund();
         }
@@ -279,6 +281,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         }
 
         escrowAddress = address(new Escrow{ value: _value }(_invoiceId, address(this)));
+        // do not use expires at here
+        // variable name should match decision window
         uint40 expiresAt = (block.timestamp + decisionWindow).toUint40();
 
         i.escrow = escrowAddress;

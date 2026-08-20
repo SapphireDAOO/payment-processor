@@ -10,9 +10,6 @@ interface IPaymentProcessorStorage {
     /// @notice Thrown when a caller attempts an action without the required authorization.
     error NotAuthorized();
 
-    /// @notice Thrown when the hold period provided is zero, which is invalid.
-    error HoldPeriodCanNotBeZero();
-
     /// @notice Thrown when the provided fee rate exceeds the maximum allowed (10,000 basis points = 100%).
     error InvalidFeeRate();
 
@@ -29,15 +26,14 @@ interface IPaymentProcessorStorage {
     /// @param owner The address authorized to modify configuration parameters.
     /// @param feeRate Platform fee rate in basis points (BPS). i.e 100 BPS = 1%; 10,000 BPS = 100%.
     /// @param feeReceiver Address that receives platform fees.
-    /// @param defaultHoldPeriod The default hold period for funds in escrow, measured in seconds.
-    /// @param marketplace Address authorized to interact with invoice creation and specific management functions.
+    /// @param intermediatedPlatformsOperator Address authorized to interact with invoice creation and specific
+    ///        management functions.
     /// @param gasThreshold The minimum amount of gas that must remain to continue processing tasks.
     struct Configuration {
         address owner;
         uint96 feeRate;
         address feeReceiver;
-        uint96 defaultHoldPeriod;
-        address marketplace;
+        address intermediatedPlatformsOperator;
         uint96 gasThreshold;
     }
 
@@ -51,18 +47,13 @@ interface IPaymentProcessorStorage {
     function updateInvoiceNonce(uint216 _by) external returns (uint216 totalInvoices);
 
     /**
-     * @notice Updates the default hold period for all new invoices.
-     * @dev Only callable by the contract owner. Reverts with HoldPeriodCanNotBeZero if zero.
-     * @param _newDefaultHoldPeriod The new default hold period in seconds.
-     */
-    function setDefaultHoldPeriod(uint96 _newDefaultHoldPeriod) external;
-
-    /**
-     * @notice Updates the marketplace address allowed to perform privileged operations.
+     * @notice Updates the sole platform operator wallet authorized to call privileged
+     *         `IntermediatedPaymentProcessor` functions: creating invoices, triggering releases and refunds,
+     *         and resolving disputes.
      * @dev Callable only by the contract owner.
-     * @param _marketplaceAddress The new marketplace address.
+     * @param _intermediatedPlatformsOperatorWallet The new platform operator wallet address.
      */
-    function setMarketplaceAddress(address _marketplaceAddress) external;
+    function setIntermediatedPlatformsOperator(address _intermediatedPlatformsOperatorWallet) external;
 
     /**
      * @notice Sets the address that will receive fees collected from transactions.
@@ -176,16 +167,10 @@ interface IPaymentProcessorStorage {
     function getFeeReceiver() external view returns (address feeReceiver);
 
     /**
-     * @notice Returns the address of the authorized marketplace contract.
-     * @return marketplace The marketplace address.
+     * @notice Returns the address of the authorized Intermediated Platforms Operator.
+     * @return intermediatedPlatformsOperator The Intermediated Platforms Operator address.
      */
-    function getMarketplace() external view returns (address marketplace);
-
-    /**
-     * @notice Returns the default hold period for invoices.
-     * @return defaultHoldPeriod The default hold period in seconds.
-     */
-    function getDefaultHoldPeriod() external view returns (uint256 defaultHoldPeriod);
+    function getIntermediatedPlatformsOperator() external view returns (address intermediatedPlatformsOperator);
 
     /**
      * @notice Returns the current gas threshold used to limit the execution loop in automated task processing.
@@ -215,10 +200,10 @@ interface IPaymentProcessorStorage {
     event FeeReceiverUpdated(address indexed feeReceiver);
 
     /**
-     * @notice Emitted when the marketplace address is updated.
-     * @param marketplace The new marketplace address.
+     * @notice Emitted when the Intermediated Platforms Operator address is updated.
+     * @param intermediatedPlatformsOperator The new Intermediated Platforms Operator address.
      */
-    event MarketplaceUpdated(address indexed marketplace);
+    event IntermediatedPlatformsOperatorUpdated(address indexed intermediatedPlatformsOperator);
 
     /**
      * @notice Emitted when the platform fee rate is updated.
@@ -231,12 +216,6 @@ interface IPaymentProcessorStorage {
      * @param gasThreshold The new gas threshold value.
      */
     event GasThresholdUpdated(uint96 gasThreshold);
-
-    /**
-     * @notice Emitted when the default hold period is updated.
-     * @param defaultHoldPeriod The new default hold period in seconds.
-     */
-    event DefaultHoldPeriodUpdated(uint96 defaultHoldPeriod);
 
     /**
      * @notice Emitted when the payment validity duration is updated.

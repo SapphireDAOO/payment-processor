@@ -51,9 +51,8 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider {
         IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
             owner: admin,
             feeReceiver: feeReceiver,
-            marketplace: address(this),
+            intermediatedPlatformsOperator: address(this),
             feeRate: uint96(FEE_RATE),
-            defaultHoldPeriod: uint96(DEFAULT_HOLD_PERIOD),
             gasThreshold: uint96(DEFAULT_GAS_Threshold)
         });
 

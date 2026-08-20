@@ -70,7 +70,7 @@ contract IntermediatedPaymentProcessorHandler is Test {
         }
         _price = bound(_price, intermediatedPP.getMinimumPrice(), 1_000e8);
 
-        vm.prank(intermediatedPP.ppStorage().getMarketplace());
+        vm.prank(intermediatedPP.ppStorage().getIntermediatedPlatformsOperator());
 
         uint216 id =
             intermediatedPP.createSingleInvoice(getInvoiceCreationParam(totalSingleInvoiceCreated, seller, _price));
@@ -95,7 +95,7 @@ contract IntermediatedPaymentProcessorHandler is Test {
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
             getInvoiceCreationParams(totalSingleInvoiceCreated, sellers, prices);
 
-        vm.prank(intermediatedPP.ppStorage().getMarketplace());
+        vm.prank(intermediatedPP.ppStorage().getIntermediatedPlatformsOperator());
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
         metaInvoiceIds.push(metaInvoiceId);
 
@@ -156,7 +156,7 @@ contract IntermediatedPaymentProcessorHandler is Test {
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
         if (inv.state != CREATED) return;
 
-        vm.prank(intermediatedPP.ppStorage().getMarketplace());
+        vm.prank(intermediatedPP.ppStorage().getIntermediatedPlatformsOperator());
         intermediatedPP.cancelInvoice(invoiceId);
     }
 
@@ -167,7 +167,7 @@ contract IntermediatedPaymentProcessorHandler is Test {
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
         if (inv.state != PAID) return;
 
-        vm.prank(intermediatedPP.ppStorage().getMarketplace());
+        vm.prank(intermediatedPP.ppStorage().getIntermediatedPlatformsOperator());
         intermediatedPP.createDispute(invoiceId);
     }
 
@@ -180,7 +180,7 @@ contract IntermediatedPaymentProcessorHandler is Test {
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
         if (inv.state != DISPUTED) return;
 
-        vm.prank(intermediatedPP.ppStorage().getMarketplace());
+        vm.prank(intermediatedPP.ppStorage().getIntermediatedPlatformsOperator());
         intermediatedPP.handleDispute(invoiceId, _resolution.toUint8(), _sellerShare);
     }
 
@@ -194,7 +194,7 @@ contract IntermediatedPaymentProcessorHandler is Test {
         if (inv.state != PAID) return;
         if (inv.balance == 0) return;
 
-        vm.prank(intermediatedPP.ppStorage().getMarketplace());
+        vm.prank(intermediatedPP.ppStorage().getIntermediatedPlatformsOperator());
         intermediatedPP.refund(invoiceId, _share);
     }
 
@@ -209,7 +209,7 @@ contract IntermediatedPaymentProcessorHandler is Test {
             vm.warp(inv.releaseAt + 1);
         }
 
-        vm.prank(intermediatedPP.ppStorage().getMarketplace());
+        vm.prank(intermediatedPP.ppStorage().getIntermediatedPlatformsOperator());
         intermediatedPP.release(invoiceId);
     }
 
@@ -222,7 +222,7 @@ contract IntermediatedPaymentProcessorHandler is Test {
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
         if (inv.state != DISPUTED) return;
 
-        vm.prank(intermediatedPP.ppStorage().getMarketplace());
+        vm.prank(intermediatedPP.ppStorage().getIntermediatedPlatformsOperator());
         intermediatedPP.resolveDispute(invoiceId);
     }
 

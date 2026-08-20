@@ -49,6 +49,9 @@ interface IIntermediatedPaymentProcessor {
     /// @notice Thrown when an attempt is made to create an invoice with a price of zero.
     error PriceCannotBeZero();
 
+    /// @notice Thrown when an invoice is created with a zero escrow hold period.
+    error HoldPeriodCanNotBeZero();
+
     /// @notice Thrown if the buyer and seller are the same address.
     error BuyerCannotBeSeller();
 
@@ -153,7 +156,7 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Creates a single invoice with the specified parameters and returns its unique hash.
-     * @dev Only callable by the marketplace contract.
+     * @dev Only callable by the Intermediated Platforms Operator.
      * @param _param The parameters required to create the invoice.
      * @return invoiceId The unique ID of the newly created invoice.
      */
@@ -161,8 +164,8 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Creates a meta-invoice composed of multiple sub-invoices for a buyer.
-     * @dev Only callable by the marketplace contract. Each sub-invoice is created using the provided parameters,
-     * and all are linked under a single meta-invoice ID.
+     * @dev Only callable by the Intermediated Platforms Operator. Each sub-invoice is created using the
+     * provided parameters, and all are linked under a single meta-invoice ID.
      * @param _param An array of parameters used to create each sub-invoice.
      * @return metaInvoiceId The keccak256 hash representing the meta-invoice ID.
      */
@@ -199,7 +202,7 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Cancels a single invoice before payment.
-     * @dev Callable only by the marketplace. If the invoice belongs to a meta-invoice,
+     * @dev Callable only by the Intermediated Platforms Operator. If the invoice belongs to a meta-invoice,
      *      the meta-invoice total price is reduced accordingly.
      * @param _invoiceId The ID of the invoice to cancel.
      */
@@ -207,7 +210,7 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Creates a dispute for an invoice.
-     * @dev Callable only by the marketplace. Only valid for invoices in the PAID state.
+     * @dev Callable only by the Intermediated Platforms Operator. Only valid for invoices in the PAID state.
      *      Transitions the invoice to DISPUTED, blocking release until the dispute is
      *      resolved or dismissed.
      * @param _invoiceId The ID of the invoice to dispute.
@@ -216,7 +219,7 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Issues a partial or full refund for a paid invoice.
-     * @dev Callable only by the marketplace. Invoice must be in the PAID state.
+     * @dev Callable only by the Intermediated Platforms Operator. Invoice must be in the PAID state.
      *      `_refundShare` must be between 1 and 10,000 basis points (inclusive). The refund
      *      amount is sent directly to the buyer from escrow.
      *      A full refund (10,000 BPS) transitions the invoice to REFUNDED. A partial refund
@@ -229,7 +232,7 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Handles a dispute on a given invoice.
-     * @dev Callable only by the marketplace. Invoice must be in the DISPUTED state.
+     * @dev Callable only by the Intermediated Platforms Operator. Invoice must be in the DISPUTED state.
      *      `_resolution` must be either DISPUTE_DISMISSED or DISPUTE_SETTLED; DISPUTE_RESOLVED
      *      is a separate flow handled by `resolveDispute`.
      *      `_sellerShare` must be between 0 and 10,000 BPS (0 = full refund to buyer).
@@ -244,7 +247,7 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Finalizes a dispute and marks the invoice as resolved.
-     * @dev Callable only by the marketplace after a dispute has been raised by the buyer.
+     * @dev Callable only by the Intermediated Platforms Operator after a dispute has been raised by the buyer.
      * This function is used when both parties (buyer and seller) have come to an agreement
      * Transitions the invoice state from DISPUTED to DISPUTE_RESOLVED.
      * @param _invoiceId The unique identifier of the disputed invoice.
@@ -253,7 +256,7 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Releases escrowed funds to the seller after the release window has passed.
-     * @dev Callable only by the marketplace. Valid for invoices in the PAID, DISPUTE_RESOLVED,
+     * @dev Callable only by the Intermediated Platforms Operator. Valid for invoices in the PAID, DISPUTE_RESOLVED,
      *      or DISPUTE_DISMISSED state once `releaseAt` has been reached. Platform fees are
      *      deducted before the net amount is transferred to the seller. The invoice transitions
      *      to RELEASED and its balance is zeroed.

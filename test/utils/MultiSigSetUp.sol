@@ -48,9 +48,8 @@ abstract contract MultiSigSetUp is Test, IAuthorizedAddressProvider {
         IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
             owner: address(multisig),
             feeReceiver: feeReceiver,
-            marketplace: address(this),
+            intermediatedPlatformsOperator: address(this),
             feeRate: FEE_RATE,
-            defaultHoldPeriod: DEFAULT_HOLD_PERIOD,
             gasThreshold: GAS_THRESHOLD
         });
 
@@ -77,10 +76,6 @@ abstract contract MultiSigSetUp is Test, IAuthorizedAddressProvider {
 
     function _encodeSetFeeRate(uint96 _feeRate) internal pure returns (bytes memory) {
         return abi.encodeCall(IPaymentProcessorStorage.setFeeRate, _feeRate);
-    }
-
-    function _encodeSetDefaultHoldPeriod(uint96 _period) internal pure returns (bytes memory) {
-        return abi.encodeCall(IPaymentProcessorStorage.setDefaultHoldPeriod, _period);
     }
 
     function _encodeSetGasThreshold(uint96 _threshold) internal pure returns (bytes memory) {

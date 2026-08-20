@@ -108,9 +108,8 @@ contract Deploy is Script {
             config: IPaymentProcessorStorage.Configuration({
                 owner: msg.sender,
                 feeReceiver: msg.sender,
-                marketplace: msg.sender,
+                intermediatedPlatformsOperator: msg.sender,
                 feeRate: FEE_RATE,
-                defaultHoldPeriod: DEFAULT_HOLD_PERIOD,
                 gasThreshold: DEFAULT_GAS_THRESHOLD
             }),
             minimumInvoiceValue: MINIMUM_INVOICE_VALUE,

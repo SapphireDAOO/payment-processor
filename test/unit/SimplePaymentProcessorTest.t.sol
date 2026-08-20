@@ -26,7 +26,6 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(ppStorage.getFeeRate(), FEE_RATE);
         assertEq(ppStorage.getFeeReceiver(), feeReceiver);
         assertEq(simplePP.getNextInvoiceNonce(), 1);
-        assertEq(ppStorage.getDefaultHoldPeriod(), DEFAULT_HOLD_PERIOD);
         assertEq(simplePP.getMinimumInvoiceValue(), MINIMUM_INVOICE_VALUE);
         assertEq(simplePP.getAutomation(), address(automation));
     }

@@ -80,8 +80,8 @@ contract MultiSigTest is MultiSigSetUp {
     }
 
     function test_executeTransaction() public {
-        uint96 newPeriod = 10 days;
-        bytes memory data = _encodeSetDefaultHoldPeriod(newPeriod);
+        uint96 newThreshold = 250_000;
+        bytes memory data = _encodeSetGasThreshold(newThreshold);
 
         bytes32 txHash = _propose(data);
 
@@ -103,7 +103,7 @@ contract MultiSigTest is MultiSigSetUp {
 
         IMultiSig.Transaction memory txn = multisig.getTransaction(txHash);
         assertEq(txn.status, EXECUTED);
-        assertEq(ppStorage.getDefaultHoldPeriod(), newPeriod);
+        assertEq(ppStorage.getGasThreshold(), newThreshold);
     }
 
     function test_addSigner() public {

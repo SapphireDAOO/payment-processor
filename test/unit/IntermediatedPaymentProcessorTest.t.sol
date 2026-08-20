@@ -58,18 +58,13 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         ppStorage.setFeeRate(100);
         ppStorage.setGasThreshold(20_000);
 
-        vm.expectRevert(HoldPeriodCanNotBeZero.selector);
-        ppStorage.setDefaultHoldPeriod(0);
-        ppStorage.setDefaultHoldPeriod(1 days);
-
-        ppStorage.setMarketplaceAddress(address(0xb0));
+        ppStorage.setIntermediatedPlatformsOperator(address(0xb0));
         vm.stopPrank();
 
         assertEq(address(0xa0), ppStorage.getFeeReceiver());
         assertEq(100, ppStorage.getFeeRate());
         assertEq(20_000, ppStorage.getGasThreshold());
-        assertEq(1 days, ppStorage.getDefaultHoldPeriod());
-        assertEq(address(0xb0), ppStorage.getMarketplace());
+        assertEq(address(0xb0), ppStorage.getIntermediatedPlatformsOperator());
     }
 
     function test_setMinimumPrice() public {
@@ -854,24 +849,13 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(inv.state, PAID);
     }
 
-    function test_defaultHoldPeriodUsedWhenEscrowHoldPeriodIsZero() public {
-        uint256 price = 100e8;
+    function test_createInvoiceRevertsWhenEscrowHoldPeriodIsZero() public {
+        IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, 100e8);
+        param.escrowHoldPeriod = 0;
 
-        uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
-        );
-
-        assertEq(intermediatedPP.getInvoice(invoiceId).escrowHoldPeriod, 0);
-
-        uint256 amountInToken = intermediatedPP.getTokenValueFromUsd(address(0), price);
-        uint256 paidAt = block.timestamp;
-
-        vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: amountInToken }(invoiceId, address(0));
-
-        IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
-
-        assertEq(inv.releaseAt, paidAt + ppStorage.getDefaultHoldPeriod());
+        vm.expectRevert(HoldPeriodCanNotBeZero.selector);
+        intermediatedPP.createSingleInvoice(param);
     }
 
     function test_customEscrowHoldPeriod_cannotReleaseBeforeIt() public {
