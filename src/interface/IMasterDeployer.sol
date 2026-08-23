@@ -52,6 +52,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @param paymentAutomation The deployed PaymentAutomation adapter address.
      * @param oracleManager The deployed OracleManager address.
      * @param intermediatedPaymentProcessor The deployed IntermediatedPaymentProcessor address.
+     * @param sweeper The deployed Sweeper address.
      */
     event SystemDeployed(
         address multiSig,
@@ -60,7 +61,8 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
         address simplePaymentProcessor,
         address paymentAutomation,
         address oracleManager,
-        address intermediatedPaymentProcessor
+        address intermediatedPaymentProcessor,
+        address sweeper
     );
 
     /**
@@ -94,6 +96,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @param paymentAutomation PaymentAutomation creation code.
      * @param oracleManager OracleManager creation code.
      * @param intermediatedPaymentProcessor IntermediatedPaymentProcessor creation code.
+     * @param sweeper Sweeper creation code.
      * @param ppStorage PaymentProcessorStorage creation code.
      */
     struct InitCodes {
@@ -103,6 +106,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
         bytes paymentAutomation;
         bytes oracleManager;
         bytes intermediatedPaymentProcessor;
+        bytes sweeper;
         bytes ppStorage;
     }
 

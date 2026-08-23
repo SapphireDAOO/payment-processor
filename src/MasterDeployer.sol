@@ -10,6 +10,7 @@ import { IntermediatedPaymentProcessor } from "./IntermediatedPaymentProcessor.s
 import { OracleManager } from "./OracleManager.sol";
 import { Notes } from "./Notes.sol";
 import { MultiSig } from "./MultiSig.sol";
+import { Sweeper } from "./Sweeper.sol";
 
 /**
  * @title MasterDeployer
@@ -40,6 +41,9 @@ contract MasterDeployer is IMasterDeployer {
 
     /// @notice The deployed IntermediatedPaymentProcessor.
     IntermediatedPaymentProcessor public intermediatedPaymentProcessor;
+
+    /// @notice The deployed Sweeper.
+    Sweeper public sweeper;
 
     /// @dev Read back by PaymentProcessorStorage's constructor; only populated during {deployAll}.
     address[] private pendingAuthorized;
@@ -124,6 +128,8 @@ contract MasterDeployer is IMasterDeployer {
             )
         );
 
+        sweeper = Sweeper(Create2.deploy(0, _params.salt, abi.encodePacked(_initCodes.sweeper, abi.encode(predicted))));
+
         pendingAuthorized.push(address(simplePaymentProcessor));
         pendingAuthorized.push(address(intermediatedPaymentProcessor));
 
@@ -143,7 +149,8 @@ contract MasterDeployer is IMasterDeployer {
             address(simplePaymentProcessor),
             address(paymentAutomation),
             address(oracleManager),
-            address(intermediatedPaymentProcessor)
+            address(intermediatedPaymentProcessor),
+            address(sweeper)
         );
 
         ppStorageAddress = address(ppStorage);

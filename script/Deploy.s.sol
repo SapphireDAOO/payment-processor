@@ -9,6 +9,7 @@ import { SimplePaymentProcessor } from "../src/SimplePaymentProcessor.sol";
 import { PaymentAutomation } from "../src/PaymentAutomation.sol";
 import { IntermediatedPaymentProcessor } from "../src/IntermediatedPaymentProcessor.sol";
 import { MultiSig } from "../src/MultiSig.sol";
+import { Sweeper } from "../src/Sweeper.sol";
 import { OracleManager } from "../src/OracleManager.sol";
 import { IOracleManager } from "../src/interface/IOracleManager.sol";
 import { MockUsdc, MockWbtc } from "../test/mock/mERC20.sol";
@@ -66,6 +67,9 @@ contract Deploy is Script {
     uint256 constant LOCAL_CHAIN_ID = 31337;
 
     uint256 constant INITIAL_THRESHOLD = 2;
+
+    /// @dev Key whose signature authorizes the per-invoice fee receiver. Override with FEE_SIGNER.
+    address constant DEFAULT_FEE_SIGNER = 0x06124927895eF15c6f436988E47C73a80c220c3b;
 
     address constant SIGNER_ONE = 0x60D7dD3b4248D53Abba8DA999B22023656A2E4B3;
     address constant SIGNER_TWO = 0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4;
@@ -133,6 +137,7 @@ contract Deploy is Script {
             paymentAutomation: type(PaymentAutomation).creationCode,
             oracleManager: type(OracleManager).creationCode,
             intermediatedPaymentProcessor: type(IntermediatedPaymentProcessor).creationCode,
+            sweeper: type(Sweeper).creationCode,
             ppStorage: type(PaymentProcessorStorage).creationCode
         });
 
@@ -164,6 +169,7 @@ contract Deploy is Script {
         console.log("PaymentAutomation deployed:       ", automation);
         console.log("OracleManager deployed:           ", address(_masterDeployer.oracleManager()));
         console.log("IntermediatedPaymentProcessor deployed:", intermediatedPP);
+        console.log("Sweeper deployed:                 ", address(_masterDeployer.sweeper()));
 
         console.log("");
         console.log("--- Wiring ---");
@@ -173,6 +179,12 @@ contract Deploy is Script {
         notes.setAuthorized(intermediatedPP, true);
         console.log("Notes authorized: deployer, SimplePaymentProcessor, IntermediatedPaymentProcessor");
         console.log("Storage authorized at construction: SimplePaymentProcessor, IntermediatedPaymentProcessor");
+
+        // Must precede the ownership handover below: setFeeSigner is owner-only, and without it every
+        // acceptPayment and payInvoice reverts with InvalidFeeAuthorization.
+        address feeSigner = vm.envOr("FEE_SIGNER", DEFAULT_FEE_SIGNER);
+        _masterDeployer.ppStorage().setFeeSigner(feeSigner);
+        console.log("Fee signer set:                   ", feeSigner);
 
         // The keeper entrypoints live on PaymentAutomation; the processor only trusts its address.
         // The CRE forwarder and workflow owner are still set on PaymentAutomation post-deploy.
@@ -197,6 +209,8 @@ contract Deploy is Script {
         console.log("PaymentAutomation:       ", address(_masterDeployer.paymentAutomation()));
         console.log("OracleManager:           ", address(_masterDeployer.oracleManager()));
         console.log("IntermediatedPaymentProcessor:", address(_masterDeployer.intermediatedPaymentProcessor()));
+        console.log("Sweeper:                 ", address(_masterDeployer.sweeper()));
+        console.log("Fee signer:              ", _masterDeployer.ppStorage().getFeeSigner());
         if (!_isMainnet) {
             console.log("MockUsdc:                ", _addr.usdc);
             console.log("MockWbtc:                ", _addr.wbtc);
