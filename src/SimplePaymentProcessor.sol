@@ -138,11 +138,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         i.seller = msg.sender;
         i.createdAt = (block.timestamp).toUint40();
         i.price = _price;
-        i.holdPeriod = _holdPeriod;
+        i.escrowHoldPeriod = _holdPeriod;
         i.state = CREATED;
         i.invoiceNonce = newNonce;
         i.feeRate = (ppStorage.getFeeRate()).toUint16();
-        i.invalidateAt = (block.timestamp + ppStorage.getPaymentValidityDuration()).toUint40();
+        i.expiresAt = (block.timestamp + ppStorage.getPaymentValidityDuration()).toUint40();
 
         if (_storageRef.length != 0) notes.createNote(invoiceId, msg.sender, _storageRef, _share);
 
@@ -169,7 +169,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         i.state = ACCEPTED;
         i.feeReceiver = _feeReceiver;
 
-        i.releaseAt = (block.timestamp + i.holdPeriod).toUint40();
+        i.releaseAt = (block.timestamp + i.escrowHoldPeriod).toUint40();
         heap.reschedule(_invoiceId, i.releaseAt, index);
 
         invoices[_invoiceId] = i;
@@ -234,9 +234,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     /// @inheritdoc ISimplePaymentProcessor
     function refundBuyer(uint216 _invoiceId) public nonReentrant whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
-        // shouldn't be expired at
-        // paid or the requires have reached
-        if (i.state != PAID || block.timestamp < i.expiresAt) {
+        if (i.state != PAID || block.timestamp < i.sellerActionDeadline) {
             revert InvoiceNotEligibleForRefund();
         }
 
@@ -299,27 +297,27 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
             revert IncorrectPaymentAmount(_value, i.price);
         }
 
-        if (block.timestamp > i.invalidateAt) {
+        if (block.timestamp > i.expiresAt) {
             revert InvoiceIsNoLongerValid();
         }
 
         escrowAddress = address(new Escrow{ value: _value }(_invoiceId, address(this)));
         // do not use expires at here
         // variable name should match decision window
-        uint40 expiresAt = (block.timestamp + decisionWindow).toUint40();
+        uint40 sellerActionDeadline = (block.timestamp + decisionWindow).toUint40();
 
         i.escrow = escrowAddress;
         i.buyer = msg.sender;
         i.state = PAID;
         i.balance = _value;
         i.paidAt = (block.timestamp).toUint40();
-        i.expiresAt = expiresAt;
+        i.sellerActionDeadline = sellerActionDeadline;
         invoices[_invoiceId] = i;
 
-        heap.insert(_invoiceId, expiresAt, index);
+        heap.insert(_invoiceId, sellerActionDeadline, index);
         if (_storageRef.length != 0) notes.createNote(_invoiceId, msg.sender, _storageRef, _share);
 
-        emit InvoicePaid(_invoiceId, msg.sender, _value, expiresAt);
+        emit InvoicePaid(_invoiceId, msg.sender, _value, sellerActionDeadline);
         return escrowAddress;
     }
 
@@ -337,7 +335,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
             revert InvalidInvoiceState(_i.state);
         }
 
-        if (block.timestamp > _i.expiresAt) {
+        if (block.timestamp > _i.sellerActionDeadline) {
             revert AcceptanceWindowExceeded();
         }
     }

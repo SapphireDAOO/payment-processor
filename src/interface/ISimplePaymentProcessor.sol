@@ -74,11 +74,11 @@ interface ISimplePaymentProcessor {
     /// @param paidAt The Unix timestamp when the payment was completed.
     /// @param feeReceiver Address that receives the platform fee for this invoice, authorized by the fee
     ///        signer when the seller accepted the payment.
-    /// @param holdPeriod Escrow hold duration (in seconds) set by the seller at creation, counted from
+    /// @param escrowHoldPeriod Escrow hold duration (in seconds) set by the seller at creation, counted from
     ///        acceptance. 0 means funds are releasable as soon as the payment is accepted.
     /// @param releaseAt The timestamp when funds in escrow can be released to the seller.
-    /// @param invalidateAt The timestamp after which the invoice is considered invalid if unpaid.
-    /// @param expiresAt The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded.
+    /// @param expiresAt The timestamp after which the invoice can no longer be paid.
+    /// @param sellerActionDeadline The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded.
     /// @param state The current state of the invoice.
     /// @param withdrawalRetries Number of failed `IEscrow.withdraw` attempts by the automation path. Resets are not needed
     ///        because an invoice follows only one terminal path. Packed with `state` in the same slot.
@@ -94,9 +94,9 @@ interface ISimplePaymentProcessor {
         uint40 createdAt;
         uint40 paidAt;
         uint40 releaseAt;
-        uint40 invalidateAt;
         uint40 expiresAt;
-        uint32 holdPeriod;
+        uint40 sellerActionDeadline;
+        uint32 escrowHoldPeriod;
         uint8 state;
         uint8 withdrawalRetries;
         uint16 feeRate;
@@ -130,7 +130,7 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Pays for an existing invoice and optionally updates the user's notes storage reference.
      * @dev The caller must send enough ETH to cover the invoice price. The invoice is inserted
-     *      into the auto-release heap with priority `expiresAt`, enabling automated refunds if
+     *      into the auto-release heap with priority `sellerActionDeadline`, enabling automated refunds if
      *      the seller does not act within the decision window.
      * @param _invoiceId The ID of the invoice being paid.
      * @param _storageRef A bytes-encoded reference to the caller's notes storage.
@@ -142,8 +142,8 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Marks the specified invoice as accepted by the seller.
      * @dev Only callable by the seller within the decision window. Transitions the invoice to
-     *      ACCEPTED and sets `releaseAt` to now plus the `holdPeriod` fixed at invoice creation.
-     *      The invoice's heap entry is rescheduled from `expiresAt` to `releaseAt` for automated
+     *      ACCEPTED and sets `releaseAt` to now plus the `escrowHoldPeriod` fixed at invoice creation.
+     *      The invoice's heap entry is rescheduled from `sellerActionDeadline` to `releaseAt` for automated
      *      fund release after the hold period. `_feeReceiver` is recorded on the invoice and paid the
      *      platform fee on release, so it must be authorized by the fee signer via `_data`.
      * @param _invoiceId The identifier of the invoice being accepted.
@@ -183,7 +183,7 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Refunds the buyer of a specific invoice when the seller fails to act in time.
-     * @dev Invoice must be in PAID state and the decision window (`expiresAt`) must have elapsed.
+     * @dev Invoice must be in PAID state and the decision window (`sellerActionDeadline`) must have elapsed.
      *      Transitions the invoice to REFUNDED, removes it from the heap, zeroes the balance,
      *      and returns funds to the buyer. After `MAX_WITHDRAWAL_RETRIES` failures the funds are
      *      burned to address(0) and the invoice transitions to BURNED instead.
@@ -290,10 +290,12 @@ interface ISimplePaymentProcessor {
      * @param invoiceId The unique ID of the paid invoice.
      * @param buyer The address that paid the invoice.
      * @param amountPaid The amount paid towards the invoice in wei.
-     * @param expiresAt The timestamp by which the seller must accept or reject the invoice.
+     * @param sellerActionDeadline The timestamp by which the seller must accept or reject the invoice.
      *          If no action is taken by then, the buyer will be refunded.
      */
-    event InvoicePaid(uint216 indexed invoiceId, address indexed buyer, uint256 indexed amountPaid, uint40 expiresAt);
+    event InvoicePaid(
+        uint216 indexed invoiceId, address indexed buyer, uint256 indexed amountPaid, uint40 sellerActionDeadline
+    );
 
     /**
      * @notice Emitted when an invoice is rejected by the seller.

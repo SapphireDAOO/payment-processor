@@ -99,7 +99,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
         uint256 buyerBalanceBefore = NATIVE_TOKEN_BUYER.balance;
 
-        vm.warp(uint256(inv.expiresAt) + 1);
+        vm.warp(uint256(inv.sellerActionDeadline) + 1);
         simplePP.refundBuyer(invoiceId);
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
@@ -140,7 +140,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
         uint256 buyerBalanceBefore = NATIVE_TOKEN_BUYER.balance;
 
-        vm.warp(uint256(inv.expiresAt) + 1);
+        vm.warp(uint256(inv.sellerActionDeadline) + 1);
 
         vm.prank(admin);
         simplePP.processDueTasks();

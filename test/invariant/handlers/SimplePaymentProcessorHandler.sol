@@ -77,7 +77,7 @@ contract SimplePaymentProcessorHandler is Test {
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory inv = pp.getInvoiceData(invoiceId);
         if (inv.state != CREATED) return;
-        if (block.timestamp > inv.invalidateAt) return;
+        if (block.timestamp > inv.expiresAt) return;
         _value = bound(_value, inv.price, inv.price);
 
         vm.prank(buyer);
@@ -89,7 +89,7 @@ contract SimplePaymentProcessorHandler is Test {
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(invoiceId);
         if (i.state != PAID) return;
-        if (block.timestamp > i.expiresAt) return;
+        if (block.timestamp > i.sellerActionDeadline) return;
         vm.prank(seller);
         pp.acceptPayment(invoiceId, feeReceiver, _feeSig(address(pp), invoiceId, feeReceiver));
     }
@@ -99,7 +99,7 @@ contract SimplePaymentProcessorHandler is Test {
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory i = pp.getInvoiceData(invoiceId);
         if (i.state != PAID) return;
-        if (block.timestamp > i.expiresAt) return;
+        if (block.timestamp > i.sellerActionDeadline) return;
         vm.prank(seller);
         pp.rejectPayment(invoiceId);
     }
@@ -136,7 +136,7 @@ contract SimplePaymentProcessorHandler is Test {
         uint216 invoiceId = invoiceIds[_index];
         ISimplePaymentProcessor.Invoice memory inv = pp.getInvoiceData(invoiceId);
         if (inv.state != PAID) return;
-        if (block.timestamp < inv.expiresAt) vm.warp(uint256(inv.expiresAt) + 1);
+        if (block.timestamp < inv.sellerActionDeadline) vm.warp(uint256(inv.sellerActionDeadline) + 1);
         pp.refundBuyer(invoiceId);
     }
 

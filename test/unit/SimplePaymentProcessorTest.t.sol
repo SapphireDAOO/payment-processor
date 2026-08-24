@@ -361,7 +361,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         uint216 invoiceId = simplePP.createInvoice(invoicePrice, sellerHoldPeriod, "", false);
 
-        assertEq(simplePP.getInvoiceData(invoiceId).holdPeriod, sellerHoldPeriod);
+        assertEq(simplePP.getInvoiceData(invoiceId).escrowHoldPeriod, sellerHoldPeriod);
 
         uint256 fee = simplePP.calculateFee(invoicePrice);
 

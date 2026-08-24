@@ -256,7 +256,7 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
     //                            HELPERS
     // ================================================================
 
-    /// @dev Creates and pays an invoice, leaving it scheduled for auto-refund at `expiresAt`.
+    /// @dev Creates and pays an invoice, leaving it scheduled for auto-refund at `sellerActionDeadline`.
     function _payInvoice() internal returns (uint216 invoiceId) {
         uint256 invoicePrice = 10 ether;
 
