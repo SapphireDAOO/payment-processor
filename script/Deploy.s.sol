@@ -43,6 +43,11 @@ contract Deploy is Script {
     /// @dev Canonical wrapped-native predeploy, identical on Base mainnet and Base Sepolia.
     address constant WETH = 0x4200000000000000000000000000000000000006;
 
+    /// @dev Mock tokens already live on Base Sepolia. Reused on every run so the testnet never
+    ///      accumulates another pair; only local Anvil deploys fresh ones.
+    address constant TESTNET_MOCK_USDC = 0x9652aF270a39E8F63Fa801F6293DEb944FdEB5B9;
+    address constant TESTNET_MOCK_WBTC = 0xc3a9d881A859EC02433eb0b6FaDC79F5678627b9;
+
     // Base mainnet Chainlink price feeds
     address constant USDC_USD_PRICE_FEED = 0x7e860098F58bBFC8648a4311b374B1D669a2bc6B;
     address constant WBTC_USD_PRICE_FEED = 0x64c911996D3c6aC71f9b455B1E8E7266BcbD848F;
@@ -76,7 +81,7 @@ contract Deploy is Script {
     address[] signers = [SIGNER_ONE, SIGNER_TWO];
 
     // Default CREATE2 salt; bump the version (or set CREATE2_SALT) to redeploy at fresh addresses.
-    bytes32 constant DEFAULT_SALT = keccak256("sapphiredao.payment-processor");
+    bytes32 constant DEFAULT_SALT = keccak256("sapphiredao.payment-processor.deploy");
 
     function run() external {
         bool isMainnet = block.chainid == MAINNET_CHAIN_ID;
@@ -107,8 +112,16 @@ contract Deploy is Script {
 
         Addr memory addr = _setUp(salt);
         if (!isMainnet) {
-            console.log("MockUsdc deployed:                ", addr.usdc);
-            console.log("MockWbtc deployed:                ", addr.wbtc);
+            string memory mockLabel = block.chainid == TESTNET_CHAIN_ID
+                ? "MockUsdc (existing):              "
+                : "MockUsdc deployed:                ";
+            console.log(mockLabel, addr.usdc);
+            console.log(
+                block.chainid == TESTNET_CHAIN_ID
+                    ? "MockWbtc (existing):              "
+                    : "MockWbtc deployed:                ",
+                addr.wbtc
+            );
         }
 
         // Owned by the deployer for post-deploy wiring; ownership moves to the MultiSig below.
@@ -243,6 +256,23 @@ contract Deploy is Script {
                 sequencerUptimeFeed: MAINNET_SEQUENCER_UPTIME_FEED,
                 usdc: USDC,
                 wbtc: WBTC,
+                weth: WETH
+            });
+        }
+
+        // Base Sepolia keeps one fixed pair of mock tokens; deploying more would strand the old ones
+        // and invalidate every allowance and balance already set up against them.
+        if (block.chainid == TESTNET_CHAIN_ID) {
+            mockUsdc = MockUsdc(TESTNET_MOCK_USDC);
+            mockWBtc = MockWbtc(TESTNET_MOCK_WBTC);
+
+            return Addr({
+                usdcPriceFeed: TESTNET_USDC_PRICE_FEED,
+                wbtcPriceFeed: TESTNET_WBTC_PRICE_FEED,
+                nativeTokenPriceFeed: TESTNET_NATIVE_TOKEN_PRICE_FEED,
+                sequencerUptimeFeed: address(0),
+                usdc: TESTNET_MOCK_USDC,
+                wbtc: TESTNET_MOCK_WBTC,
                 weth: WETH
             });
         }
