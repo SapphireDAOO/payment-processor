@@ -30,7 +30,7 @@ clean:
 	@forge clean
 
 deploy-local:
-	@forge script script/Deploye.s.sol --rpc-url anvil \
+	@forge script script/Deploy.s.sol --rpc-url anvil \
 	--account sp-key --sender $(SENDER) --broadcast -vvv
 
 deploy-test:
@@ -39,6 +39,6 @@ deploy-test:
 	--verify --broadcast -vvv
 
 deploy-mainnet:
-	@forge script script/Deploye.s.sol --rpc-url $(MAINNET_RPC_URL) \
+	@forge script script/Deploy.s.sol --rpc-url $(MAINNET_RPC) \
 	--account sp-key --sender $(SENDER) --etherscan-api-key $(ETHERSCAN_API_KEY) \
 	--verify --broadcast -vvv
