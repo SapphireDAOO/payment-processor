@@ -315,8 +315,9 @@ interface ISimplePaymentProcessor {
      * @notice Emitted when an invoice is accepted by the seller.
      * @param invoiceId The unique ID of the accepted invoice.
      * @param feeReceiver The address recorded to be paid this invoice's platform fee on release.
+     * @param releaseAt The timestamp when the escrowed funds become releasable to the seller.
      */
-    event InvoiceAccepted(uint216 indexed invoiceId, address indexed feeReceiver);
+    event InvoiceAccepted(uint216 indexed invoiceId, address indexed feeReceiver, uint40 releaseAt);
 
     /**
      * @notice Emitted when an invoice is canceled.

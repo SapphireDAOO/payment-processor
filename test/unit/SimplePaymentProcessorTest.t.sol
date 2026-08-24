@@ -928,7 +928,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.acceptPayment(invoiceId, feeReceiver, hex"");
 
         vm.expectEmit(address(simplePP));
-        emit ISimplePaymentProcessor.InvoiceAccepted(invoiceId, feeReceiver);
+        emit ISimplePaymentProcessor.InvoiceAccepted(invoiceId, feeReceiver, uint40(block.timestamp + HOLD_PERIOD));
         simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
         vm.stopPrank();
 

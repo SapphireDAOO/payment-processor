@@ -174,7 +174,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
         invoices[_invoiceId] = i;
 
-        emit InvoiceAccepted(_invoiceId, _feeReceiver);
+        emit InvoiceAccepted(_invoiceId, _feeReceiver, i.releaseAt);
     }
 
     /// @inheritdoc ISimplePaymentProcessor
