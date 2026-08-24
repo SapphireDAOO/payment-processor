@@ -6,7 +6,7 @@ import type { Config } from "./main";
 const config: Config = {
   schedule: "0 */5 * * * *",
   chainSelectorName: "ethereum-testnet-sepolia-base-1",
-  automationAddress: "0xd70c10C73a716F85d97b5619dADfb6B1b6b6a706",
+  automationAddress: "0xcd7F1e411f7ed9792f61a5F3181bc354f8E26845",
   gasLimit: "1000000",
 };
 
