@@ -177,4 +177,22 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
             IERC20(USDC).approve(_spender, type(uint256).max);
         }
     }
+
+    /**
+     * @notice Fee receivers for every sub-invoice of a meta-invoice, sized from the invoice itself.
+     * @param _metaInvoiceId The meta-invoice being paid.
+     * @return receivers One receiver per sub-invoice, all pointing at the shared `feeReceiver`.
+     */
+    function _metaReceivers(uint216 _metaInvoiceId) internal view returns (address[] memory receivers) {
+        return _feeReceivers(intermediatedPP.getMetaInvoice(_metaInvoiceId).subInvoiceIds.length);
+    }
+
+    /**
+     * @notice The single fee-signer authorization covering {_metaReceivers}.
+     * @param _metaInvoiceId The meta-invoice being paid.
+     * @return signature The 65-byte ECDSA signature to pass as the call's `_data`.
+     */
+    function _metaFeeSig(uint216 _metaInvoiceId) internal view returns (bytes memory signature) {
+        return _feeSigMeta(address(intermediatedPP), _metaInvoiceId, _metaReceivers(_metaInvoiceId));
+    }
 }

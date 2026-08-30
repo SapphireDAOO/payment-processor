@@ -102,6 +102,36 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider {
         return abi.encodePacked(r, s, v);
     }
 
+    /**
+     * @notice Signs one authorization covering every fee receiver of a meta-invoice.
+     * @param _processor The processor the signature is bound to.
+     * @param _metaInvoiceId The meta-invoice being paid.
+     * @param _receivers The fee receivers, index-aligned with the meta-invoice's sub-invoice IDs.
+     * @return signature The 65-byte ECDSA signature to pass as the call's `_data`.
+     */
+    function _feeSigMeta(address _processor, uint216 _metaInvoiceId, address[] memory _receivers)
+        internal
+        view
+        returns (bytes memory signature)
+    {
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19Ethereum Signed Message:\n32",
+                keccak256(abi.encode(_processor, block.chainid, _metaInvoiceId, _receivers))
+            )
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(FEE_SIGNER_PK, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    /// @notice Builds `_count` fee receivers, all pointing at the shared `feeReceiver`.
+    function _feeReceivers(uint256 _count) internal view returns (address[] memory receivers) {
+        receivers = new address[](_count);
+        for (uint256 i; i < _count; i++) {
+            receivers[i] = feeReceiver;
+        }
+    }
+
     /// @dev Mirrors {FeeAuthorizationLib.digest}, which reads `address(this)` from its caller.
     function _feeDigest(address _processor, uint216 _invoiceId, address _feeReceiver)
         private

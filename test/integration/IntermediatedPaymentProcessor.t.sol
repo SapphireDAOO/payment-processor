@@ -67,9 +67,11 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
         // make payment
         uint256 tokenAmount = intermediatedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
 
+        address[] memory metaReceivers1 = _metaReceivers(metaInvoiceId);
+        bytes memory metaFeeSig1 = _metaFeeSig(metaInvoiceId);
         vm.prank(NATIVE_TOKEN_BUYER);
 
-        intermediatedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId);
+        intermediatedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId, metaReceivers1, metaFeeSig1);
 
         for (uint256 i = 0; i < invoiceIds.length; i++) {
             IIntermediatedPaymentProcessor.Invoice memory subInvoice = intermediatedPP.getInvoice(invoiceIds[i]);
@@ -116,8 +118,10 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
 
+        address[] memory metaReceivers2 = _metaReceivers(metaInvoiceId);
+        bytes memory metaFeeSig2 = _metaFeeSig(metaInvoiceId);
         vm.startPrank(WTBC_BUYER);
-        intermediatedPP.payMetaInvoice(metaInvoiceId, address(WBTC));
+        intermediatedPP.payMetaInvoice(metaInvoiceId, address(WBTC), metaReceivers2, metaFeeSig2);
 
         vm.stopPrank();
 

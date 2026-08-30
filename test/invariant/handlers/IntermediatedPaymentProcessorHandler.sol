@@ -157,8 +157,15 @@ contract IntermediatedPaymentProcessorHandler is Test {
         }
         if (!hasPayable || paid || metaInv.price == 0) return;
 
+        address[] memory receivers = new address[](ids.length);
+        for (uint256 i; i < ids.length; i++) {
+            receivers[i] = feeReceiver;
+        }
+
         vm.prank(buyer);
-        intermediatedPP.payMetaInvoiceWithValue{ value: tokenValue }(invoiceId);
+        intermediatedPP.payMetaInvoiceWithValue{ value: tokenValue }(
+            invoiceId, receivers, _feeSigMeta(address(intermediatedPP), invoiceId, receivers)
+        );
     }
 
     function cancelInvoice(uint256 _index) public onlyExistingInvoice {
@@ -287,6 +294,22 @@ contract IntermediatedPaymentProcessorHandler is Test {
 
     function getSubInvoiceId(uint216 _metaInvoiceId, uint256 _index) external view returns (uint216 invoiceId) {
         return subInvoice[_metaInvoiceId][_index];
+    }
+
+    /// @dev Signs one authorization covering every fee receiver of a meta-invoice.
+    function _feeSigMeta(address _processor, uint216 _metaInvoiceId, address[] memory _receivers)
+        internal
+        view
+        returns (bytes memory signature)
+    {
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19Ethereum Signed Message:\n32",
+                keccak256(abi.encode(_processor, block.chainid, _metaInvoiceId, _receivers))
+            )
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(feeSignerPk, digest);
+        return abi.encodePacked(r, s, v);
     }
 
     /// @dev Signs a fee-receiver authorization as the processors' configured fee signer.

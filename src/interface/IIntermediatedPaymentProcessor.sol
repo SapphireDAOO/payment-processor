@@ -58,6 +58,11 @@ interface IIntermediatedPaymentProcessor {
     /// @notice Thrown when the zero address is supplied as the fee receiver.
     error InvalidFeeReceiver();
 
+    /// @notice Thrown when a meta-invoice payment supplies the wrong number of fee receivers.
+    /// @param provided How many fee receivers the caller supplied.
+    /// @param expected How many sub-invoices the meta-invoice holds.
+    error FeeReceiverCountMismatch(uint256 provided, uint256 expected);
+
     /// @notice Thrown if the buyer and seller are the same address.
     error BuyerCannotBeSeller();
 
@@ -114,7 +119,7 @@ interface IIntermediatedPaymentProcessor {
     /// @param escrow Address of the escrow contract holding the funds.
     /// @param paymentToken Token used for payment. Address zero for native currency.
     /// @param feeReceiver Address that receives the platform fee for this invoice, authorized by the fee signer
-    ///        when the buyer paid. Zero for sub-invoices paid as part of a meta-invoice.
+    ///        when the buyer paid. Sub-invoices carry their own, taken from the array signed for the meta-invoice.
     /// @param amountPaid Total amount paid by the buyer for this invoice, in the payment token (use native token if `paymentToken == address(0)`).
     /// @param price Invoice amount expressed in USD (8 decimals).
     /// @param balance Current balance of the escrow associated with the order, accounting for total amount paid minus refunds or releases.
@@ -203,8 +208,15 @@ interface IIntermediatedPaymentProcessor {
      *      stored meta-invoice price, so `msg.value` only needs to cover the remaining
      *      non-canceled sub-invoices. Sub-invoices not in CREATED state are silently skipped.
      * @param _invoiceId The meta-invoice ID to pay.
+     * @param _feeReceivers The fee receiver for each sub-invoice, in the same order as the meta-invoice's
+     *        sub-invoice IDs. One entry per sub-invoice, including any that end up skipped.
+     * @param _data The fee signer's 65-byte ECDSA signature over
+     *        `keccak256(abi.encode(address(this), block.chainid, _invoiceId, _feeReceivers))`, as an
+     *        EIP-191 `personal_sign` digest. A single signature authorizes the whole array.
      */
-    function payMetaInvoiceWithValue(uint216 _invoiceId) external payable;
+    function payMetaInvoiceWithValue(uint216 _invoiceId, address[] calldata _feeReceivers, bytes memory _data)
+        external
+        payable;
 
     /**
      * @notice Pays all sub-invoices in a meta invoice using native ETH or ERC20.
@@ -214,8 +226,18 @@ interface IIntermediatedPaymentProcessor {
      *      sub-invoices. Sub-invoices not in CREATED state are silently skipped.
      * @param _invoiceId The meta invoice ID to be paid.
      * @param _paymentToken The token address used for payment.
+     * @param _feeReceivers The fee receiver for each sub-invoice, in the same order as the meta-invoice's
+     *        sub-invoice IDs. One entry per sub-invoice, including any that end up skipped.
+     * @param _data The fee signer's 65-byte ECDSA signature over
+     *        `keccak256(abi.encode(address(this), block.chainid, _invoiceId, _feeReceivers))`, as an
+     *        EIP-191 `personal_sign` digest. A single signature authorizes the whole array.
      */
-    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external;
+    function payMetaInvoice(
+        uint216 _invoiceId,
+        address _paymentToken,
+        address[] calldata _feeReceivers,
+        bytes memory _data
+    ) external;
 
     /**
      * @notice Cancels a single invoice before payment.

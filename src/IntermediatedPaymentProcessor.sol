@@ -177,30 +177,44 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @dev Caller must send exactly the oracle-converted total. Any dust from integer rounding is refunded.
      * @param _invoiceId The meta-invoice ID to pay.
      */
-    function payMetaInvoiceWithValue(uint216 _invoiceId) external payable nonReentrant whenNotPaused {
+    function payMetaInvoiceWithValue(uint216 _invoiceId, address[] calldata _feeReceivers, bytes memory _data)
+        external
+        payable
+        nonReentrant
+        whenNotPaused
+    {
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
+
+        _validateMetaFeeAuthorization(_invoiceId, m.subInvoiceIds.length, _feeReceivers, _data);
 
         uint256 usdPerToken = _usdPerToken(address(0));
         uint256 priceInToken = m.price.mulDivUp(10 ** DEFAULT_DECIMAL, usdPerToken);
 
         if (priceInToken != msg.value) revert InvalidMetaInvoicePaymentAmount(msg.value, priceInToken);
 
-        uint256 amountPaid = _paySubInvoices(m.subInvoiceIds, address(0), usdPerToken, DEFAULT_DECIMAL);
+        uint256 amountPaid = _paySubInvoices(m.subInvoiceIds, address(0), usdPerToken, DEFAULT_DECIMAL, _feeReceivers);
         if (amountPaid == 0) revert InvalidInvoiceState();
 
         _refundExtra(priceInToken, amountPaid);
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function payMetaInvoice(uint216 _invoiceId, address _paymentToken) external nonReentrant whenNotPaused {
+    function payMetaInvoice(
+        uint216 _invoiceId,
+        address _paymentToken,
+        address[] calldata _feeReceivers,
+        bytes memory _data
+    ) external nonReentrant whenNotPaused {
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
+
+        _validateMetaFeeAuthorization(_invoiceId, m.subInvoiceIds.length, _feeReceivers, _data);
 
         uint256 usdPerToken = _usdPerToken(_paymentToken);
         uint8 decimals = _getDecimals(_paymentToken);
 
-        _paySubInvoices(m.subInvoiceIds, _paymentToken, usdPerToken, decimals);
+        _paySubInvoices(m.subInvoiceIds, _paymentToken, usdPerToken, decimals, _feeReceivers);
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
@@ -426,7 +440,8 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         uint216[] memory _subInvoiceIds,
         address _paymentToken,
         uint256 _tokenUsdPrice,
-        uint8 _decimals
+        uint8 _decimals,
+        address[] calldata _feeReceivers
     ) internal returns (uint256 amountPaid) {
         for (uint256 j = 0; j < _subInvoiceIds.length; j++) {
             uint216 subInvoiceId = _subInvoiceIds[j];
@@ -435,7 +450,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
                 uint256 price = i.price.mulDiv(10 ** _decimals, _tokenUsdPrice);
                 if (price == 0) continue;
 
-                amountPaid += _pay(i, subInvoiceId, _paymentToken, price, address(0));
+                amountPaid += _pay(i, subInvoiceId, _paymentToken, price, _feeReceivers[j]);
                 invoices[subInvoiceId] = i;
             }
         }
@@ -540,11 +555,33 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /**
-     * @notice Reverts unless `_feeReceiver` was authorized by the configured fee signer for this invoice.
-     * @param _invoiceId The invoice the fee receiver is being attached to.
-     * @param _feeReceiver The fee receiver supplied by the caller.
+     * @notice Reverts unless every fee receiver in a meta-invoice payment was authorized by the fee signer.
+     * @dev One signature covers the whole array, so the receivers must be supplied in the same order as
+     *      the meta-invoice's sub-invoice IDs and the count must match exactly.
+     * @param _metaInvoiceId The meta-invoice being paid.
+     * @param _subInvoiceCount How many sub-invoices the meta-invoice holds.
+     * @param _feeReceivers The fee receivers supplied by the caller.
      * @param _data The fee signer's ECDSA signature over the authorization digest.
      */
+    function _validateMetaFeeAuthorization(
+        uint216 _metaInvoiceId,
+        uint256 _subInvoiceCount,
+        address[] calldata _feeReceivers,
+        bytes memory _data
+    ) internal view {
+        if (_feeReceivers.length != _subInvoiceCount) {
+            revert FeeReceiverCountMismatch(_feeReceivers.length, _subInvoiceCount);
+        }
+
+        for (uint256 j = 0; j < _feeReceivers.length; j++) {
+            if (_feeReceivers[j] == address(0)) revert InvalidFeeReceiver();
+        }
+
+        if (!FeeAuthorizationLib.isAuthorized(ppStorage.getFeeSigner(), _metaInvoiceId, _feeReceivers, _data)) {
+            revert InvalidFeeAuthorization();
+        }
+    }
+
     function _validateFeeAuthorization(uint216 _invoiceId, address _feeReceiver, bytes memory _data) internal view {
         if (_feeReceiver == address(0)) revert InvalidFeeReceiver();
         if (!FeeAuthorizationLib.isAuthorized(ppStorage.getFeeSigner(), _invoiceId, _feeReceiver, _data)) {
@@ -554,8 +591,8 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
     /**
      * @notice Resolves the address that should receive an invoice's platform fee.
-     * @dev Sub-invoices are paid through the meta-invoice entrypoints, which carry no per-invoice fee
-     *      receiver, so a zero receiver falls back to the global one held in storage.
+     * @dev Every payment path now records a receiver, so the fallback only covers invoices paid before
+     *      per-invoice receivers existed.
      * @param _feeReceiver The fee receiver stored on the invoice; zero when it has none.
      * @return feeReceiver The address to send the fee to.
      */

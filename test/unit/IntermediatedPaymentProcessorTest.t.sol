@@ -244,18 +244,34 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         uint256 tokenAmount = intermediatedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
 
-        vm.expectRevert(IIntermediatedPaymentProcessor.InvoiceDoesNotExist.selector);
-        intermediatedPP.payMetaInvoiceWithValue{ value: 0.03 ether }(0);
+        {
+            address[] memory metaReceivers1 = _metaReceivers(0);
+            bytes memory metaFeeSig1 = _metaFeeSig(0);
+            vm.expectRevert(IIntermediatedPaymentProcessor.InvoiceDoesNotExist.selector);
+            intermediatedPP.payMetaInvoiceWithValue{ value: 0.03 ether }(0, metaReceivers1, metaFeeSig1);
+        }
 
-        vm.startPrank(buyerOne);
+        {
+            address[] memory metaReceivers2 = _metaReceivers(metaInvoiceId);
+            bytes memory metaFeeSig2 = _metaFeeSig(metaInvoiceId);
+            vm.startPrank(buyerOne);
 
-        vm.expectRevert(IIntermediatedPaymentProcessor.UnsupportedToken.selector);
-        intermediatedPP.payMetaInvoice(metaInvoiceId, address(12));
+            vm.expectRevert(IIntermediatedPaymentProcessor.UnsupportedToken.selector);
+            intermediatedPP.payMetaInvoice(metaInvoiceId, address(12), metaReceivers2, metaFeeSig2);
+        }
 
-        intermediatedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId);
+        {
+            address[] memory metaReceivers3 = _metaReceivers(metaInvoiceId);
+            bytes memory metaFeeSig3 = _metaFeeSig(metaInvoiceId);
+            intermediatedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId, metaReceivers3, metaFeeSig3);
+        }
 
-        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidInvoiceState.selector);
-        intermediatedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId);
+        {
+            address[] memory metaReceivers4 = _metaReceivers(metaInvoiceId);
+            bytes memory metaFeeSig4 = _metaFeeSig(metaInvoiceId);
+            vm.expectRevert(IIntermediatedPaymentProcessor.InvalidInvoiceState.selector);
+            intermediatedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId, metaReceivers4, metaFeeSig4);
+        }
 
         vm.stopPrank();
 
@@ -291,9 +307,13 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
         uint256 expected = intermediatedPP.getMetaInvoice(metaInvoiceId).price;
 
-        vm.prank(buyerOne);
-        vm.expectRevert();
-        intermediatedPP.payMetaInvoiceWithValue{ value: expected - 1 }(metaInvoiceId);
+        {
+            address[] memory metaReceivers5 = _metaReceivers(metaInvoiceId);
+            bytes memory metaFeeSig5 = _metaFeeSig(metaInvoiceId);
+            vm.prank(buyerOne);
+            vm.expectRevert();
+            intermediatedPP.payMetaInvoiceWithValue{ value: expected - 1 }(metaInvoiceId, metaReceivers5, metaFeeSig5);
+        }
     }
 
     function test_erc20PaymentForSingleInvoice() public {
@@ -334,17 +354,27 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         // create meta invoice
 
-        vm.expectRevert(IIntermediatedPaymentProcessor.InvoiceDoesNotExist.selector);
-        intermediatedPP.payMetaInvoice(0, address(mockWBtc));
+        {
+            address[] memory metaReceivers6 = _metaReceivers(0);
+            bytes memory metaFeeSig6 = _metaFeeSig(0);
+            vm.expectRevert(IIntermediatedPaymentProcessor.InvoiceDoesNotExist.selector);
+            intermediatedPP.payMetaInvoice(0, address(mockWBtc), metaReceivers6, metaFeeSig6);
+        }
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices);
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
 
-        // make payment
-        vm.prank(buyerOne);
-        intermediatedPP.payMetaInvoice(metaInvoiceId, address(mockWBtc));
+        // make payment; scoped so the extra locals do not push this function past the stack limit
+        {
+            {
+                address[] memory metaReceivers7 = _metaReceivers(metaInvoiceId);
+                bytes memory metaFeeSig7 = _metaFeeSig(metaInvoiceId);
+                vm.prank(buyerOne);
+                intermediatedPP.payMetaInvoice(metaInvoiceId, address(mockWBtc), metaReceivers7, metaFeeSig7);
+            }
+        }
 
         IIntermediatedPaymentProcessor.Invoice memory invOne = intermediatedPP.getInvoice(invoiceIds[0]);
         address escrowOne = intermediatedPP.getEscrowAddress(invOne.seller, invOne.buyer, invoiceIds[0]);
@@ -456,8 +486,12 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
 
-        vm.prank(buyerOne);
-        intermediatedPP.payMetaInvoice(metaInvoiceId, address(mockUsdc));
+        {
+            address[] memory metaReceivers8 = _metaReceivers(metaInvoiceId);
+            bytes memory metaFeeSig8 = _metaFeeSig(metaInvoiceId);
+            vm.prank(buyerOne);
+            intermediatedPP.payMetaInvoice(metaInvoiceId, address(mockUsdc), metaReceivers8, metaFeeSig8);
+        }
 
         for (uint256 i; i < invoiceIds.length; i++) {
             uint216 key = invoiceIds[i];
@@ -604,8 +638,12 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         uint256 balanceBefore = buyerTwo.balance;
 
-        vm.prank(buyerTwo);
-        intermediatedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId);
+        {
+            address[] memory metaReceivers9 = _metaReceivers(metaInvoiceId);
+            bytes memory metaFeeSig9 = _metaFeeSig(metaInvoiceId);
+            vm.prank(buyerTwo);
+            intermediatedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId, metaReceivers9, metaFeeSig9);
+        }
 
         vm.warp(block.timestamp + 1 days);
         intermediatedPP.release(invoiceIds[0]);
@@ -651,8 +689,12 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 tokenAmount = intermediatedPP.getTokenValueFromUsd(address(0), prices[1] + prices[2]);
         uint256 balanceBefore = buyerOne.balance;
 
-        vm.prank(buyerOne);
-        intermediatedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId);
+        {
+            address[] memory metaReceivers10 = _metaReceivers(metaInvoiceId);
+            bytes memory metaFeeSig10 = _metaFeeSig(metaInvoiceId);
+            vm.prank(buyerOne);
+            intermediatedPP.payMetaInvoiceWithValue{ value: tokenAmount }(metaInvoiceId, metaReceivers10, metaFeeSig10);
+        }
 
         assertApproxEqAbs(balanceBefore - tokenAmount, buyerOne.balance, 1);
     }
@@ -965,8 +1007,14 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 totalTokenValue = intermediatedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
         uint256 paidAt = block.timestamp;
 
-        vm.prank(buyerOne);
-        intermediatedPP.payMetaInvoiceWithValue{ value: totalTokenValue }(metaInvoiceId);
+        {
+            address[] memory metaReceivers11 = _metaReceivers(metaInvoiceId);
+            bytes memory metaFeeSig11 = _metaFeeSig(metaInvoiceId);
+            vm.prank(buyerOne);
+            intermediatedPP.payMetaInvoiceWithValue{ value: totalTokenValue }(
+                metaInvoiceId, metaReceivers11, metaFeeSig11
+            );
+        }
 
         for (uint256 i = 0; i < invoiceIds.length; i++) {
             IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceIds[i]);
@@ -1243,8 +1291,12 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
         uint256 totalEth = intermediatedPP.getTokenValueFromUsd(address(0), _priceO + _priceT);
 
-        vm.prank(buyerOne);
-        intermediatedPP.payMetaInvoiceWithValue{ value: totalEth }(metaInvoiceId);
+        {
+            address[] memory metaReceivers12 = _metaReceivers(metaInvoiceId);
+            bytes memory metaFeeSig12 = _metaFeeSig(metaInvoiceId);
+            vm.prank(buyerOne);
+            intermediatedPP.payMetaInvoiceWithValue{ value: totalEth }(metaInvoiceId, metaReceivers12, metaFeeSig12);
+        }
 
         IIntermediatedPaymentProcessor.Invoice memory inv0 = intermediatedPP.getInvoice(subInvoiceIds[0]);
         IIntermediatedPaymentProcessor.Invoice memory inv1 = intermediatedPP.getInvoice(subInvoiceIds[1]);
@@ -1410,7 +1462,11 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         vm.startPrank(_buyer);
         mockUsdc.approve(address(intermediatedPP), _tokenValue);
-        intermediatedPP.payMetaInvoice(_invoiceId, address(mockUsdc));
+        {
+            address[] memory metaReceivers13 = _metaReceivers(_invoiceId);
+            bytes memory metaFeeSig13 = _metaFeeSig(_invoiceId);
+            intermediatedPP.payMetaInvoice(_invoiceId, address(mockUsdc), metaReceivers13, metaFeeSig13);
+        }
         vm.stopPrank();
     }
 
@@ -1453,13 +1509,21 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
             invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
         );
 
-        vm.prank(buyerTwo);
-        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
-        intermediatedPP.payMetaInvoiceWithValue(invoiceId);
+        {
+            address[] memory metaReceivers14 = _metaReceivers(invoiceId);
+            bytes memory metaFeeSig14 = _metaFeeSig(invoiceId);
+            vm.prank(buyerTwo);
+            vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+            intermediatedPP.payMetaInvoiceWithValue(invoiceId, metaReceivers14, metaFeeSig14);
+        }
 
-        vm.prank(buyerTwo);
-        vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
-        intermediatedPP.payMetaInvoice(invoiceId, address(0));
+        {
+            address[] memory metaReceivers15 = _metaReceivers(invoiceId);
+            bytes memory metaFeeSig15 = _metaFeeSig(invoiceId);
+            vm.prank(buyerTwo);
+            vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
+            intermediatedPP.payMetaInvoice(invoiceId, address(0), metaReceivers15, metaFeeSig15);
+        }
 
         vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
         intermediatedPP.createDispute(invoiceId);
@@ -1595,7 +1659,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(feeReceiver.balance, globalFeeReceiverBalance, "global fee receiver should not be paid");
     }
 
-    function test_metaInvoiceSubInvoicesFallBackToTheGlobalFeeReceiver() public {
+    function test_metaInvoiceGivesEachSubInvoiceItsOwnFeeReceiver() public {
         address[] memory sellers = new address[](2);
         sellers[0] = sellerOne;
         sellers[1] = sellerTwo;
@@ -1609,20 +1673,75 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(params);
 
+        address[] memory receivers = new address[](2);
+        receivers[0] = address(0xfee1);
+        receivers[1] = address(0xfee2);
+
         uint256 totalValue = intermediatedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
+        bytes memory sig = _feeSigMeta(address(intermediatedPP), metaInvoiceId, receivers);
 
         vm.prank(buyerOne);
-        intermediatedPP.payMetaInvoiceWithValue{ value: totalValue }(metaInvoiceId);
+        intermediatedPP.payMetaInvoiceWithValue{ value: totalValue }(metaInvoiceId, receivers, sig);
 
-        assertEq(intermediatedPP.getInvoice(subInvoiceIds[0]).feeReceiver, address(0));
+        // One signature, but each sub-invoice keeps its own receiver.
+        assertEq(intermediatedPP.getInvoice(subInvoiceIds[0]).feeReceiver, receivers[0]);
+        assertEq(intermediatedPP.getInvoice(subInvoiceIds[1]).feeReceiver, receivers[1]);
 
-        uint256 fee = applyBasisPoints(intermediatedPP.getInvoice(subInvoiceIds[0]).balance, FEE_RATE);
-        uint256 globalFeeReceiverBalance = feeReceiver.balance;
+        uint256 feeOne = applyBasisPoints(intermediatedPP.getInvoice(subInvoiceIds[0]).balance, FEE_RATE);
+        uint256 feeTwo = applyBasisPoints(intermediatedPP.getInvoice(subInvoiceIds[1]).balance, FEE_RATE);
 
         vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
         intermediatedPP.release(subInvoiceIds[0]);
+        intermediatedPP.release(subInvoiceIds[1]);
 
-        assertEq(feeReceiver.balance, globalFeeReceiverBalance + fee);
+        assertEq(receivers[0].balance, feeOne);
+        assertEq(receivers[1].balance, feeTwo);
+    }
+
+    function test_metaInvoiceRejectsAMismatchedOrTamperedFeeReceiverArray() public {
+        address[] memory sellers = new address[](2);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 100e8;
+        prices[1] = 50e8;
+
+        (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params,) =
+            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices);
+
+        uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(params);
+        uint256 totalValue = intermediatedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
+
+        address[] memory receivers = new address[](2);
+        receivers[0] = address(0xfee1);
+        receivers[1] = address(0xfee2);
+        bytes memory sig = _feeSigMeta(address(intermediatedPP), metaInvoiceId, receivers);
+
+        address[] memory tooFew = new address[](1);
+        tooFew[0] = address(0xfee1);
+
+        // Reordering the array invalidates the one signature that covers it.
+        address[] memory swapped = new address[](2);
+        swapped[0] = receivers[1];
+        swapped[1] = receivers[0];
+
+        address[] memory withZero = new address[](2);
+        withZero[0] = address(0xfee1);
+
+        vm.startPrank(buyerOne);
+
+        vm.expectRevert(abi.encodeWithSelector(IIntermediatedPaymentProcessor.FeeReceiverCountMismatch.selector, 1, 2));
+        intermediatedPP.payMetaInvoiceWithValue{ value: totalValue }(metaInvoiceId, tooFew, sig);
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidFeeReceiver.selector);
+        intermediatedPP.payMetaInvoiceWithValue{ value: totalValue }(metaInvoiceId, withZero, sig);
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidFeeAuthorization.selector);
+        intermediatedPP.payMetaInvoiceWithValue{ value: totalValue }(metaInvoiceId, swapped, sig);
+
+        intermediatedPP.payMetaInvoiceWithValue{ value: totalValue }(metaInvoiceId, receivers, sig);
+        vm.stopPrank();
     }
 
     function test_setFeeSigner() public {
