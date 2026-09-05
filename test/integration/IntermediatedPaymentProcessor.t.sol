@@ -30,7 +30,7 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
     function test_nativeTokenPaymentForSingleInvoice() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         uint256 amountInToken = intermediatedPP.getTokenValueFromUsd(address(0), price);
@@ -60,7 +60,7 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
         // create invoice
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices);
+            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
 
@@ -87,7 +87,7 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
     function test_erc20PaymentForSingleInvoice() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         vm.prank(USDC_BUYER);
@@ -114,7 +114,7 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
         prices[1] = 200e8;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices);
+            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
 
@@ -144,7 +144,7 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
         // single invoice
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         intermediatedPP.cancelInvoice(invoiceId);
@@ -165,7 +165,7 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
         prices[2] = 1400e8;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices);
+            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         intermediatedPP.createMetaInvoice(param);
 
@@ -178,7 +178,7 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
     function test_settledDispute() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(USDC), price);
@@ -213,7 +213,7 @@ contract IntermediatedPaymentProcessorInteractions is IntermediatedPaymentProces
     function test_invoiceRelease() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price)
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(WBTC), price);

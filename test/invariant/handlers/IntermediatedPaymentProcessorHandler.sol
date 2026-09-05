@@ -82,8 +82,9 @@ contract IntermediatedPaymentProcessorHandler is Test {
 
         vm.prank(intermediatedPP.ppStorage().getIntermediatedPlatformsOperator());
 
-        uint216 id =
-            intermediatedPP.createSingleInvoice(getInvoiceCreationParam(totalSingleInvoiceCreated, seller, _price));
+        uint216 id = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(totalSingleInvoiceCreated, seller, _price, _testPaymentTokens())
+        );
 
         singleInvoiceIds.push(id);
         singleAndSubInvoice.push(id);
@@ -103,7 +104,7 @@ contract IntermediatedPaymentProcessorHandler is Test {
         prices[1] = _priceT;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(totalSingleInvoiceCreated, sellers, prices);
+            getInvoiceCreationParams(totalSingleInvoiceCreated, sellers, prices, _testPaymentTokens());
 
         vm.prank(intermediatedPP.ppStorage().getIntermediatedPlatformsOperator());
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
@@ -326,5 +327,11 @@ contract IntermediatedPaymentProcessorHandler is Test {
         );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(feeSignerPk, digest);
         return abi.encodePacked(r, s, v);
+    }
+
+    /// @dev The tokens invoices accept in the invariant run; the handler only ever pays natively.
+    function _testPaymentTokens() internal pure returns (address[] memory tokens) {
+        tokens = new address[](1);
+        tokens[0] = address(0);
     }
 }

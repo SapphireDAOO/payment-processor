@@ -236,13 +236,18 @@ contract Deploy is Script {
         uint96 heartbeat = _isMainnet ? FEED_HEARTBEAT : 0;
 
         _oracle.setPriceFeed(
-            address(0), IOracleManager.PriceFeedConfig({ aggregator: _addr.nativeTokenPriceFeed, heartbeat: heartbeat })
+            address(0),
+            IOracleManager.PriceFeedConfig({
+                aggregator: _addr.nativeTokenPriceFeed, heartbeat: heartbeat, allowed: true
+            })
         );
         _oracle.setPriceFeed(
-            _addr.usdc, IOracleManager.PriceFeedConfig({ aggregator: _addr.usdcPriceFeed, heartbeat: heartbeat })
+            _addr.usdc,
+            IOracleManager.PriceFeedConfig({ aggregator: _addr.usdcPriceFeed, heartbeat: heartbeat, allowed: true })
         );
         _oracle.setPriceFeed(
-            _addr.wbtc, IOracleManager.PriceFeedConfig({ aggregator: _addr.wbtcPriceFeed, heartbeat: heartbeat })
+            _addr.wbtc,
+            IOracleManager.PriceFeedConfig({ aggregator: _addr.wbtcPriceFeed, heartbeat: heartbeat, allowed: true })
         );
         console.log("Price feeds set: ETH/USD, USDC/USD, WBTC/USD");
     }

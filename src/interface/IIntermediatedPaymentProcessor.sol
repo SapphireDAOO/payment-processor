@@ -58,6 +58,14 @@ interface IIntermediatedPaymentProcessor {
     /// @notice Thrown when the zero address is supplied as the fee receiver.
     error InvalidFeeReceiver();
 
+    /// @notice Thrown when paying an invoice with a token it does not accept.
+    /// @param invoiceId The invoice being paid.
+    /// @param paymentToken The token the caller tried to pay with.
+    error PaymentTokenNotAllowed(uint216 invoiceId, address paymentToken);
+
+    /// @notice Thrown when an invoice is created without any accepted payment token.
+    error NoPaymentTokens();
+
     /// @notice Thrown when a meta-invoice payment supplies the wrong number of fee receivers.
     /// @param provided How many fee receivers the caller supplied.
     /// @param expected How many sub-invoices the meta-invoice holds.
@@ -157,11 +165,14 @@ interface IIntermediatedPaymentProcessor {
     /// @param seller Address of the seller.
     /// @param price Price or amount to be paid for the invoice in USD (8 decimals).
     /// @param escrowHoldPeriod Duration (in seconds) that the escrow will lock the payment before it's releasable.
+    /// @param paymentTokens The tokens this invoice accepts. Must hold at least one entry; include
+    ///        `address(0)` to accept native currency. Any token outside this list is rejected at payment.
     struct InvoiceCreationParam {
         string invoiceId;
         address seller;
         uint256 price;
         uint32 escrowHoldPeriod;
+        address[] paymentTokens;
     }
 
     // ================================================================
@@ -339,6 +350,14 @@ interface IIntermediatedPaymentProcessor {
     function getMetaInvoice(uint216 _metaInvoiceId) external view returns (MetaInvoice memory m);
 
     /**
+     * @notice Reports whether an invoice accepts a given payment token.
+     * @param _invoiceId The invoice to check.
+     * @param _paymentToken The token to check; `address(0)` for native currency.
+     * @return allowed True when the token was registered at invoice creation.
+     */
+    function isPaymentTokenAllowed(uint216 _invoiceId, address _paymentToken) external view returns (bool allowed);
+
+    /**
      * @notice Returns the total number of unique invoices created.
      * @return totalInvoices The total number of unique invoices created.
      */
@@ -431,6 +450,13 @@ interface IIntermediatedPaymentProcessor {
      * @param amount The amount refunded to the buyer.
      */
     event Refunded(uint216 indexed invoiceId, uint256 indexed amount);
+
+    /**
+     * @notice Emitted with the set of tokens an invoice accepts, once at creation.
+     * @param invoiceId The invoice the tokens were registered for.
+     * @param paymentTokens The accepted tokens; `address(0)` means native currency.
+     */
+    event PaymentTokensRegistered(uint216 indexed invoiceId, address[] paymentTokens);
 
     /**
      * @notice Emitted when an invoice is canceled before any payment has been made.

@@ -18,16 +18,20 @@ uint32 constant TEST_ESCROW_HOLD_PERIOD = 1 days;
  * @param _invoiceNonce The invoice nonce used as a string identifier.
  * @param _seller The seller address for the invoice.
  * @param _price The invoice price in USD (8 decimals).
+ * @param _paymentTokens The tokens the invoice accepts; must hold at least one entry.
  * @return invoiceParam The populated invoice creation parameters.
  */
-function getInvoiceCreationParam(uint256 _invoiceNonce, address _seller, uint256 _price)
-    pure
-    returns (IIntermediatedPaymentProcessor.InvoiceCreationParam memory invoiceParam)
-{
+function getInvoiceCreationParam(
+    uint256 _invoiceNonce,
+    address _seller,
+    uint256 _price,
+    address[] memory _paymentTokens
+) pure returns (IIntermediatedPaymentProcessor.InvoiceCreationParam memory invoiceParam) {
     invoiceParam.invoiceId = LibString.toString(_invoiceNonce);
     invoiceParam.seller = _seller;
     invoiceParam.price = _price;
     invoiceParam.escrowHoldPeriod = TEST_ESCROW_HOLD_PERIOD;
+    invoiceParam.paymentTokens = _paymentTokens;
 }
 
 /**
@@ -35,19 +39,22 @@ function getInvoiceCreationParam(uint256 _invoiceNonce, address _seller, uint256
  * @param _invoiceNonce The starting invoice nonce.
  * @param _sellers The list of sellers.
  * @param _prices The list of prices in USD (8 decimals).
+ * @param _paymentTokens The tokens every sub-invoice accepts; must hold at least one entry.
  * @return params The array of invoice creation parameters.
  * @return subInvoiceIds The expected sub-invoice IDs derived from invoice IDs.
  */
-function getInvoiceCreationParams(uint256 _invoiceNonce, address[] memory _sellers, uint256[] memory _prices)
-    pure
-    returns (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory subInvoiceIds)
-{
+function getInvoiceCreationParams(
+    uint256 _invoiceNonce,
+    address[] memory _sellers,
+    uint256[] memory _prices,
+    address[] memory _paymentTokens
+) pure returns (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory subInvoiceIds) {
     uint256 numberOfInvoice = _sellers.length;
     params = new IIntermediatedPaymentProcessor.InvoiceCreationParam[](numberOfInvoice);
     subInvoiceIds = new uint216[](numberOfInvoice);
 
     for (uint256 i; i < numberOfInvoice; i++) {
-        params[i] = getInvoiceCreationParam(_invoiceNonce + i, _sellers[i], _prices[i]);
+        params[i] = getInvoiceCreationParam(_invoiceNonce + i, _sellers[i], _prices[i], _paymentTokens);
         subInvoiceIds[i] = SafeCastLib.toUint216(uint256(keccak256(abi.encode(params[i].invoiceId))) & ((1 << 216) - 1));
     }
     return (params, subInvoiceIds);

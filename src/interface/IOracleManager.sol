@@ -21,13 +21,16 @@ interface IOracleManager {
     error InvalidPrice();
 
     /// @notice Configuration for a Chainlink price feed associated with a payment token.
-    /// @param aggregator Address of the Chainlink AggregatorV3 contract. address(0) disables the token.
+    /// @param aggregator Address of the Chainlink AggregatorV3 contract.
     /// @param heartbeat Maximum acceptable age (in seconds) of a price update before it is considered stale.
     ///        Should match the feed's documented update interval (e.g. 3600 for a 1-hour feed).
     ///        Set to 0 to disable the freshness check entirely (e.g. mock feeds on local testnets).
+    /// @param allowed Whether the token may be used for payment. This flag alone decides support, so a
+    ///        token can be turned off without clearing its aggregator, and re-enabled without resupplying it.
     struct PriceFeedConfig {
         address aggregator;
         uint96 heartbeat;
+        bool allowed;
     }
 
     /**
@@ -44,6 +47,14 @@ interface IOracleManager {
      * @return The token's USD price with 8 decimals as returned by the Chainlink aggregator.
      */
     function getUsdPerToken(address _paymentToken) external view returns (uint256);
+
+    /**
+     * @notice Reports whether a token is allowed as payment.
+     * @dev Lets callers check support without provoking the revert `getUsdPerToken` would raise.
+     * @param _token The token to check; `address(0)` for native currency.
+     * @return supported True when the token's price feed is marked allowed.
+     */
+    function isSupportedToken(address _token) external view returns (bool supported);
 
     /**
      * @notice Sets the Chainlink price feed configuration for a specific payment token.

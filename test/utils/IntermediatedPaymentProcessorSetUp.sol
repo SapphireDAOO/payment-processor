@@ -78,15 +78,21 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
         vm.startPrank(admin);
         oracle.setPriceFeed(
             address(addr.usdc),
-            IOracleManager.PriceFeedConfig({ aggregator: address(addr.usdcPriceFeed), heartbeat: 24 hours })
+            IOracleManager.PriceFeedConfig({
+                aggregator: address(addr.usdcPriceFeed), heartbeat: 24 hours, allowed: true
+            })
         );
         oracle.setPriceFeed(
             address(addr.wbtc),
-            IOracleManager.PriceFeedConfig({ aggregator: address(addr.wbtcPriceFeed), heartbeat: 24 hours })
+            IOracleManager.PriceFeedConfig({
+                aggregator: address(addr.wbtcPriceFeed), heartbeat: 24 hours, allowed: true
+            })
         );
         oracle.setPriceFeed(
             address(0),
-            IOracleManager.PriceFeedConfig({ aggregator: address(addr.nativeTokenPriceFeed), heartbeat: 24 hours })
+            IOracleManager.PriceFeedConfig({
+                aggregator: address(addr.nativeTokenPriceFeed), heartbeat: 24 hours, allowed: true
+            })
         );
         vm.stopPrank();
 
@@ -194,5 +200,17 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
      */
     function _metaFeeSig(uint216 _metaInvoiceId) internal view returns (bytes memory signature) {
         return _feeSigMeta(address(intermediatedPP), _metaInvoiceId, _metaReceivers(_metaInvoiceId));
+    }
+
+    /**
+     * @notice The payment tokens invoices accept in tests: native currency plus both mock ERC20s.
+     * @return tokens The accepted token list for {getInvoiceCreationParam}.
+     */
+    function _testPaymentTokens() internal view returns (address[] memory tokens) {
+        // Reads the resolved addresses rather than the mock handles, so fork runs list the real tokens.
+        tokens = new address[](3);
+        tokens[0] = address(0);
+        tokens[1] = addr.usdc;
+        tokens[2] = addr.wbtc;
     }
 }

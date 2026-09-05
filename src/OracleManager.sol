@@ -59,7 +59,7 @@ contract OracleManager is IOracleManager {
     function getUsdPerToken(address _paymentToken) external view returns (uint256) {
         PriceFeedConfig memory config = priceFeeds[_paymentToken];
 
-        if (config.aggregator == address(0)) revert UnsupportedToken();
+        if (!config.allowed) revert UnsupportedToken();
 
         if (sequencerUptimeFeed != address(0)) {
             try AggregatorV3Interface(sequencerUptimeFeed).latestRoundData() returns (
@@ -79,6 +79,11 @@ contract OracleManager is IOracleManager {
         if (config.heartbeat != 0 && block.timestamp > updatedAt + config.heartbeat) revert StalePriceFeed();
 
         return answer.toUint256(); // 8 decimals from Chainlink
+    }
+
+    /// @inheritdoc IOracleManager
+    function isSupportedToken(address _token) external view returns (bool supported) {
+        return priceFeeds[_token].allowed;
     }
 
     /// @inheritdoc IOracleManager

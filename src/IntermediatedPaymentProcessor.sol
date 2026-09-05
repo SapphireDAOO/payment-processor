@@ -67,6 +67,13 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     mapping(uint216 metaInvoiceId => MetaInvoice invoice) private metaInvoices;
 
     /**
+     * @notice Tokens each invoice accepts as payment.
+     * @dev Fixed at invoice creation and never widened afterwards, so a buyer can only pay in a
+     *      currency the operator listed for that invoice. `address(0)` means native currency.
+     */
+    mapping(uint216 invoiceId => mapping(address paymentToken => bool allowed)) private allowedPaymentTokens;
+
+    /**
      * @notice Restricts function access to the authorized Intermediated Platforms Operator.
      * @dev Reverts with NotAuthorized() if the caller is not the Intermediated Platforms Operator.
      */
@@ -135,8 +142,8 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
         for (uint216 j = 0; j < length; j++) {
             totalPrice += _param[j].price;
-            metaInvoices[metaInvoiceId].subInvoiceIds
-                .push(_createInvoice(firstInvoiceNonce + j, metaInvoiceId, _param[j]));
+            uint216 invoiceId = _createInvoice(firstInvoiceNonce + j, metaInvoiceId, _param[j]);
+            metaInvoices[metaInvoiceId].subInvoiceIds.push(invoiceId);
         }
 
         metaInvoices[metaInvoiceId].price = totalPrice;
@@ -155,6 +162,10 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         nonReentrant
         whenNotPaused
     {
+        if (!allowedPaymentTokens[_invoiceId][_paymentToken]) {
+            revert PaymentTokenNotAllowed(_invoiceId, _paymentToken);
+        }
+
         Invoice memory i = invoices[_invoiceId];
         uint256 priceInToken = getTokenValueFromUsd(_paymentToken, i.price);
 
@@ -447,6 +458,10 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
             uint216 subInvoiceId = _subInvoiceIds[j];
             Invoice memory i = invoices[subInvoiceId];
             if (i.state == CREATED) {
+                if (!allowedPaymentTokens[subInvoiceId][_paymentToken]) {
+                    revert PaymentTokenNotAllowed(subInvoiceId, _paymentToken);
+                }
+
                 uint256 price = i.price.mulDiv(10 ** _decimals, _tokenUsdPrice);
                 if (price == 0) continue;
 
@@ -471,6 +486,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         if (_param.price == 0) revert PriceCannotBeZero();
         if (_param.price < minimumPrice) revert PriceIsTooLow();
         if (_param.escrowHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
+        if (_param.paymentTokens.length == 0) revert NoPaymentTokens();
         Invoice memory i;
         i.seller = _param.seller;
         i.price = _param.price;
@@ -488,7 +504,13 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
         invoices[invoiceId] = i;
 
+        for (uint256 j = 0; j < _param.paymentTokens.length; j++) {
+            if (!oracle.isSupportedToken(_param.paymentTokens[j])) revert UnsupportedToken();
+            allowedPaymentTokens[invoiceId][_param.paymentTokens[j]] = true;
+        }
+
         emit InvoiceCreated(invoiceId, i);
+        emit PaymentTokensRegistered(invoiceId, _param.paymentTokens);
         return invoiceId;
     }
 
@@ -682,6 +704,11 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     /// @inheritdoc IIntermediatedPaymentProcessor
     function getInvoice(uint216 _invoiceId) external view returns (Invoice memory i) {
         return invoices[_invoiceId];
+    }
+
+    /// @inheritdoc IIntermediatedPaymentProcessor
+    function isPaymentTokenAllowed(uint216 _invoiceId, address _paymentToken) external view returns (bool allowed) {
+        return allowedPaymentTokens[_invoiceId][_paymentToken];
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor

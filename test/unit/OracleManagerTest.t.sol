@@ -29,7 +29,8 @@ contract OracleManagerTest is BaseSetUp {
 
         vm.prank(admin);
         oracle.setPriceFeed(
-            TOKEN, IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT })
+            TOKEN,
+            IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT, allowed: true })
         );
     }
 
@@ -45,7 +46,8 @@ contract OracleManagerTest is BaseSetUp {
     function test_setPriceFeed_revertsForNonOwner() public {
         vm.expectRevert(IOracleManager.NotAuthorized.selector);
         oracle.setPriceFeed(
-            TOKEN, IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT })
+            TOKEN,
+            IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT, allowed: true })
         );
     }
 
@@ -53,7 +55,7 @@ contract OracleManagerTest is BaseSetUp {
         MockV3Aggregator newFeed = new MockV3Aggregator(8, 3000e8);
         vm.prank(admin);
         oracle.setPriceFeed(
-            TOKEN, IOracleManager.PriceFeedConfig({ aggregator: address(newFeed), heartbeat: HEARTBEAT })
+            TOKEN, IOracleManager.PriceFeedConfig({ aggregator: address(newFeed), heartbeat: HEARTBEAT, allowed: true })
         );
 
         assertEq(oracle.getUsdPerToken(TOKEN), 3000e8);
@@ -63,18 +65,33 @@ contract OracleManagerTest is BaseSetUp {
         MockV3Aggregator newFeed = new MockV3Aggregator(8, 5000e8);
         vm.prank(address(ppStorage));
         oracle.setPriceFeed(
-            TOKEN, IOracleManager.PriceFeedConfig({ aggregator: address(newFeed), heartbeat: HEARTBEAT })
+            TOKEN, IOracleManager.PriceFeedConfig({ aggregator: address(newFeed), heartbeat: HEARTBEAT, allowed: true })
         );
 
         assertEq(oracle.getUsdPerToken(TOKEN), 5000e8);
     }
 
     function test_setPriceFeed_removeToken() public {
+        // Clearing `allowed` disables the token; the aggregator can stay in place for a later re-enable.
         vm.prank(admin);
-        oracle.setPriceFeed(TOKEN, IOracleManager.PriceFeedConfig({ aggregator: address(0), heartbeat: 0 }));
+        oracle.setPriceFeed(
+            TOKEN,
+            IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT, allowed: false })
+        );
+
+        assertFalse(oracle.isSupportedToken(TOKEN));
 
         vm.expectRevert(IOracleManager.UnsupportedToken.selector);
         oracle.getUsdPerToken(TOKEN);
+
+        vm.prank(admin);
+        oracle.setPriceFeed(
+            TOKEN,
+            IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT, allowed: true })
+        );
+
+        assertTrue(oracle.isSupportedToken(TOKEN));
+        assertEq(oracle.getUsdPerToken(TOKEN), uint256(INITIAL_PRICE));
     }
 
     // ── setSequencerUptimeFeed ────────────────────────────────────────────────────
@@ -181,7 +198,8 @@ contract OracleManagerTest is BaseSetUp {
         OracleManager noSeqOracle = new OracleManager(address(ppStorage), address(0));
         vm.prank(admin);
         noSeqOracle.setPriceFeed(
-            TOKEN, IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT })
+            TOKEN,
+            IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT, allowed: true })
         );
 
         assertEq(noSeqOracle.getUsdPerToken(TOKEN), uint256(INITIAL_PRICE));
