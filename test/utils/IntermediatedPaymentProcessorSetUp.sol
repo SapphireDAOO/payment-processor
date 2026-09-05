@@ -43,9 +43,11 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
     uint256 constant LOCAL_CHAIN_ID = 31337;
     uint256 constant MAINNET_CHAIN_ID = 8453;
 
-    address constant WTBC_BUYER = 0x03b69Ae9423DF674eAF396c157a03BE9349208f1;
-    address constant USDC_BUYER = 0x0cCc149f4c01A2eADa3e9f915CA7628920901623;
-    address constant NATIVE_TOKEN_BUYER = 0xBefa750Ed568Cc84970eB4FD506aF4FF599c42D0;
+    /// @dev Arbitrary test-only addresses funded directly via {vm.deal} and {deal}, rather than real
+    ///      mainnet holders, so fork tests don't depend on someone else's balance at the pinned block.
+    address constant WTBC_BUYER = address(0x53);
+    address constant USDC_BUYER = address(0x54);
+    address constant NATIVE_TOKEN_BUYER = address(0x955);
 
     /// @notice Initializes the base setup and deploys the intermediated processor.
     function setUp() public virtual {
@@ -176,6 +178,17 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
         }
 
         if (block.chainid == MAINNET_CHAIN_ID) {
+            vm.deal(NATIVE_TOKEN_BUYER, INITIAL_BALANCE);
+            vm.deal(WTBC_BUYER, INITIAL_BALANCE);
+            vm.deal(USDC_BUYER, INITIAL_BALANCE);
+            vm.deal(sellerOne, INITIAL_BALANCE);
+            vm.deal(sellerTwo, INITIAL_BALANCE);
+            vm.deal(admin, INITIAL_BALANCE);
+            vm.deal(feeReceiver, INITIAL_BALANCE);
+
+            deal(WBTC, WTBC_BUYER, 1000e8);
+            deal(USDC, USDC_BUYER, 10_000_000e6);
+
             vm.prank(WTBC_BUYER);
             IERC20(WBTC).approve(_spender, type(uint256).max);
 

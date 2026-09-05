@@ -9,7 +9,9 @@ import { PAID, REJECTED, CANCELED, REFUNDED, RELEASED } from "src/constants/Simp
 contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
     string MAINNET_RPC = vm.envString("MAINNET_RPC");
 
-    address constant NATIVE_TOKEN_BUYER = 0xBefa750Ed568Cc84970eB4FD506aF4FF599c42D0;
+    /// @dev Arbitrary test-only address funded directly via {vm.deal}, rather than a real mainnet
+    ///      holder, so this fork test doesn't depend on someone else's balance at the pinned block.
+    address constant NATIVE_TOKEN_BUYER = address(0x9101);
 
     uint256 constant INVOICE_PRICE = 10 ether;
 
@@ -17,6 +19,11 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         uint256 fork = vm.createFork(MAINNET_RPC);
         vm.selectFork(fork);
         super.setUp();
+
+        vm.deal(NATIVE_TOKEN_BUYER, INITIAL_BALANCE);
+        vm.deal(sellerOne, INITIAL_BALANCE);
+        vm.deal(admin, INITIAL_BALANCE);
+        vm.deal(feeReceiver, INITIAL_BALANCE);
     }
 
     function test_payInvoice() public {
