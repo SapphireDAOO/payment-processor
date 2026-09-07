@@ -49,6 +49,16 @@ interface IOracleManager {
     function getUsdPerToken(address _paymentToken) external view returns (uint256);
 
     /**
+     * @notice Fetches Chainlink USD prices for several payment tokens in one call.
+     * @dev Applies the same validation as {getUsdPerToken} to each token, but checks sequencer
+     *      uptime once for the whole batch rather than once per token. Reverts on the first
+     *      unsupported or invalid token, aborting the entire batch.
+     * @param _paymentTokens The token addresses to price (address(0) for native ETH).
+     * @return prices Each token's USD price with 8 decimals, index-aligned with `_paymentTokens`.
+     */
+    function getUsdPerTokenBatch(address[] calldata _paymentTokens) external view returns (uint256[] memory prices);
+
+    /**
      * @notice Reports whether a token is allowed as payment.
      * @dev Lets callers check support without provoking the revert `getUsdPerToken` would raise.
      * @param _token The token to check; `address(0)` for native currency.

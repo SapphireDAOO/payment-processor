@@ -58,27 +58,24 @@ contract OracleManager is IOracleManager {
     /// @inheritdoc IOracleManager
     function getUsdPerToken(address _paymentToken) external view returns (uint256) {
         PriceFeedConfig memory config = priceFeeds[_paymentToken];
-
         if (!config.allowed) revert UnsupportedToken();
 
-        if (sequencerUptimeFeed != address(0)) {
-            try AggregatorV3Interface(sequencerUptimeFeed).latestRoundData() returns (
-                uint80, int256 seqAnswer, uint256 startedAt, uint256, uint80
-            ) {
-                if (seqAnswer != 0) revert SequencerDown();
-                if (block.timestamp < startedAt + SEQUENCER_GRACE_PERIOD) revert SequencerDown();
-            } catch {
-                revert SequencerDown();
-            }
+        _checkSequencer();
+        return _usdPerToken(config);
+    }
+
+    /// @inheritdoc IOracleManager
+    function getUsdPerTokenBatch(address[] calldata _paymentTokens) external view returns (uint256[] memory prices) {
+        _checkSequencer();
+
+        uint256 length = _paymentTokens.length;
+        prices = new uint256[](length);
+        for (uint256 i; i < length; i++) {
+            PriceFeedConfig memory config = priceFeeds[_paymentTokens[i]];
+            if (!config.allowed) revert UnsupportedToken();
+
+            prices[i] = _usdPerToken(config);
         }
-
-        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) =
-            AggregatorV3Interface(config.aggregator).latestRoundData();
-        if (answeredInRound < roundId) revert StalePrice();
-        if (answer <= 0) revert InvalidPrice();
-        if (config.heartbeat != 0 && block.timestamp > updatedAt + config.heartbeat) revert StalePriceFeed();
-
-        return answer.toUint256(); // 8 decimals from Chainlink
     }
 
     /// @inheritdoc IOracleManager
@@ -100,6 +97,39 @@ contract OracleManager is IOracleManager {
     /// @inheritdoc IOracleManager
     function getSequencerUptimeFeed() external view returns (address feed) {
         return sequencerUptimeFeed;
+    }
+
+    /**
+     * @notice Reverts unless the L2 sequencer is up and past its post-restart grace period.
+     * @dev Skipped when `sequencerUptimeFeed == address(0)` (L1 or local testnets). Shared by
+     *      {getUsdPerToken} and {getUsdPerTokenBatch} so a batch call checks it only once.
+     */
+    function _checkSequencer() internal view {
+        if (sequencerUptimeFeed == address(0)) return;
+
+        try AggregatorV3Interface(sequencerUptimeFeed).latestRoundData() returns (
+            uint80, int256 seqAnswer, uint256 startedAt, uint256, uint80
+        ) {
+            if (seqAnswer != 0) revert SequencerDown();
+            if (block.timestamp < startedAt + SEQUENCER_GRACE_PERIOD) revert SequencerDown();
+        } catch {
+            revert SequencerDown();
+        }
+    }
+
+    /**
+     * @notice Reads and validates a token's Chainlink price, assuming the sequencer was already checked.
+     * @param _config The token's price feed configuration.
+     * @return The token's USD price with 8 decimals as returned by the Chainlink aggregator.
+     */
+    function _usdPerToken(PriceFeedConfig memory _config) internal view returns (uint256) {
+        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) =
+            AggregatorV3Interface(_config.aggregator).latestRoundData();
+        if (answeredInRound < roundId) revert StalePrice();
+        if (answer <= 0) revert InvalidPrice();
+        if (_config.heartbeat != 0 && block.timestamp > updatedAt + _config.heartbeat) revert StalePriceFeed();
+
+        return answer.toUint256(); // 8 decimals from Chainlink
     }
 
     /**

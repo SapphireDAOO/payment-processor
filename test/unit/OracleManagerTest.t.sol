@@ -12,8 +12,12 @@ contract OracleManagerTest is BaseSetUp {
     MockV3Aggregator seqFeed;
 
     address constant TOKEN = address(0xdead);
+    address constant TOKEN_TWO = address(0xdead2);
     uint96 constant HEARTBEAT = 24 hours;
     int256 constant INITIAL_PRICE = 2000e8; // $2,000 in 8-decimal Chainlink format
+    int256 constant INITIAL_PRICE_TWO = 1e8;
+
+    MockV3Aggregator priceFeedTwo;
 
     function setUp() public {
         initialize();
@@ -31,6 +35,13 @@ contract OracleManagerTest is BaseSetUp {
         oracle.setPriceFeed(
             TOKEN,
             IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT, allowed: true })
+        );
+
+        priceFeedTwo = new MockV3Aggregator(8, INITIAL_PRICE_TWO);
+        vm.prank(admin);
+        oracle.setPriceFeed(
+            TOKEN_TWO,
+            IOracleManager.PriceFeedConfig({ aggregator: address(priceFeedTwo), heartbeat: HEARTBEAT, allowed: true })
         );
     }
 
@@ -203,5 +214,55 @@ contract OracleManagerTest is BaseSetUp {
         );
 
         assertEq(noSeqOracle.getUsdPerToken(TOKEN), uint256(INITIAL_PRICE));
+    }
+
+    // ── getUsdPerTokenBatch ────────────────────────────────────────────────────────
+
+    function test_getUsdPerTokenBatch_returnsCorrectPrices() public view {
+        address[] memory tokens = new address[](2);
+        tokens[0] = TOKEN;
+        tokens[1] = TOKEN_TWO;
+
+        uint256[] memory prices = oracle.getUsdPerTokenBatch(tokens);
+
+        assertEq(prices.length, 2);
+        assertEq(prices[0], uint256(INITIAL_PRICE));
+        assertEq(prices[1], uint256(INITIAL_PRICE_TWO));
+    }
+
+    function test_getUsdPerTokenBatch_empty() public view {
+        assertEq(oracle.getUsdPerTokenBatch(new address[](0)).length, 0);
+    }
+
+    function test_getUsdPerTokenBatch_revertsOnUnsupportedToken() public {
+        address[] memory tokens = new address[](2);
+        tokens[0] = TOKEN;
+        tokens[1] = address(0xdeadbeef);
+
+        vm.expectRevert(IOracleManager.UnsupportedToken.selector);
+        oracle.getUsdPerTokenBatch(tokens);
+    }
+
+    function test_getUsdPerTokenBatch_revertsWhenSequencerDown() public {
+        seqFeed.updateAnswer(1); // answer=1 means sequencer is down
+
+        address[] memory tokens = new address[](2);
+        tokens[0] = TOKEN;
+        tokens[1] = TOKEN_TWO;
+
+        vm.expectRevert(IOracleManager.SequencerDown.selector);
+        oracle.getUsdPerTokenBatch(tokens);
+    }
+
+    function test_getUsdPerTokenBatch_revertsOnStalePriceFeed() public {
+        // MockV3Aggregator hardcodes updatedAt = 500 days; heartbeat = 24 hours
+        vm.warp(501 days + 1);
+
+        address[] memory tokens = new address[](2);
+        tokens[0] = TOKEN;
+        tokens[1] = TOKEN_TWO;
+
+        vm.expectRevert(IOracleManager.StalePriceFeed.selector);
+        oracle.getUsdPerTokenBatch(tokens);
     }
 }
