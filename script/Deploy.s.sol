@@ -81,7 +81,7 @@ contract Deploy is Script {
     address[] signers = [SIGNER_ONE, SIGNER_TWO];
 
     // Default CREATE2 salt; bump the version (or set CREATE2_SALT) to redeploy at fresh addresses.
-    bytes32 constant DEFAULT_SALT = keccak256("sapphiredao.payment-processor.deploy");
+    bytes32 constant DEFAULT_SALT = keccak256("sapphiredao.payment-processor.deploy.testnet");
 
     function run() external {
         bool isMainnet = block.chainid == MAINNET_CHAIN_ID;
@@ -107,8 +107,9 @@ contract Deploy is Script {
 
         vm.startBroadcast();
 
-        MasterDeployer masterDeployer = new MasterDeployer{ salt: salt }(msg.sender);
-        console.log("MasterDeployer deployed:          ", address(masterDeployer));
+        // Reused when already present, so a run that failed partway (a rejected transaction, a
+        // dropped nonce) resumes on the same addresses instead of colliding on this CREATE2 slot.
+        MasterDeployer masterDeployer = _masterDeployerAt(salt);
 
         Addr memory addr = _setUp(salt);
         if (!isMainnet) {
@@ -142,22 +143,39 @@ contract Deploy is Script {
         });
 
         // Creation code is passed in rather than embedded so MasterDeployer stays under the
-        // EIP-170 size limit.
-        IMasterDeployer.InitCodes memory initCodes = IMasterDeployer.InitCodes({
+        // EIP-170 size limit. Split across the two phases so neither transaction carries the whole
+        // system's bytecode as calldata.
+        IMasterDeployer.CoreInitCodes memory coreInitCodes = IMasterDeployer.CoreInitCodes({
             multiSig: type(MultiSig).creationCode,
             notes: type(Notes).creationCode,
             simplePaymentProcessor: type(SimplePaymentProcessor).creationCode,
             paymentAutomation: type(PaymentAutomation).creationCode,
+            ppStorage: type(PaymentProcessorStorage).creationCode
+        });
+
+        IMasterDeployer.SystemInitCodes memory systemInitCodes = IMasterDeployer.SystemInitCodes({
             oracleManager: type(OracleManager).creationCode,
             intermediatedPaymentProcessor: type(IntermediatedPaymentProcessor).creationCode,
             sweeper: type(Sweeper).creationCode,
             ppStorage: type(PaymentProcessorStorage).creationCode
         });
 
-        address predictedStorage = masterDeployer.predictStorageAddress(salt, params.config, initCodes.ppStorage);
+        address predictedStorage =
+            masterDeployer.predictStorageAddress(salt, params.config, coreInitCodes.ppStorage);
         console.log("Predicted PaymentProcessorStorage:", predictedStorage);
 
-        masterDeployer.deployAll(params, initCodes);
+        // Each phase is skipped when it already ran, so a partial deployment picks up where it left off.
+        if (address(masterDeployer.multiSig()) == address(0)) {
+            masterDeployer.deployCore(params, coreInitCodes);
+        } else {
+            console.log("Core phase (existing):             already deployed");
+        }
+
+        if (address(masterDeployer.ppStorage()) == address(0)) {
+            masterDeployer.deploySystem(params, systemInitCodes);
+        } else {
+            console.log("System phase (existing):           already deployed");
+        }
 
         _wire(masterDeployer, addr, isMainnet);
 
@@ -250,6 +268,28 @@ contract Deploy is Script {
             IOracleManager.PriceFeedConfig({ aggregator: _addr.wbtcPriceFeed, heartbeat: heartbeat, allowed: true })
         );
         console.log("Price feeds set: ETH/USD, USDC/USD, WBTC/USD");
+    }
+
+    /**
+     * @notice Returns the MasterDeployer for `_salt`, deploying it only if it is not already there.
+     * @dev `new MasterDeployer{salt:}` goes through the deterministic CREATE2 factory, so the address
+     *      is fixed by the salt. Deploying unconditionally reverts with a create collision whenever a
+     *      previous run already got this far, which would otherwise force a fresh salt on every retry.
+     * @param _salt The CREATE2 salt.
+     * @return masterDeployer The existing or newly deployed MasterDeployer.
+     */
+    function _masterDeployerAt(bytes32 _salt) internal returns (MasterDeployer masterDeployer) {
+        address predicted = vm.computeCreate2Address(
+            _salt, keccak256(abi.encodePacked(type(MasterDeployer).creationCode, abi.encode(msg.sender)))
+        );
+
+        if (predicted.code.length != 0) {
+            console.log("MasterDeployer (existing):        ", predicted);
+            return MasterDeployer(predicted);
+        }
+
+        masterDeployer = new MasterDeployer{ salt: _salt }(msg.sender);
+        console.log("MasterDeployer deployed:          ", address(masterDeployer));
     }
 
     function _setUp(bytes32 _salt) internal returns (Addr memory) {

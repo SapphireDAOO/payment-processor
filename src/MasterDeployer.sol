@@ -45,7 +45,13 @@ contract MasterDeployer is IMasterDeployer {
     /// @notice The deployed Sweeper.
     Sweeper public sweeper;
 
-    /// @dev Read back by PaymentProcessorStorage's constructor; only populated during {deployAll}.
+    /// @notice The address PaymentProcessorStorage will be deployed at, recorded by {deployCore}.
+    /// @dev Carries the prediction across the two deployment transactions so both phases construct
+    ///      against the same address.
+    address public predictedStorage;
+
+    /// @dev Read back by PaymentProcessorStorage's constructor. Populated across {deployCore} and
+    ///      {deploySystem}, then cleared once the storage contract has read it.
     address[] private pendingAuthorized;
 
     /**
@@ -72,14 +78,15 @@ contract MasterDeployer is IMasterDeployer {
     }
 
     /// @inheritdoc IMasterDeployer
-    function deployAll(Params calldata _params, InitCodes calldata _initCodes)
+    function deployCore(Params calldata _params, CoreInitCodes calldata _initCodes)
         external
-        returns (address ppStorageAddress)
+        returns (address predictedStorageAddress)
     {
         if (msg.sender != deployer) revert NotDeployer();
-        if (address(ppStorage) != address(0)) revert AlreadyDeployed();
+        if (address(multiSig) != address(0)) revert AlreadyDeployed();
 
         address predicted = predictStorageAddress(_params.salt, _params.config, _initCodes.ppStorage);
+        predictedStorage = predicted;
 
         multiSig = MultiSig(
             Create2.deploy(
@@ -110,6 +117,26 @@ contract MasterDeployer is IMasterDeployer {
             )
         );
 
+        pendingAuthorized.push(address(simplePaymentProcessor));
+
+        emit CoreDeployed(
+            address(multiSig), address(notes), address(simplePaymentProcessor), address(paymentAutomation)
+        );
+
+        predictedStorageAddress = predicted;
+    }
+
+    /// @inheritdoc IMasterDeployer
+    function deploySystem(Params calldata _params, SystemInitCodes calldata _initCodes)
+        external
+        returns (address ppStorageAddress)
+    {
+        if (msg.sender != deployer) revert NotDeployer();
+        if (address(multiSig) == address(0)) revert CoreNotDeployed();
+        if (address(ppStorage) != address(0)) revert AlreadyDeployed();
+
+        address predicted = predictedStorage;
+
         oracleManager = OracleManager(
             Create2.deploy(
                 0,
@@ -130,7 +157,6 @@ contract MasterDeployer is IMasterDeployer {
 
         sweeper = Sweeper(Create2.deploy(0, _params.salt, abi.encodePacked(_initCodes.sweeper, abi.encode(predicted))));
 
-        pendingAuthorized.push(address(simplePaymentProcessor));
         pendingAuthorized.push(address(intermediatedPaymentProcessor));
 
         ppStorage = PaymentProcessorStorage(

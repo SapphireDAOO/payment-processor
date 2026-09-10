@@ -10,11 +10,6 @@
 #
 # Reads from .env: TEST_NET_RPC_URL, MAINNET_RPC, ETHERSCAN_API_KEY, SENDER,
 # and optionally FEE_SIGNER and CREATE2_SALT (both consumed by Deploy.s.sol).
-#
-# MasterDeployer.deployAll deploys eight contracts in one transaction, so its gas limit lands
-# near 14M. Some RPC providers reject a limit that high with "gas limit too high" (-32003).
-# GAS_MULTIPLIER trims the padding forge adds on top of its estimate (default 130); lower it
-# toward 100 if a provider rejects the transaction, or point RPC_OVERRIDE at another node.
 
 set -euo pipefail
 
@@ -83,7 +78,7 @@ fi
 
 FORGE_ARGS=(script/Deploy.s.sol --tc Deploy --rpc-url "$RPC_URL")
 FORGE_ARGS+=("${SIGNING_ARGS[@]}")
-FORGE_ARGS+=(--gas-estimate-multiplier "${GAS_MULTIPLIER:-110}")
+FORGE_ARGS+=(--gas-estimate-multiplier "${GAS_MULTIPLIER:-130}")
 
 if [[ "$DRY_RUN" == true ]]; then
     echo "--- dry run: simulating only, nothing is broadcast ---"
@@ -100,7 +95,7 @@ echo "Network:    $NETWORK"
 echo "RPC:        $RPC_URL"
 echo "Signer:     $SIGNER_ADDR (nonce $latest, settled)"
 echo "Fee signer: ${FEE_SIGNER:-<Deploy.s.sol default>}"
-echo "Gas mult:   ${GAS_MULTIPLIER:-110}%"
+echo "Gas mult:   ${GAS_MULTIPLIER:-130}%"
 echo "Salt:       ${CREATE2_SALT:-<Deploy.s.sol default>}"
 echo ""
 

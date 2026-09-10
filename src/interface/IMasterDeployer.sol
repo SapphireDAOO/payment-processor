@@ -26,15 +26,24 @@ interface IAuthorizedAddressProvider {
  *      {IAuthorizedAddressProvider.authorizedAddresses} during its constructor), so the address
  *      is known before the processors exist. The processors are deployed first against the
  *      predicted address, then the storage contract is deployed at exactly that address with the
- *      processors authorized. The pending authorization list only exists for the duration of
- *      {deployAll}; once it completes, authorization on the storage contract can never change.
+ *      processors authorized.
+ *
+ *      Deployment runs in two transactions, {deployCore} then {deploySystem}, because deploying
+ *      all eight contracts at once needs ~15.6M gas and RPC providers reject a transaction whose
+ *      gas limit exceeds 16,777,216. The two heaviest contracts (SimplePaymentProcessor and
+ *      IntermediatedPaymentProcessor) are split across the two calls to keep each well clear of
+ *      that ceiling. The pending authorization list spans both calls and is cleared by
+ *      {deploySystem}; once it completes, authorization on the storage contract can never change.
  */
 interface IMasterDeployer is IAuthorizedAddressProvider {
     /// @notice Thrown when `deployAll` is called by an address other than the deployer.
     error NotDeployer();
 
-    /// @notice Thrown when `deployAll` is called more than once.
+    /// @notice Thrown when a deployment phase that has already run is called again.
     error AlreadyDeployed();
+
+    /// @notice Thrown when `deploySystem` is called before `deployCore`.
+    error CoreNotDeployed();
 
     /**
      * @notice Thrown when the deployed storage address does not match the prediction.
@@ -42,6 +51,17 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @param deployed The address the contract was actually deployed at.
      */
     error StorageAddressMismatch(address predicted, address deployed);
+
+    /**
+     * @notice Emitted once the first deployment phase completes.
+     * @param multiSig The deployed MultiSig address.
+     * @param notes The deployed Notes address.
+     * @param simplePaymentProcessor The deployed SimplePaymentProcessor address.
+     * @param paymentAutomation The deployed PaymentAutomation adapter address.
+     */
+    event CoreDeployed(
+        address multiSig, address notes, address simplePaymentProcessor, address paymentAutomation
+    );
 
     /**
      * @notice Emitted once the full system has been deployed.
@@ -86,7 +106,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
     }
 
     /**
-     * @notice Creation code (without constructor args) for each contract in the system.
+     * @notice Creation code (without constructor args) for the contracts {deployCore} deploys.
      * @dev Supplied by the caller so the deployer contract does not embed the system's bytecode,
      *      which would put it far past the EIP-170 size limit. The deployer appends the
      *      abi-encoded constructor args itself.
@@ -94,16 +114,27 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @param notes Notes creation code.
      * @param simplePaymentProcessor SimplePaymentProcessor creation code.
      * @param paymentAutomation PaymentAutomation creation code.
-     * @param oracleManager OracleManager creation code.
-     * @param intermediatedPaymentProcessor IntermediatedPaymentProcessor creation code.
-     * @param sweeper Sweeper creation code.
-     * @param ppStorage PaymentProcessorStorage creation code.
+     * @param ppStorage PaymentProcessorStorage creation code. Not deployed in this phase; it is
+     *        needed to predict the storage address the other contracts are constructed against.
      */
-    struct InitCodes {
+    struct CoreInitCodes {
         bytes multiSig;
         bytes notes;
         bytes simplePaymentProcessor;
         bytes paymentAutomation;
+        bytes ppStorage;
+    }
+
+    /**
+     * @notice Creation code (without constructor args) for the contracts {deploySystem} deploys.
+     * @param oracleManager OracleManager creation code.
+     * @param intermediatedPaymentProcessor IntermediatedPaymentProcessor creation code.
+     * @param sweeper Sweeper creation code.
+     * @param ppStorage PaymentProcessorStorage creation code. Must match the one passed to
+     *        {deployCore}, otherwise the storage contract lands away from the predicted address
+     *        and the call reverts with `StorageAddressMismatch`.
+     */
+    struct SystemInitCodes {
         bytes oracleManager;
         bytes intermediatedPaymentProcessor;
         bytes sweeper;
@@ -124,18 +155,29 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
     ) external view returns (address predicted);
 
     /**
-     * @notice Deploys the full system: MultiSig, Notes, SimplePaymentProcessor, PaymentAutomation,
-     *         OracleManager, IntermediatedPaymentProcessor, and finally PaymentProcessorStorage at
-     *         its predicted address with both processors authorized.
-     * @dev Callable once, by the deployer only. Ownership of the storage contract is left with
-     *      `_params.config.owner`; post-deploy wiring (notes authorization, registering the automation
-     *      adapter on the Simple processor, price feeds, ownership transfer to the MultiSig) is the
-     *      deployer's responsibility.
+     * @notice First deployment phase: MultiSig, Notes, SimplePaymentProcessor and PaymentAutomation.
+     * @dev Callable once, by the deployer only. Records the predicted PaymentProcessorStorage
+     *      address for {deploySystem} to reuse, so both phases construct against the same address.
      * @param _params The deployment parameters.
-     * @param _initCodes The creation code of each contract to deploy.
+     * @param _initCodes The creation code of each contract this phase needs.
+     * @return predictedStorageAddress The address PaymentProcessorStorage will be deployed at.
+     */
+    function deployCore(Params calldata _params, CoreInitCodes calldata _initCodes)
+        external
+        returns (address predictedStorageAddress);
+
+    /**
+     * @notice Second deployment phase: OracleManager, IntermediatedPaymentProcessor, Sweeper, and
+     *         finally PaymentProcessorStorage at its predicted address with both processors authorized.
+     * @dev Callable once, by the deployer only, and only after {deployCore}. Ownership of the storage
+     *      contract is left with `_params.config.owner`; post-deploy wiring (notes authorization,
+     *      registering the automation adapter on the Simple processor, price feeds, ownership transfer
+     *      to the MultiSig) is the deployer's responsibility.
+     * @param _params The deployment parameters. Must match those passed to {deployCore}.
+     * @param _initCodes The creation code of each contract this phase needs.
      * @return ppStorageAddress The deployed PaymentProcessorStorage address.
      */
-    function deployAll(Params calldata _params, InitCodes calldata _initCodes)
+    function deploySystem(Params calldata _params, SystemInitCodes calldata _initCodes)
         external
         returns (address ppStorageAddress);
 }

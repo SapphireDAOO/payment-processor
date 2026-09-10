@@ -29,7 +29,8 @@ contract MasterDeployerTest is Test {
     function setUp() public {
         weth = new MockWeth();
         deployer = new MasterDeployer(address(this));
-        deployer.deployAll(_params(), _initCodes());
+        deployer.deployCore(_params(), _coreInitCodes());
+        deployer.deploySystem(_params(), _systemInitCodes());
     }
 
     function test_deploysEveryContract() public view {
@@ -70,9 +71,36 @@ contract MasterDeployerTest is Test {
         assertEq(token.balanceOf(feeReceiver), 100e6);
     }
 
-    function test_deployAllIsSingleUse() public {
+    function test_eachPhaseIsSingleUse() public {
         vm.expectRevert(IMasterDeployer.AlreadyDeployed.selector);
-        deployer.deployAll(_params(), _initCodes());
+        deployer.deployCore(_params(), _coreInitCodes());
+
+        vm.expectRevert(IMasterDeployer.AlreadyDeployed.selector);
+        deployer.deploySystem(_params(), _systemInitCodes());
+    }
+
+    function test_deploySystemRequiresCoreFirst() public {
+        MasterDeployer fresh = new MasterDeployer(address(this));
+
+        vm.expectRevert(IMasterDeployer.CoreNotDeployed.selector);
+        fresh.deploySystem(_params(), _systemInitCodes());
+    }
+
+    function test_phasesShareOnePredictedStorageAddress() public view {
+        // The address the core phase recorded is the one the storage contract actually landed at.
+        assertEq(deployer.predictedStorage(), address(deployer.ppStorage()));
+    }
+
+    function test_onlyDeployerCanRunEitherPhase() public {
+        MasterDeployer fresh = new MasterDeployer(address(this));
+
+        vm.prank(address(0xbad));
+        vm.expectRevert(IMasterDeployer.NotDeployer.selector);
+        fresh.deployCore(_params(), _coreInitCodes());
+
+        vm.prank(address(0xbad));
+        vm.expectRevert(IMasterDeployer.NotDeployer.selector);
+        fresh.deploySystem(_params(), _systemInitCodes());
     }
 
     function _params() internal view returns (IMasterDeployer.Params memory params) {
@@ -97,12 +125,18 @@ contract MasterDeployerTest is Test {
         });
     }
 
-    function _initCodes() internal pure returns (IMasterDeployer.InitCodes memory initCodes) {
-        initCodes = IMasterDeployer.InitCodes({
+    function _coreInitCodes() internal pure returns (IMasterDeployer.CoreInitCodes memory initCodes) {
+        initCodes = IMasterDeployer.CoreInitCodes({
             multiSig: type(MultiSig).creationCode,
             notes: type(Notes).creationCode,
             simplePaymentProcessor: type(SimplePaymentProcessor).creationCode,
             paymentAutomation: type(PaymentAutomation).creationCode,
+            ppStorage: type(PaymentProcessorStorage).creationCode
+        });
+    }
+
+    function _systemInitCodes() internal pure returns (IMasterDeployer.SystemInitCodes memory initCodes) {
+        initCodes = IMasterDeployer.SystemInitCodes({
             oracleManager: type(OracleManager).creationCode,
             intermediatedPaymentProcessor: type(IntermediatedPaymentProcessor).creationCode,
             sweeper: type(Sweeper).creationCode,
