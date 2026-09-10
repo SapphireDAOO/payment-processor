@@ -59,9 +59,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @param simplePaymentProcessor The deployed SimplePaymentProcessor address.
      * @param paymentAutomation The deployed PaymentAutomation adapter address.
      */
-    event CoreDeployed(
-        address multiSig, address notes, address simplePaymentProcessor, address paymentAutomation
-    );
+    event CoreDeployed(address multiSig, address notes, address simplePaymentProcessor, address paymentAutomation);
 
     /**
      * @notice Emitted once the full system has been deployed.

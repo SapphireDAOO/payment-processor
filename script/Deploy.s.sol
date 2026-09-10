@@ -160,8 +160,7 @@ contract Deploy is Script {
             ppStorage: type(PaymentProcessorStorage).creationCode
         });
 
-        address predictedStorage =
-            masterDeployer.predictStorageAddress(salt, params.config, coreInitCodes.ppStorage);
+        address predictedStorage = masterDeployer.predictStorageAddress(salt, params.config, coreInitCodes.ppStorage);
         console.log("Predicted PaymentProcessorStorage:", predictedStorage);
 
         // Each phase is skipped when it already ran, so a partial deployment picks up where it left off.
