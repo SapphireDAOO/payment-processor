@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import { INotes } from "src/Notes.sol";
 import { NotesSetUp } from "../utils/NotesSetUp.sol";
+import { Vm } from "forge-std/Vm.sol";
 
 contract NotesTest is NotesSetUp {
     function test_createNote() public {
@@ -88,5 +89,104 @@ contract NotesTest is NotesSetUp {
         uint256 noteId = notes.createNote(invoiceId, address(this), "hello everyone", false);
         (,,,, uint8 version) = notes.getNote(invoiceId, noteId);
         assertEq(version, notes.getCurrentVersion());
+    }
+
+    // ── setPublicKey ──────────────────────────────────────────────────────────────
+
+    function test_setPublicKeyRegistersTheCallersOwnKey() public {
+        Vm.Wallet memory wallet = vm.createWallet("public-key-owner");
+        bytes memory publicKey = _publicKey(wallet);
+        uint8 version = notes.getCurrentVersion();
+
+        assertEq(notes.getPublicKey(wallet.addr).key.length, 0, "should start unregistered");
+
+        vm.prank(wallet.addr);
+        vm.expectEmit(address(notes));
+        emit INotes.PublicKeySet(wallet.addr, publicKey, version);
+        notes.setPublicKey(publicKey);
+
+        INotes.PublicKey memory registered = notes.getPublicKey(wallet.addr);
+        assertEq(registered.key, publicKey);
+        assertEq(registered.version, version);
+    }
+
+    function test_setPublicKeyRecordsTheVersionActiveAtRegistration() public {
+        vm.prank(admin);
+        notes.updateVersion(7);
+
+        Vm.Wallet memory wallet = vm.createWallet("public-key-owner");
+
+        vm.prank(wallet.addr);
+        notes.setPublicKey(_publicKey(wallet));
+
+        assertEq(notes.getPublicKey(wallet.addr).version, 7);
+
+        // A later version bump does not rewrite an already-registered key.
+        vm.prank(admin);
+        notes.updateVersion(8);
+
+        assertEq(notes.getPublicKey(wallet.addr).version, 7);
+        assertEq(notes.getCurrentVersion(), 8);
+    }
+
+    function test_setPublicKeyOnlyEverWritesTheCallersOwnSlot() public {
+        Vm.Wallet memory wallet = vm.createWallet("public-key-owner");
+        Vm.Wallet memory other = vm.createWallet("public-key-other");
+
+        // The key is not checked against the caller, but it still lands under the caller's slot
+        // and leaves the account the key came from untouched.
+        vm.prank(other.addr);
+        notes.setPublicKey(_publicKey(wallet));
+
+        assertEq(notes.getPublicKey(other.addr).key, _publicKey(wallet));
+        assertEq(notes.getPublicKey(wallet.addr).key.length, 0);
+    }
+
+    function test_setPublicKeyRejectsAMalformedKey() public {
+        Vm.Wallet memory wallet = vm.createWallet("public-key-owner");
+
+        // 65-byte form, i.e. one byte too long.
+        vm.prank(wallet.addr);
+        vm.expectRevert(INotes.InvalidPublicKey.selector);
+        notes.setPublicKey(abi.encodePacked(bytes1(0x04), _publicKey(wallet)));
+
+        vm.prank(wallet.addr);
+        vm.expectRevert(INotes.InvalidPublicKey.selector);
+        notes.setPublicKey("");
+    }
+
+    function test_setPublicKeyIsWriteOnce() public {
+        Vm.Wallet memory wallet = vm.createWallet("public-key-owner");
+        bytes memory publicKey = _publicKey(wallet);
+
+        vm.prank(wallet.addr);
+        notes.setPublicKey(publicKey);
+
+        // Even re-registering the same, valid key is refused.
+        vm.prank(wallet.addr);
+        vm.expectRevert(INotes.PublicKeyAlreadySet.selector);
+        notes.setPublicKey(publicKey);
+
+        assertEq(notes.getPublicKey(wallet.addr).key, publicKey);
+    }
+
+    function test_setPublicKeyKeepsAccountsIndependent() public {
+        Vm.Wallet memory walletOne = vm.createWallet("public-key-one");
+        Vm.Wallet memory walletTwo = vm.createWallet("public-key-two");
+
+        vm.prank(walletOne.addr);
+        notes.setPublicKey(_publicKey(walletOne));
+
+        // One account being write-once does not block another from registering.
+        vm.prank(walletTwo.addr);
+        notes.setPublicKey(_publicKey(walletTwo));
+
+        assertEq(notes.getPublicKey(walletOne.addr).key, _publicKey(walletOne));
+        assertEq(notes.getPublicKey(walletTwo.addr).key, _publicKey(walletTwo));
+    }
+
+    /// @dev The wallet's 64-byte public key.
+    function _publicKey(Vm.Wallet memory _wallet) private pure returns (bytes memory publicKey) {
+        return abi.encodePacked(_wallet.publicKeyX, _wallet.publicKeyY);
     }
 }

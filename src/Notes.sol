@@ -35,6 +35,10 @@ contract Notes is INotes {
     /// @dev Address => ALLOWED/NOT_ALLOWED flag.
     mapping(address => uint256) private auth;
 
+    /// @notice Public key each account registered, so others can encrypt notes to it.
+    /// @dev Written only by the account itself, once, via {setPublicKey}.
+    mapping(address account => PublicKey publicKey) private publicKeys;
+
     /**
      * @notice Restricts access to authorized callers.
      * @dev Reverts with Unauthorized if the caller is not allowed.
@@ -127,6 +131,22 @@ contract Notes is INotes {
     function updateVersion(uint8 _newVersion) external {
         if (msg.sender != _owner()) revert Unauthorized();
         currentVersion = _newVersion;
+    }
+
+    /// @inheritdoc INotes
+    function setPublicKey(bytes calldata _publicKey) external {
+        if (publicKeys[msg.sender].key.length != 0) revert PublicKeyAlreadySet();
+        if (_publicKey.length != 64) revert InvalidPublicKey();
+
+        uint8 version = currentVersion;
+        publicKeys[msg.sender] = PublicKey({ key: _publicKey, version: version });
+
+        emit PublicKeySet(msg.sender, _publicKey, version);
+    }
+
+    /// @inheritdoc INotes
+    function getPublicKey(address _account) external view returns (PublicKey memory publicKey) {
+        return publicKeys[_account];
     }
 
     /// @inheritdoc INotes

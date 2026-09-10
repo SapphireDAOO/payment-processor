@@ -10,6 +10,10 @@ interface INotes {
     error EmptyContent();
     /// @notice Thrown when the requested note does not exist.
     error NoteNotFound();
+    /// @notice Thrown when the supplied public key is not 64 bytes.
+    error InvalidPublicKey();
+    /// @notice Thrown when an account that already registered a public key tries to register another.
+    error PublicKeyAlreadySet();
 
     /// @notice Stored note data.
     /// @param author The note author.
@@ -23,6 +27,14 @@ interface INotes {
         bool exists;
         uint8 version;
         bytes content;
+    }
+
+    /// @notice A public key registered by an account, so others can encrypt notes to it.
+    /// @param key The registered public key.
+    /// @param version The note encryption version that was active when the key was registered.
+    struct PublicKey {
+        bytes key;
+        uint8 version;
     }
 
     /**
@@ -101,6 +113,26 @@ interface INotes {
     function setAuthorized(address _user, bool _enabled) external;
 
     /**
+     * @notice Registers the caller's wallet public key, so others can encrypt notes to it.
+     * @dev An account registers under its own slot, so a caller can only ever set its own key.
+     *      The key is not verified against the caller beyond a 64-byte length check.
+     *
+     *      The key is stored alongside the note encryption version active at registration, so a
+     *      reader knows which scheme the key was published for. Write-once: an account that already
+     *      registered a key cannot replace or clear it.
+     * @param _publicKey The caller's 64-byte public key.
+     */
+    function setPublicKey(bytes calldata _publicKey) external;
+
+    /**
+     * @notice Returns the public key an account registered.
+     * @param _account The account to look up.
+     * @return publicKey The registered key and the note version it was registered under. The `key`
+     *         is empty when the account has not registered one.
+     */
+    function getPublicKey(address _account) external view returns (PublicKey memory publicKey);
+
+    /**
      * @notice Returns the active note encryption version.
      * @return v The current note version.
      */
@@ -117,6 +149,15 @@ interface INotes {
     event NoteCreated(
         uint216 indexed invoiceId, uint256 indexed noteId, address indexed author, bool share, bytes encryptedContent
     );
+
+    /**
+     * @notice Emitted once when an account registers its public key.
+     * @dev Never emitted twice for the same account: registration is write-once.
+     * @param account The account that registered the key.
+     * @param publicKey The public key that was registered.
+     * @param version The note encryption version active at registration.
+     */
+    event PublicKeySet(address indexed account, bytes publicKey, uint8 version);
 
     /**
      * @notice Emitted when a user changes their opened state for a note.
