@@ -66,6 +66,12 @@ interface IPaymentAutomation {
      */
     event ForwarderUpdated(address indexed forwarder);
 
+    /// @notice The CRE forwarder allowed to deliver reports. Fixed at construction.
+    function FORWARDER() external view returns (address forwarder);
+
+    /// @notice The CRE workflow owner carried in report metadata. Fixed at construction.
+    function WORKFLOW_OWNER() external view returns (address workflowOwner);
+
     /**
      * @notice Emitted when the authorized CRE workflow owner is updated.
      * @param workflowOwner The new authorized workflow owner address.

@@ -119,13 +119,13 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storageRef, bool _share)
+    function createInvoice(uint256 _price, bytes memory _storageRef, bool _share)
         public
         whenNotPaused
         returns (uint216 invoiceId)
     {
-        if (_price < minimumInvoiceValue) revert ValueIsTooLow();
-        uint216 newNonce = ppStorage.updateInvoiceNonce(1);
+        if (_price < MINIMUM_INVOICE_VALUE) revert ValueIsTooLow();
+        uint216 newNonce = PP_STORAGE.updateInvoiceNonce(1);
         invoiceId = _computeInvoiceId(msg.sender, newNonce);
 
         Invoice storage i = invoices[invoiceId];
@@ -134,13 +134,12 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         i.seller = msg.sender;
         i.createdAt = (block.timestamp).toUint40();
         i.price = _price;
-        i.escrowHoldPeriod = _holdPeriod;
         i.state = CREATED;
         i.invoiceNonce = newNonce;
-        i.feeRate = (ppStorage.getFeeRate()).toUint16();
-        i.expiresAt = (block.timestamp + ppStorage.getPaymentValidityDuration()).toUint40();
+        i.feeRate = uint256(PP_STORAGE.FEE_RATE()).toUint16();
+        i.expiresAt = (block.timestamp + PP_STORAGE.DEFAULT_PAYMENT_VALIDITY_PERIOD()).toUint40();
 
-        if (_storageRef.length != 0) notes.createNote(invoiceId, msg.sender, _storageRef, _share);
+        if (_storageRef.length != 0) NOTES.createNote(invoiceId, msg.sender, _storageRef, _share);
 
         emit InvoiceCreated(invoiceId, i);
 
@@ -260,11 +259,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
     /// @inheritdoc ISimplePaymentProcessor
     function processDueTasks() external nonReentrant whenNotPaused {
-        if (msg.sender != _owner() && msg.sender != automation) {
+        if (msg.sender != AUTOMATION) {
             revert NotAuthorized();
         }
 
-        heap.processDueTask(index, _release, ppStorage.getGasThreshold());
+        heap.processDueTask(index, _release, PP_STORAGE.GAS_THRESHOLD());
     }
 
     /**
@@ -311,7 +310,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         invoices[_invoiceId] = i;
 
         heap.insert(_invoiceId, sellerActionDeadline, index);
-        if (_storageRef.length != 0) notes.createNote(_invoiceId, msg.sender, _storageRef, _share);
+        if (_storageRef.length != 0) NOTES.createNote(_invoiceId, msg.sender, _storageRef, _share);
 
         emit InvoicePaid(_invoiceId, msg.sender, _value, sellerActionDeadline);
         return escrowAddress;
@@ -452,17 +451,11 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
      */
     function _validateFeeAuthorization(uint216 _invoiceId, address _feeReceiver, bytes memory _data) internal view {
         if (_feeReceiver == address(0)) revert InvalidFeeReceiver();
-        if (!FeeAuthorizationLib.isAuthorized(ppStorage.getFeeSigner(), _invoiceId, _feeReceiver, _data)) {
+        if (!FeeAuthorizationLib.isAuthorized(PP_STORAGE.getFeeSigner(), _invoiceId, _feeReceiver, _data)) {
             revert InvalidFeeAuthorization();
         }
     }
 
-    /**
-     * @notice Resolves the address that should receive an invoice's platform fee.
-     * @dev Falls back to the global fee receiver when the invoice carries none.
-     * @param _feeReceiver The fee receiver stored on the invoice; zero when it has none.
-     * @return feeReceiver The address to send the fee to.
-     */
     /**
      * @notice Pulls the platform fee out of escrow, wraps it into WETH, and sends it to the fee receiver.
      * @dev Escrows hold native currency, so the fee lands here and is wrapped in the same call. Paying
@@ -479,13 +472,27 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
         if (!success) return false;
 
+        IWETH weth = IWETH(PP_STORAGE.WETH());
         weth.deposit{ value: _fee }();
         return weth.transfer(_feeReceiver, _fee);
     }
 
+    /**
+     * @notice Resolves the address that should receive an invoice's platform fee.
+     * @dev Falls back to the global fee receiver when the invoice carries none.
+     * @param _feeReceiver The fee receiver stored on the invoice; zero when it has none.
+     * @return feeReceiver The address to send the fee to.
+     */
     function _feeReceiverFor(address _feeReceiver) internal view returns (address feeReceiver) {
-        return _feeReceiver == address(0) ? ppStorage.getFeeReceiver() : _feeReceiver;
+        return _feeReceiver == address(0) ? PP_STORAGE.FEE_RECEIVER() : _feeReceiver;
     }
+
+    /**
+     * @notice Computes a unique invoice ID from the contract address, seller, and nonce.
+     * @param _seller The address of the invoice creator (seller).
+     * @param _invoiceNonce The unique nonce assigned to this invoice.
+     * @return invoiceId The 216-bit invoice ID.
+     */
 
     function _computeInvoiceId(address _seller, uint256 _invoiceNonce) internal view returns (uint216 invoiceId) {
         invoiceId =
@@ -498,12 +505,12 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
      * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
      */
     function _owner() internal view returns (address ownerAddress) {
-        ownerAddress = PaymentProcessorStorage(address(ppStorage)).owner();
+        ownerAddress = PaymentProcessorStorage(address(PP_STORAGE)).owner();
     }
 
     /// @dev Reverts with ContractPaused while the storage contract reports a pause.
     function _whenNotPaused() internal view {
-        if (ppStorage.isPaused()) revert ContractPaused();
+        if (PP_STORAGE.isPaused()) revert ContractPaused();
     }
 
     /**
@@ -511,14 +518,14 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
      * @dev Reverts with NotAuthorized if neither condition is met.
      */
     function _isAuthorized() internal view {
-        if (msg.sender != _owner() && msg.sender != address(ppStorage)) {
+        if (msg.sender != _owner() && msg.sender != address(PP_STORAGE)) {
             revert NotAuthorized();
         }
     }
 
     /// @inheritdoc ISimplePaymentProcessor
     function calculateFee(uint256 _amount) public view returns (uint256 feeValue) {
-        return _calculateFee(_amount, ppStorage.getFeeRate());
+        return _calculateFee(_amount, PP_STORAGE.FEE_RATE());
     }
 
     /**
@@ -544,12 +551,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function getMinimumInvoiceValue() external view returns (uint256 minimumValue) {
-        return minimumInvoiceValue;
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function getItems() external view returns (uint216[] memory items) {
+    function getItems() external view returns (uint216[] memory id, uint40[] memory dueAt) {
         return heap.getItems();
     }
 }

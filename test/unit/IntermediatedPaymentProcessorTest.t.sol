@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {
-    IIntermediatedPaymentProcessor,
-    IntermediatedPaymentProcessor
-} from "../../src/IntermediatedPaymentProcessor.sol";
-import { IOracleManager } from "../../src/interface/IOracleManager.sol";
-import { IPaymentProcessorStorage } from "../../src/interface/IPaymentProcessorStorage.sol";
+import { IIntermediatedPaymentProcessor, IntermediatedPaymentProcessor } from "src/IntermediatedPaymentProcessor.sol";
+import { IOracleManager } from "src/interface/IOracleManager.sol";
+import { IPaymentProcessorStorage } from "src/interface/IPaymentProcessorStorage.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { console } from "forge-std/console.sol";
 
@@ -80,7 +77,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     }
 
     function test_setPriceFeed() public {
-        IOracleManager oracleManager = intermediatedPP.oracle();
+        IOracleManager oracleManager = intermediatedPP.ORACLE();
 
         vm.expectRevert(IOracleManager.UnsupportedToken.selector);
         oracleManager.getUsdPerToken(address(1));
@@ -819,7 +816,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(inv.balance, releaseableAmount);
         assertEq(buyerOne.balance, buyerBalance + refundableAmount);
 
-        releaseableAmount -= (releaseableAmount * ppStorage.getFeeRate()) / BASIS_POINTS;
+        releaseableAmount -= (releaseableAmount * ppStorage.FEE_RATE()) / BASIS_POINTS;
 
         uint256 sellerBalance = sellerOne.balance;
 
@@ -949,37 +946,18 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
             invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
         );
 
-        // warp past default hold (1 day) but not past custom hold (7 days)
-        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
-
+        // Past the helper default, short of this invoice's own hold period.
+        vm.warp(block.timestamp + TEST_INVOICE_HOLD_PERIOD + 1);
         vm.expectRevert(IIntermediatedPaymentProcessor.InvalidInvoiceState.selector);
         intermediatedPP.release(invoiceId);
-    }
 
-    function test_customEscrowHoldPeriod_canReleaseAfterIt() public {
-        uint256 price = 100e8;
-        uint32 customHold = 7 days;
-
-        IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens());
-        param.escrowHoldPeriod = customHold;
-
-        uint216 invoiceId = intermediatedPP.createSingleInvoice(param);
-
-        uint256 amountInToken = intermediatedPP.getTokenValueFromUsd(address(0), price);
-
-        vm.prank(buyerOne);
-        intermediatedPP.payInvoice{ value: amountInToken }(
-            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
-        );
-
-        vm.warp(block.timestamp + customHold + 1);
+        vm.warp(block.timestamp + customHold);
         intermediatedPP.release(invoiceId);
 
         assertEq(intermediatedPP.getInvoice(invoiceId).state, RELEASED);
     }
 
-    function test_customEscrowHoldPeriodForMetaInvoice() public {
+    function test_holdPeriodAppliesToEverySubInvoice() public {
         uint32 customHold = 14 days;
 
         address[] memory sellers = new address[](2);

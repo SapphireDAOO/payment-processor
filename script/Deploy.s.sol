@@ -136,15 +136,12 @@ contract Deploy is Script {
         IMasterDeployer.Params memory params = IMasterDeployer.Params({
             salt: salt,
             config: IPaymentProcessorStorage.Configuration({
-                owner: msg.sender,
-                feeReceiver: msg.sender,
-                intermediatedPlatformsOperator: msg.sender,
-                feeRate: FEE_RATE,
-                gasThreshold: DEFAULT_GAS_THRESHOLD
+                owner: msg.sender, feeReceiver: msg.sender, intermediatedPlatformsOperator: msg.sender, weth: addr.weth
             }),
-            minimumInvoiceValue: MINIMUM_INVOICE_VALUE,
-            weth: addr.weth,
+            escrowHoldPeriod: _escrowHoldPeriod(),
             sequencerUptimeFeed: addr.sequencerUptimeFeed,
+            forwarder: vm.envOr("CRE_FORWARDER", DEFAULT_CRE_FORWARDER),
+            workflowOwner: vm.envOr("CRE_WORKFLOW_OWNER", DEFAULT_CRE_WORKFLOW_OWNER),
             multiSigSigners: signers,
             multiSigThreshold: INITIAL_THRESHOLD
         });
@@ -164,6 +161,7 @@ contract Deploy is Script {
             oracleManager: type(OracleManager).creationCode,
             intermediatedPaymentProcessor: type(IntermediatedPaymentProcessor).creationCode,
             sweeper: type(Sweeper).creationCode,
+            notes: type(Notes).creationCode,
             ppStorage: type(PaymentProcessorStorage).creationCode
         });
 

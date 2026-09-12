@@ -67,23 +67,23 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
      * @inheritdoc IReceiver
      */
     function onReport(bytes calldata _metadata, bytes calldata) external {
-        if (msg.sender != forwarder) {
+        if (msg.sender != FORWARDER) {
             revert NotAuthorized();
         }
 
         address reportedWorkflowOwner = _decodeWorkflowOwner(_metadata);
-        if (reportedWorkflowOwner != workflowOwner) {
+        if (reportedWorkflowOwner != WORKFLOW_OWNER) {
             revert UnauthorizedWorkflowOwner(reportedWorkflowOwner);
         }
 
-        processor.processDueTasks();
+        PROCESSOR.processDueTasks();
 
         emit DueTasksProcessed(msg.sender, CRE_SOURCE);
     }
 
     /// @inheritdoc IPaymentAutomation
     function processDueTasks() external {
-        processor.processDueTasks();
+        PROCESSOR.processDueTasks();
 
         emit DueTasksProcessed(msg.sender, GELATO_SOURCE);
     }
@@ -122,7 +122,7 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
 
     /// @dev A paused system rejects `processDueTasks`, so report no work rather than let keepers revert.
     function _hasDueTasks() internal view returns (bool dueTasksExist) {
-        return !ppStorage.isPaused() && processor.hasDueTasks();
+        return !PP_STORAGE.isPaused() && PROCESSOR.hasDueTasks();
     }
 
     /**
@@ -130,7 +130,7 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
      * @dev Reverts with NotAuthorized if neither condition is met.
      */
     function _isAuthorized() internal view {
-        if (msg.sender != _owner() && msg.sender != address(ppStorage)) {
+        if (msg.sender != _owner() && msg.sender != address(PP_STORAGE)) {
             revert NotAuthorized();
         }
     }
@@ -141,6 +141,6 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
      * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
      */
     function _owner() internal view returns (address ownerAddress) {
-        ownerAddress = PaymentProcessorStorage(address(ppStorage)).owner();
+        ownerAddress = PaymentProcessorStorage(address(PP_STORAGE)).owner();
     }
 }

@@ -103,7 +103,7 @@ contract MultiSigTest is MultiSigSetUp {
 
         IMultiSig.Transaction memory txn = multisig.getTransaction(txHash);
         assertEq(txn.status, EXECUTED);
-        assertEq(ppStorage.getGasThreshold(), newThreshold);
+        assertEq(ppStorage.getIntermediatedPlatformsOperator(), newOperator);
     }
 
     function test_addSigner() public {

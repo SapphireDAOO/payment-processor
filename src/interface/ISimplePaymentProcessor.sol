@@ -74,21 +74,6 @@ interface ISimplePaymentProcessor {
     /// @param paidAt The Unix timestamp when the payment was completed.
     /// @param feeReceiver Address that receives the platform fee for this invoice, authorized by the fee
     ///        signer when the seller accepted the payment.
-    /// @param escrowHoldPeriod Escrow hold duration (in seconds) set by the seller at creation, counted from
-    ///        acceptance. 0 means funds are releasable as soon as the payment is accepted.
-    /// @param releaseAt The timestamp when funds in escrow can be released to the seller.
-    /// @param expiresAt The timestamp after which the invoice can no longer be paid.
-    /// @param sellerActionDeadline The timestamp after which the seller can no longer take action (accept/reject), and the buyer is refunded.
-    /// @param state The current state of the invoice.
-    /// @param withdrawalRetries Number of failed `IEscrow.withdraw` attempts by the automation path. Resets are not needed
-    ///        because an invoice follows only one terminal path. Packed with `state` in the same slot.
-    /// @param feeRate The platform fee rate (in basis points) captured at invoice creation. Releases always
-    ///        charge this rate, so later changes to the global fee rate do not affect existing invoices.
-    /// @param seller The address of the seller of the invoice.
-    /// @param buyer The address of the buyer of the invoice.
-    /// @param escrow The address of the escrow contract managing the funds for this invoice.
-    /// @param price The total price of the invoice in wei.
-    /// @param balance The current amount held in escrow, net of any fees deducted upon acceptance. Zeroed on release or refund.
     struct Invoice {
         uint216 invoiceNonce;
         uint40 createdAt;
@@ -229,29 +214,11 @@ interface ISimplePaymentProcessor {
     function calculateFee(uint256 _amount) external view returns (uint256 feeValue);
 
     /**
-     * @notice Returns the address of the registered automation adapter.
-     * @return automationAddress The configured automation adapter address.
+     * @notice Returns the task IDs currently queued, with the time each becomes due.
+     * @return id Task IDs in heap order.
+     * @return dueAt Each task's due timestamp, index-aligned with `id`.
      */
-    function getAutomation() external view returns (address automationAddress);
-
-    /**
-     * @notice Returns the window sellers have to accept or reject a payment after the buyer pays.
-     * @return decisionWindowValue The current decision window in seconds.
-     */
-    function getDecisionWindow() external view returns (uint256 decisionWindowValue);
-
-    /**
-     * @notice Returns the minimum allowed invoice value required for invoice creation.
-     * @return minimumValue The minimum allowed invoice value.
-     */
-    function getMinimumInvoiceValue() external view returns (uint256 minimumValue);
-
-    /**
-     * @notice Returns a list of all task IDs currently in the heap.
-     * @dev Retrieves the uint216 task identifiers extracted from the internal encoded heap structure.
-     * @return items Array of task IDs.
-     */
-    function getItems() external view returns (uint216[] memory items);
+    function getItems() external view returns (uint216[] memory id, uint40[] memory dueAt);
 
     // ================================================================
     //                              EVENTS
@@ -335,6 +302,9 @@ interface ISimplePaymentProcessor {
      * @param automation The new automation adapter address.
      */
     event AutomationUpdated(address indexed automation);
+
+    /// @notice The keeper adapter allowed to drive `processDueTasks`. Fixed at construction.
+    function AUTOMATION() external view returns (address automation);
 
     /**
      * @notice Emitted when an automated withdrawal fails and the invoice is rescheduled for a retry.

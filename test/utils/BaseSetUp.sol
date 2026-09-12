@@ -63,18 +63,25 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider, IPendingProcess
         vm.deal(buyerTwo, INITIAL_BALANCE);
         vm.deal(sellerTwo, INITIAL_BALANCE);
 
+        weth = new MockWeth();
+
         IPaymentProcessorStorage.Configuration memory config = IPaymentProcessorStorage.Configuration({
-            owner: admin,
-            feeReceiver: feeReceiver,
-            intermediatedPlatformsOperator: address(this),
-            feeRate: uint96(FEE_RATE),
-            gasThreshold: uint96(DEFAULT_GAS_Threshold)
+            owner: admin, feeReceiver: feeReceiver, intermediatedPlatformsOperator: address(this), weth: address(weth)
         });
 
         address predictedStorage = _predictStorageAddress(config);
-        notes = new Notes(predictedStorage);
+        address predictedNotes = vm.computeCreate2Address(
+            TEST_SALT,
+            keccak256(abi.encodePacked(type(Notes).creationCode, abi.encode(predictedStorage))),
+            address(this)
+        );
 
-        _deployAuthorized(predictedStorage, address(notes));
+        _deployAuthorized(predictedStorage, predictedNotes);
+
+        pendingAuthorized.push(address(this));
+        notes = new Notes{ salt: TEST_SALT }(predictedStorage);
+        assertEq(address(notes), predictedNotes, "notes deployed away from prediction");
+        pendingAuthorized.pop();
 
         ppStorage = new PaymentProcessorStorage{ salt: TEST_SALT }(config);
         delete pendingAuthorized;
@@ -92,7 +99,7 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider, IPendingProcess
      *         register them with {_authorize}. Overrides must call `super._deployAuthorized` so
      *         setups compose under multiple inheritance.
      * @param _predictedStorage The address PaymentProcessorStorage will be deployed at.
-     * @param _notesAddress The deployed Notes address.
+     * @param _notesAddress The address Notes will be deployed at; it does not exist yet.
      */
     function _deployAuthorized(address _predictedStorage, address _notesAddress) internal virtual { }
 

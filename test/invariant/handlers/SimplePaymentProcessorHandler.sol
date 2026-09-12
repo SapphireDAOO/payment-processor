@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { ISimplePaymentProcessor, SimplePaymentProcessor } from "../../../src/SimplePaymentProcessor.sol";
+import { ISimplePaymentProcessor, SimplePaymentProcessor } from "src/SimplePaymentProcessor.sol";
 import { Test } from "forge-std/Test.sol";
 
-import { CREATED, PAID, ACCEPTED } from "src/constants/Simple.sol";
+import { CREATED, PAID, ACCEPTED, MINIMUM_INVOICE_VALUE } from "src/constants/Simple.sol";
 
 contract SimplePaymentProcessorHandler is Test {
     SimplePaymentProcessor public pp;
@@ -129,7 +129,7 @@ contract SimplePaymentProcessorHandler is Test {
     }
 
     function processDueTasks() public {
-        vm.prank(admin);
+        vm.prank(pp.AUTOMATION());
         pp.processDueTasks();
     }
 

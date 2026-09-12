@@ -126,9 +126,9 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         uint256 expectedFee = simplePP.calculateFee(INVOICE_PRICE);
         uint256 sellerBalanceBefore = sellerOne.balance;
 
-        vm.warp(block.timestamp + HOLD_PERIOD + 1);
+        vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
 
-        vm.prank(admin);
+        vm.prank(address(automation));
         simplePP.processDueTasks();
 
         ISimplePaymentProcessor.Invoice memory inv = simplePP.getInvoiceData(invoiceId);
@@ -149,7 +149,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
         vm.warp(uint256(inv.sellerActionDeadline) + 1);
 
-        vm.prank(admin);
+        vm.prank(address(automation));
         simplePP.processDueTasks();
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);

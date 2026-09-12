@@ -51,8 +51,8 @@ contract OracleManager is IOracleManager {
      *        Pass address(0) to disable the sequencer check (e.g. on L1 or local testnets).
      */
     constructor(address _paymentProcessorStorageAddress, address _sequencerUptimeFeed) {
-        ppStorage = PaymentProcessorStorage(_paymentProcessorStorageAddress);
-        sequencerUptimeFeed = _sequencerUptimeFeed;
+        PP_STORAGE = PaymentProcessorStorage(_paymentProcessorStorageAddress);
+        SEQUENCER_UPTIME_FEED = _sequencerUptimeFeed;
     }
 
     /// @inheritdoc IOracleManager
@@ -127,7 +127,7 @@ contract OracleManager is IOracleManager {
      * @dev Reverts with `NotAuthorized` if the caller is not the storage owner.
      */
     function _isAuthorized() internal view {
-        if (msg.sender != _owner() && msg.sender != address(ppStorage)) {
+        if (msg.sender != _owner() && msg.sender != address(PP_STORAGE)) {
             revert NotAuthorized();
         }
     }
@@ -138,6 +138,6 @@ contract OracleManager is IOracleManager {
      * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
      */
     function _owner() internal view returns (address ownerAddress) {
-        ownerAddress = PaymentProcessorStorage(address(ppStorage)).owner();
+        ownerAddress = PaymentProcessorStorage(address(PP_STORAGE)).owner();
     }
 }

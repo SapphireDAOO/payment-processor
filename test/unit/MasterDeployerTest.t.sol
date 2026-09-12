@@ -45,7 +45,7 @@ contract MasterDeployerTest is Test {
     }
 
     function test_sweeperIsLinkedToTheDeployedStorage() public view {
-        assertEq(address(deployer.sweeper().ppStorage()), address(deployer.ppStorage()));
+        assertEq(address(deployer.sweeper().PP_STORAGE()), address(deployer.ppStorage()));
     }
 
     function test_deployedSweeperIsGatedOnTheStorageOwner() public {
@@ -111,15 +111,12 @@ contract MasterDeployerTest is Test {
         params = IMasterDeployer.Params({
             salt: SALT,
             config: IPaymentProcessorStorage.Configuration({
-                owner: owner,
-                feeReceiver: feeReceiver,
-                intermediatedPlatformsOperator: operator,
-                feeRate: 500,
-                gasThreshold: 100_000
+                owner: owner, feeReceiver: feeReceiver, intermediatedPlatformsOperator: operator, weth: address(weth)
             }),
-            minimumInvoiceValue: 1 ether,
-            weth: address(weth),
+            escrowHoldPeriod: 1 days,
             sequencerUptimeFeed: address(0),
+            forwarder: address(0xf0),
+            workflowOwner: address(0xf1),
             multiSigSigners: signers,
             multiSigThreshold: 2
         });
@@ -140,6 +137,7 @@ contract MasterDeployerTest is Test {
             oracleManager: type(OracleManager).creationCode,
             intermediatedPaymentProcessor: type(IntermediatedPaymentProcessor).creationCode,
             sweeper: type(Sweeper).creationCode,
+            notes: type(Notes).creationCode,
             ppStorage: type(PaymentProcessorStorage).creationCode
         });
     }

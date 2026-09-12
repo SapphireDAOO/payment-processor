@@ -38,7 +38,7 @@ contract Sweeper is ISweeper {
     constructor(address _paymentProcessorStorageAddress) {
         if (_paymentProcessorStorageAddress == address(0)) revert InvalidAddress();
 
-        ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
+        PP_STORAGE = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
     }
 
     /// @inheritdoc ISweeper
@@ -68,7 +68,7 @@ contract Sweeper is ISweeper {
 
     /// @dev Reverts unless the caller owns the linked PaymentProcessorStorage.
     function _onlyOwner() internal view {
-        if (msg.sender != PaymentProcessorStorage(address(ppStorage)).owner()) revert NotAuthorized();
+        if (msg.sender != PaymentProcessorStorage(address(PP_STORAGE)).owner()) revert NotAuthorized();
     }
 
     /// @inheritdoc ISweeper

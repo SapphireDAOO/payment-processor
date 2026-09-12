@@ -106,10 +106,14 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @param _oracle The address of the deployed OracleManager contract used for token price conversions.
      */
     constructor(address _paymentProcessorStorageAddress, address _oracle) {
-        ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
-        oracle = IOracleManager(_oracle);
+        PP_STORAGE = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
+        ORACLE = IOracleManager(_oracle);
         nextMetaInvoiceNonce = 1;
-        minimumPrice = DEFAULT_MINIMUM_INVOICE_PRICE;
+    }
+
+    /// @dev Accepts native currency only while a platform fee is being wrapped into WETH.
+    receive() external payable {
+        if (!wrappingFee) revert UnexpectedNativeTransfer();
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
@@ -119,7 +123,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         whenNotPaused
         returns (uint216 invoiceId)
     {
-        return _createInvoice(ppStorage.updateInvoiceNonce(1), 0, _param);
+        return _createInvoice(PP_STORAGE.updateInvoiceNonce(1), 0, _param);
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
@@ -133,7 +137,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         if (length == 0) revert EmptyMetaInvoice();
 
         uint256 totalPrice = 0;
-        uint216 firstInvoiceNonce = ppStorage.getNextInvoiceNonce();
+        uint216 firstInvoiceNonce = PP_STORAGE.getNextInvoiceNonce();
 
         uint256 lastInvoiceNonce = length + firstInvoiceNonce - 1;
 
@@ -148,7 +152,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
         metaInvoices[metaInvoiceId].price = totalPrice;
         nextMetaInvoiceNonce++;
-        ppStorage.updateInvoiceNonce(length.toUint216());
+        PP_STORAGE.updateInvoiceNonce(length.toUint216());
 
         emit MetaInvoiceCreated(metaInvoiceId, totalPrice);
 
@@ -266,6 +270,35 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         }
     }
 
+    /**
+     * @notice Sends the platform fee to its receiver, wrapping it into WETH when the escrow holds native.
+     * @dev Paying an ERC20 means a receiver that rejects native transfers is still paid. ERC20 escrows
+     *      already pay in a token, so they transfer straight from escrow.
+     * @param _escrow The escrow holding the invoice's funds.
+     * @param _paymentToken The escrowed token; `address(0)` for native currency.
+     * @param _feeReceiver The address to pay the fee to.
+     * @param _fee The fee amount.
+     * @return success True when the fee reached `_feeReceiver`.
+     */
+    function _payFee(address _escrow, address _paymentToken, address _feeReceiver, uint256 _fee)
+        internal
+        returns (bool success)
+    {
+        if (_paymentToken != address(0)) {
+            return IEscrow(_escrow).withdraw(_paymentToken, _feeReceiver, _fee);
+        }
+
+        wrappingFee = true;
+        success = IEscrow(_escrow).withdraw(address(0), address(this), _fee);
+        wrappingFee = false;
+
+        if (!success) return false;
+
+        IWETH weth = IWETH(PP_STORAGE.WETH());
+        weth.deposit{ value: _fee }();
+        return weth.transfer(_feeReceiver, _fee);
+    }
+
     /// @inheritdoc IIntermediatedPaymentProcessor
     function release(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
@@ -370,7 +403,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @return The token's USD price with 8 decimals as returned by the Chainlink aggregator.
      */
     function _usdPerToken(address _paymentToken) internal view returns (uint256) {
-        return oracle.getUsdPerToken(_paymentToken);
+        return ORACLE.getUsdPerToken(_paymentToken);
     }
 
     /**
@@ -482,9 +515,9 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         i.metaInvoiceId = _metaInvoiceId;
         i.state = CREATED;
         i.invoiceNonce = _nonce;
-        i.feeRate = (ppStorage.getFeeRate()).toUint16();
-        i.expiresAt = (ppStorage.getPaymentValidityDuration() + block.timestamp).toUint40();
-        i.escrowHoldPeriod = _param.escrowHoldPeriod;
+        i.holdPeriod = _param.holdPeriod;
+        i.feeRate = uint256(PP_STORAGE.FEE_RATE()).toUint16();
+        i.expiresAt = (PP_STORAGE.DEFAULT_PAYMENT_VALIDITY_PERIOD() + block.timestamp).toUint40();
 
         invoiceId = (uint256(keccak256(abi.encode(_param.invoiceId))) & ((1 << 216) - 1)).toUint216();
 
@@ -493,7 +526,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         invoices[invoiceId] = i;
 
         for (uint256 j = 0; j < _param.paymentTokens.length; j++) {
-            if (!oracle.isSupportedToken(_param.paymentTokens[j])) revert UnsupportedToken();
+            if (!ORACLE.isSupportedToken(_param.paymentTokens[j])) revert UnsupportedToken();
             allowedPaymentTokens[invoiceId][_param.paymentTokens[j]] = true;
         }
 
@@ -587,14 +620,14 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
             if (_feeReceivers[j] == address(0)) revert InvalidFeeReceiver();
         }
 
-        if (!FeeAuthorizationLib.isAuthorized(ppStorage.getFeeSigner(), _metaInvoiceId, _feeReceivers, _data)) {
+        if (!FeeAuthorizationLib.isAuthorized(PP_STORAGE.getFeeSigner(), _metaInvoiceId, _feeReceivers, _data)) {
             revert InvalidFeeAuthorization();
         }
     }
 
     function _validateFeeAuthorization(uint216 _invoiceId, address _feeReceiver, bytes memory _data) internal view {
         if (_feeReceiver == address(0)) revert InvalidFeeReceiver();
-        if (!FeeAuthorizationLib.isAuthorized(ppStorage.getFeeSigner(), _invoiceId, _feeReceiver, _data)) {
+        if (!FeeAuthorizationLib.isAuthorized(PP_STORAGE.getFeeSigner(), _invoiceId, _feeReceiver, _data)) {
             revert InvalidFeeAuthorization();
         }
     }
@@ -607,7 +640,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @return feeReceiver The address to send the fee to.
      */
     function _feeReceiverFor(address _feeReceiver) internal view returns (address feeReceiver) {
-        return _feeReceiver == address(0) ? ppStorage.getFeeReceiver() : _feeReceiver;
+        return _feeReceiver == address(0) ? PP_STORAGE.FEE_RECEIVER() : _feeReceiver;
     }
 
     /**
@@ -664,7 +697,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
      */
     function _owner() internal view returns (address ownerAddress) {
-        ownerAddress = PaymentProcessorStorage(address(ppStorage)).owner();
+        ownerAddress = PaymentProcessorStorage(address(PP_STORAGE)).owner();
     }
 
     /**
@@ -677,7 +710,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
     /// @dev Reverts with ContractPaused while the storage contract reports a pause.
     function _whenNotPaused() internal view {
-        if (ppStorage.isPaused()) revert ContractPaused();
+        if (PP_STORAGE.isPaused()) revert ContractPaused();
     }
 
     /**
@@ -686,7 +719,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      *      the Intermediated Platforms Operator address stored in `ppStorage`.
      */
     function _onlyIntermediatedPlatformsOperator() internal view {
-        if (msg.sender != ppStorage.getIntermediatedPlatformsOperator()) revert NotAuthorized();
+        if (msg.sender != PP_STORAGE.getIntermediatedPlatformsOperator()) revert NotAuthorized();
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
@@ -706,7 +739,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
     /// @inheritdoc IIntermediatedPaymentProcessor
     function totalUniqueInvoiceCreated() external view returns (uint216 totalInvoices) {
-        return ppStorage.totalInvoiceCreated();
+        return PP_STORAGE.totalInvoiceCreated();
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
@@ -715,13 +748,8 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function getMinimumPrice() external view returns (uint256 currentMinimumPrice) {
-        return minimumPrice;
-    }
-
-    /// @inheritdoc IIntermediatedPaymentProcessor
     function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonce) {
-        return ppStorage.getNextInvoiceNonce();
+        return PP_STORAGE.getNextInvoiceNonce();
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor

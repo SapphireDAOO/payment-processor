@@ -8,7 +8,6 @@ import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
 import { MockUsdc, MockWbtc } from "../mock/mERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { BaseSetUp } from "./BaseSetUp.sol";
-import { Notes } from "src/Notes.sol";
 
 struct Addr {
     address usdcPriceFeed;

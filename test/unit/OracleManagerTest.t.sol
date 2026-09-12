@@ -48,8 +48,8 @@ contract OracleManagerTest is BaseSetUp {
     // ── Constructor ──────────────────────────────────────────────────────────────
 
     function test_constructor() public view {
-        assertEq(address(oracle.ppStorage()), address(ppStorage));
-        assertEq(oracle.getSequencerUptimeFeed(), address(seqFeed));
+        assertEq(address(oracle.PP_STORAGE()), address(ppStorage));
+        assertEq(oracle.SEQUENCER_UPTIME_FEED(), address(seqFeed));
     }
 
     // ── setPriceFeed ─────────────────────────────────────────────────────────────

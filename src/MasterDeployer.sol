@@ -49,6 +49,10 @@ contract MasterDeployer is IMasterDeployer, IPendingProcessorProvider {
     /// @notice The deployed Sweeper.
     Sweeper public sweeper;
 
+    /// @notice The address Notes will be deployed at, recorded by {deployCore}.
+    /// @dev Notes is deployed last so its authorization list can name both processors.
+    address public predictedNotes;
+
     /// @notice The address PaymentProcessorStorage will be deployed at, recorded by {deployCore}.
     /// @dev Carries the prediction across the two deployment transactions so both phases construct
     ///      against the same address.
@@ -64,7 +68,7 @@ contract MasterDeployer is IMasterDeployer, IPendingProcessorProvider {
      *        deployed via a CREATE2 factory, so `msg.sender` here is the factory.
      */
     constructor(address _deployer) {
-        deployer = _deployer;
+        DEPLOYER = _deployer;
     }
 
     /// @inheritdoc IAuthorizedAddressProvider
@@ -142,7 +146,7 @@ contract MasterDeployer is IMasterDeployer, IPendingProcessorProvider {
         external
         returns (address ppStorageAddress)
     {
-        if (msg.sender != deployer) revert NotDeployer();
+        if (msg.sender != DEPLOYER) revert NotDeployer();
         if (address(multiSig) == address(0)) revert CoreNotDeployed();
         if (address(ppStorage) != address(0)) revert AlreadyDeployed();
 
@@ -201,6 +205,26 @@ contract MasterDeployer is IMasterDeployer, IPendingProcessorProvider {
         );
 
         ppStorageAddress = address(ppStorage);
+    }
+
+    /// @dev Notes init code: creation code plus the predicted storage address.
+    function _notesInitCode(bytes memory _creationCode, address _predictedStorage)
+        private
+        pure
+        returns (bytes memory initCode)
+    {
+        initCode = abi.encodePacked(_creationCode, abi.encode(_predictedStorage));
+    }
+
+    /// @dev PaymentAutomation init code, free of the processor's address so it stays predictable.
+    function _automationInitCode(bytes memory _creationCode, address _predictedStorage, Params calldata _params)
+        private
+        pure
+        returns (bytes memory initCode)
+    {
+        initCode = abi.encodePacked(
+            _creationCode, abi.encode(_predictedStorage, _params.forwarder, _params.workflowOwner)
+        );
     }
 
     /// @dev PaymentProcessorStorage init code: creation code plus the abi-encoded configuration.

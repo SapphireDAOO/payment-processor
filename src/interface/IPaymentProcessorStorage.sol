@@ -51,9 +51,10 @@ interface IPaymentProcessorStorage {
 
     /**
      * @notice Updates the sole platform operator wallet authorized to call privileged
-     *         `IntermediatedPaymentProcessor` functions: creating invoices, triggering releases and refunds,
-     *         and resolving disputes.
-     * @dev Callable only by the contract owner.
+     *         `IntermediatedPaymentProcessor` functions: creating invoices, triggering releases and
+     *         refunds, and resolving disputes.
+     * @dev Callable only by the contract owner. Kept settable so the operating wallet can be
+     *      replaced without redeploying the system.
      * @param _intermediatedPlatformsOperatorWallet The new platform operator wallet address.
      */
     function setIntermediatedPlatformsOperator(address _intermediatedPlatformsOperatorWallet) external;
@@ -161,13 +162,20 @@ interface IPaymentProcessorStorage {
      */
     function getIntermediatedPlatformsOperator() external view returns (address intermediatedPlatformsOperator);
 
-    /**
-     * @notice Returns the current gas threshold used to limit the execution loop in automated task processing.
-     * @dev This threshold is typically used to prevent out-of-gas errors during batch operations
-     *      triggered by the Chainlink CRE workflow.
-     * @return gasThreshold The current gas threshold value.
-     */
-    function getGasThreshold() external view returns (uint256 gasThreshold);
+    /// @notice The platform fee rate in basis points. Compile-time constant.
+    function FEE_RATE() external view returns (uint96 feeRate);
+
+    /// @notice The minimum gas that must remain to continue processing tasks. Compile-time constant.
+    function GAS_THRESHOLD() external view returns (uint96 gasThreshold);
+
+    /// @notice The window after invoice creation during which a buyer can pay. Compile-time constant.
+    function DEFAULT_PAYMENT_VALIDITY_PERIOD() external view returns (uint256 validityDuration);
+
+    /// @notice The address that receives collected platform fees. Fixed at construction.
+    function FEE_RECEIVER() external view returns (address feeReceiver);
+
+    /// @notice Wrapped native token both processors pay platform fees in.
+    function WETH() external view returns (address weth);
 
     /**
      * @notice Emitted once at construction with the initial configuration parameters.

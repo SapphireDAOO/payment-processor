@@ -111,18 +111,20 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @notice Parameters for the full system deployment.
      * @param salt The CREATE2 salt used for every deployment.
      * @param config The initial PaymentProcessorStorage configuration.
-     * @param minimumInvoiceValue Minimum invoice value (in wei) for the SimplePaymentProcessor.
-     * @param weth Wrapped native token the SimplePaymentProcessor pays platform fees in.
+     * @param escrowHoldPeriod Seconds a SimplePaymentProcessor escrow holds a payment before release.
      * @param sequencerUptimeFeed Chainlink sequencer uptime feed; address(0) disables the check.
+     * @param forwarder CRE forwarder allowed to deliver reports to PaymentAutomation.
+     * @param workflowOwner CRE workflow owner carried in report metadata.
      * @param multiSigSigners Initial MultiSig signers.
      * @param multiSigThreshold Initial MultiSig approval threshold.
      */
     struct Params {
         bytes32 salt;
         IPaymentProcessorStorage.Configuration config;
-        uint256 minimumInvoiceValue;
-        address weth;
+        uint32 escrowHoldPeriod;
         address sequencerUptimeFeed;
+        address forwarder;
+        address workflowOwner;
         address[] multiSigSigners;
         uint256 multiSigThreshold;
     }
@@ -160,6 +162,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
         bytes oracleManager;
         bytes intermediatedPaymentProcessor;
         bytes sweeper;
+        bytes notes;
         bytes ppStorage;
     }
 
@@ -181,7 +184,9 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @dev Callable once, by the deployer only. Records the predicted PaymentProcessorStorage
      *      address for {deploySystem} to reuse, so both phases construct against the same address.
      * @param _params The deployment parameters.
-     * @param _initCodes The creation code of each contract this phase needs.
+     * @param _initCodes The creation code of each contract this phase needs. The Notes and
+     *        PaymentAutomation code is used to predict their addresses, which the processor is
+     *        constructed against; both are deployed later (Notes in {deploySystem}).
      * @return predictedStorageAddress The address PaymentProcessorStorage will be deployed at.
      */
     function deployCore(Params calldata _params, CoreInitCodes calldata _initCodes)

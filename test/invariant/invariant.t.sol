@@ -63,7 +63,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
     function setUp() public override(SimplePaymentProcessorSetUp, IntermediatedPaymentProcessorSetUp) {
         (storageAddress, notesAddress) = initialize();
 
-        simplePaymentProcessor = _simplePaymentProcessorSetUp(storageAddress, notesAddress);
+        simplePaymentProcessor = simplePP;
         intermediatedPaymentProcessor = _intermediatedPaymentProcessorSetUp(storageAddress);
 
         sHandler = new SimplePaymentProcessorHandler(

@@ -31,7 +31,7 @@ contract SweeperTest is BaseSetUp {
     }
 
     function test_initialState() public view {
-        assertEq(address(sweeper.ppStorage()), address(ppStorage));
+        assertEq(address(sweeper.PP_STORAGE()), address(ppStorage));
         assertEq(ppStorage.owner(), admin, "sweeper is gated on the storage owner");
     }
 

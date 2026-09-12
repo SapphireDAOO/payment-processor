@@ -131,12 +131,12 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.pay{ value: s }(invoiceId, "", false);
 
         // TRY EXPIRED INVOICE
-        vm.warp(block.timestamp + ppStorage.getPaymentValidityDuration() + 1);
+        vm.warp(block.timestamp + ppStorage.DEFAULT_PAYMENT_VALIDITY_PERIOD() + 1);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceIsNoLongerValid.selector);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
         // MAKE VALID PAYMENT
-        vm.warp(block.timestamp - ppStorage.getPaymentValidityDuration());
+        vm.warp(block.timestamp - ppStorage.DEFAULT_PAYMENT_VALIDITY_PERIOD());
         address escrowAddress = simplePP.pay{ value: invoicePrice }(invoiceId, "correct", false);
 
         uint256 currentInvoiceStatus = simplePP.getInvoiceData(invoiceId).state;
@@ -362,68 +362,60 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
-        assertEq(simplePP.getInvoiceData(invoiceId).releaseAt, block.timestamp);
-        assertTrue(simplePP.hasDueTasks());
+        vm.warp(block.timestamp + simplePP.ESCROW_HOLD_PERIOD() - 1);
 
         vm.prank(sellerOne);
+        vm.expectRevert(ISimplePaymentProcessor.HoldPeriodHasNotBeenExceeded.selector);
         simplePP.release(invoiceId);
-
-        assertEq(simplePP.getInvoiceData(invoiceId).state, RELEASED);
-        assertEq(simplePP.getInvoiceData(invoiceId).balance, 0);
     }
 
     function test_automatedRelease() public {
         uint256 invoicePrice = 100 ether;
-
         uint256 numberOfInvoice = 10;
         uint216[] memory invoiceIds = new uint216[](numberOfInvoice);
 
+        uint32 holdPeriod = simplePP.ESCROW_HOLD_PERIOD();
+        uint256 firstAcceptedAt = block.timestamp;
+
+        // The hold period is uniform now, so staggering acceptance is what gives the heap distinct
+        // release times to order by.
         for (uint256 i = 0; i < numberOfInvoice; i++) {
-            uint32 holdPeriod = HOLD_PERIOD;
-            if (i == 2) holdPeriod = 12 hours;
-            if (i == 9) holdPeriod = 1000 hours;
-
             vm.prank(sellerOne);
-            uint216 invoiceId = simplePP.createInvoice(invoicePrice, holdPeriod, "", false);
+            uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
-            // PAY
             vm.prank(buyerOne);
             simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
-            // ACCEPT
             vm.prank(sellerOne);
             simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
             invoiceIds[i] = invoiceId;
+
+            vm.warp(block.timestamp + 1 hours);
         }
 
-        vm.warp(block.timestamp + 5 days);
+        // Accepted first, so it releases first and sits at the heap root.
+        (uint216[] memory queued,) = simplePP.getItems();
+        assertEq(queued[0], invoiceIds[0]);
 
-        bool dueTasksExist = simplePP.hasDueTasks();
-        assertTrue(dueTasksExist);
-
-        uint216[] memory o = simplePP.getItems();
-
-        assertEq(o[0], invoiceIds[2]);
-        for (uint256 i = 0; i < o.length; i++) {
-            console.log("items in heap before up keep", o[i]);
-        }
+        // Past the release time of every invoice but the last, which was accepted an hour later.
+        vm.warp(firstAcceptedAt + holdPeriod + ((numberOfInvoice - 2) * 1 hours) + 30 minutes);
+        assertTrue(simplePP.hasDueTasks());
 
         vm.prank(buyerOne);
         vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
         simplePP.processDueTasks();
 
-        vm.prank(admin);
+        vm.prank(address(automation));
         simplePP.processDueTasks();
-        for (uint256 i = 0; i < numberOfInvoice; i++) {
-            console.log("order:", invoiceIds[i], simplePP.getInvoiceData(invoiceIds[i]).state, i);
-        }
+
+        assertEq(simplePP.getInvoiceData(invoiceIds[0]).state, RELEASED);
         assertEq(simplePP.getInvoiceData(invoiceIds[9]).state, ACCEPTED);
     }
 
     function test_automatedRefund() public {
         uint256 invoicePrice = 100 ether;
 
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
@@ -474,21 +466,21 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_ineligibleRelease() public {
         uint256 invoicePrice = 100 ether;
 
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
         simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
-        vm.prank(admin);
+        vm.prank(address(automation));
         simplePP.processDueTasks();
     }
 
     function test_directEscrowWithdrawal() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
@@ -601,10 +593,10 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(address(noReceiveSeller));
         simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
-        vm.warp(block.timestamp + HOLD_PERIOD + 1);
+        vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
 
         uint256 buyerBefore = buyerOne.balance;
-        vm.prank(admin);
+        vm.prank(address(automation));
         simplePP.processDueTasks();
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
@@ -629,9 +621,9 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(address(noReceiveSeller));
         simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
-        vm.warp(block.timestamp + HOLD_PERIOD + 1);
+        vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
 
-        vm.prank(admin);
+        vm.prank(address(automation));
         simplePP.processDueTasks();
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, BURNED);
@@ -887,7 +879,9 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         simplePP.acceptPayment(invoiceId, feeReceiver, hex"");
 
         vm.expectEmit(address(simplePP));
-        emit ISimplePaymentProcessor.InvoiceAccepted(invoiceId, feeReceiver, uint40(block.timestamp + HOLD_PERIOD));
+        emit ISimplePaymentProcessor.InvoiceAccepted(
+            invoiceId, feeReceiver, uint40(block.timestamp + TEST_ESCROW_HOLD_PERIOD)
+        );
         simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
         vm.stopPrank();
 
