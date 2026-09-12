@@ -23,6 +23,7 @@ import {
     BURNED,
     BASIS_POINTS,
     SELLER_DEFAULT_DECISION_WINDOW,
+    MINIMUM_INVOICE_VALUE,
     MAX_WITHDRAWAL_RETRIES
 } from "./constants/Simple.sol";
 
@@ -297,9 +298,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         }
 
         escrowAddress = address(new Escrow{ value: _value }(_invoiceId, address(this)));
-        // do not use expires at here
-        // variable name should match decision window
-        uint40 sellerActionDeadline = (block.timestamp + decisionWindow).toUint40();
+
+        uint40 sellerActionDeadline = (block.timestamp + SELLER_DEFAULT_DECISION_WINDOW).toUint40();
 
         i.escrow = escrowAddress;
         i.buyer = msg.sender;
@@ -438,12 +438,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /**
-     * @notice Computes a unique invoice ID from the contract address, seller, and nonce.
-     * @param _seller The address of the invoice creator (seller).
-     * @param _invoiceNonce The unique nonce assigned to this invoice.
-     * @return invoiceId The 216-bit invoice ID.
-     */
-    /**
      * @notice Reverts unless `_feeReceiver` was authorized by the configured fee signer for this invoice.
      * @param _invoiceId The invoice the fee receiver is being attached to.
      * @param _feeReceiver The fee receiver supplied by the caller.
@@ -493,7 +487,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
      * @param _invoiceNonce The unique nonce assigned to this invoice.
      * @return invoiceId The 216-bit invoice ID.
      */
-
     function _computeInvoiceId(address _seller, uint256 _invoiceNonce) internal view returns (uint216 invoiceId) {
         invoiceId =
             (uint256(keccak256(abi.encode(address(this), _seller, _invoiceNonce))) & ((1 << 216) - 1)).toUint216();

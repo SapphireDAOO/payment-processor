@@ -14,7 +14,8 @@ import {
     DISPUTE_RESOLVED,
     DISPUTE_DISMISSED,
     DISPUTE_SETTLED,
-    BASIS_POINTS
+    BASIS_POINTS,
+    DEFAULT_MINIMUM_INVOICE_PRICE
 } from "src/constants/Intermediated.sol";
 
 contract IntermediatedPaymentProcessorHandler is Test {

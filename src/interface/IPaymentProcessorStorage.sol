@@ -174,18 +174,6 @@ interface IPaymentProcessorStorage {
     event AuthorizationUpdated(address indexed account, bool authorized);
 
     /**
-     * @notice Emitted when the fee receiver address is updated.
-     * @param feeReceiver The new fee receiver address.
-     */
-    event FeeReceiverUpdated(address indexed feeReceiver);
-
-    /**
-     * @notice Emitted when the fee signer is updated.
-     * @param feeSigner The new fee signer address.
-     */
-    event FeeSignerUpdated(address indexed feeSigner);
-
-    /**
      * @notice Emitted when the Intermediated Platforms Operator address is updated.
      * @param intermediatedPlatformsOperator The new Intermediated Platforms Operator address.
      */

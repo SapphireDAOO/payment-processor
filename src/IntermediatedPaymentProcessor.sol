@@ -307,6 +307,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         bool isReleasable = (state == PAID || state == DISPUTE_RESOLVED || state == DISPUTE_DISMISSED)
             && block.timestamp >= i.releaseAt;
         if (!isReleasable) revert InvalidInvoiceState();
+
         uint256 fee = _applyBasisPoints(i.balance, i.feeRate);
         uint256 sellerNetAmount = i.balance - fee;
         IEscrow(i.escrow).withdraw(i.paymentToken, i.seller, sellerNetAmount);

@@ -28,7 +28,8 @@ import {
     DISPUTE_SETTLED,
     RELEASED,
     BASIS_POINTS,
-    DEFAULT_DECIMAL
+    DEFAULT_DECIMAL,
+    DEFAULT_MINIMUM_INVOICE_PRICE
 } from "src/constants/Intermediated.sol";
 
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
@@ -825,7 +826,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(sellerBalance + releaseableAmount, sellerOne.balance);
     }
 
-    function test_feeRateSnapshotAtCreationIsUsedOnRelease() public {
+    function test_invoiceFeeRateSnapshotIsUsedOnRelease() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
             getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
@@ -977,12 +978,10 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 paidAt = block.timestamp;
 
         {
-            address[] memory metaReceivers11 = _metaReceivers(metaInvoiceId);
-            bytes memory metaFeeSig11 = _metaFeeSig(metaInvoiceId);
+            address[] memory metaReceivers = _metaReceivers(metaInvoiceId);
+            bytes memory metaFeeSig = _metaFeeSig(metaInvoiceId);
             vm.prank(buyerOne);
-            intermediatedPP.payMetaInvoiceWithValue{ value: totalTokenValue }(
-                metaInvoiceId, metaReceivers11, metaFeeSig11
-            );
+            intermediatedPP.payMetaInvoiceWithValue{ value: totalTokenValue }(metaInvoiceId, metaReceivers, metaFeeSig);
         }
 
         for (uint256 i = 0; i < invoiceIds.length; i++) {

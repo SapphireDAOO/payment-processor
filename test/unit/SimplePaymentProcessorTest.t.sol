@@ -3,7 +3,6 @@ pragma solidity 0.8.28;
 
 import { ISimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
-import { console } from "forge-std/console.sol";
 import { IEscrow } from "src/interface/IEscrow.sol";
 import { NoReceiveEther } from "../utils/NoReceiveEther.sol";
 

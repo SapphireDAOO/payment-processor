@@ -2,10 +2,10 @@
 pragma solidity 0.8.28;
 
 import { Test } from "forge-std/Test.sol";
-import { MultiSig } from "../../../src/MultiSig.sol";
-import { IMultiSig } from "../../../src/interface/IMultiSig.sol";
-import { IPaymentProcessorStorage } from "../../../src/interface/IPaymentProcessorStorage.sol";
-import { PaymentProcessorStorage } from "../../../src/PaymentProcessorStorage.sol";
+import { MultiSig } from "src/MultiSig.sol";
+import { IMultiSig } from "src/interface/IMultiSig.sol";
+import { IPaymentProcessorStorage } from "src/interface/IPaymentProcessorStorage.sol";
+import { PaymentProcessorStorage } from "src/PaymentProcessorStorage.sol";
 
 import { PROPOSED, APPROVED, MINIMUM_THRESHOLD } from "src/constants/MultiSig.sol";
 
