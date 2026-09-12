@@ -23,9 +23,7 @@ abstract contract MultiSigSetUp is Test, IAuthorizedAddressProvider {
     // Default deployment parameters
     uint256 constant INITIAL_THRESHOLD = 2;
     uint256 constant INITIAL_SIGNER_COUNT = 3;
-    uint96 constant FEE_RATE = 500;
-    uint96 constant DEFAULT_HOLD_PERIOD = 1 days;
-    uint96 constant GAS_THRESHOLD = 100_000;
+    uint32 constant TEST_ESCROW_HOLD_PERIOD = 1 days;
 
     function setUp() public virtual {
         _multiSigSetUp();
@@ -74,12 +72,12 @@ abstract contract MultiSigSetUp is Test, IAuthorizedAddressProvider {
         multisig.approveTransaction(txHash);
     }
 
-    function _encodeSetFeeRate(uint96 _feeRate) internal pure returns (bytes memory) {
-        return abi.encodeCall(IPaymentProcessorStorage.setFeeRate, _feeRate);
+    function _encodeSetFeeSigner(address _feeSigner) internal pure returns (bytes memory) {
+        return abi.encodeCall(IPaymentProcessorStorage.setFeeSigner, _feeSigner);
     }
 
-    function _encodeSetGasThreshold(uint96 _threshold) internal pure returns (bytes memory) {
-        return abi.encodeCall(IPaymentProcessorStorage.setGasThreshold, _threshold);
+    function _encodeSetOperator(address _operator) internal pure returns (bytes memory) {
+        return abi.encodeCall(IPaymentProcessorStorage.setIntermediatedPlatformsOperator, _operator);
     }
 
     function _hashTx(address _target, bytes memory _data, uint256 _newNonce) internal pure returns (bytes32) {

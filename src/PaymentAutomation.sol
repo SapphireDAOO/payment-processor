@@ -5,6 +5,7 @@ import { IPaymentAutomation } from "./interface/IPaymentAutomation.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { IERC165, IReceiver } from "./interface/IReceiver.sol";
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
+import { IPendingProcessorProvider } from "./interface/IMasterDeployer.sol";
 
 import { CRE_SOURCE, GELATO_SOURCE } from "./constants/Automation.sol";
 
@@ -14,20 +15,20 @@ import { CRE_SOURCE, GELATO_SOURCE } from "./constants/Automation.sol";
  * @dev Owns no queue, no invoice state and no funds — it only reads `hasDueTasks()` and calls
  *      `processDueTasks()` on {SimplePaymentProcessor}, behind two keeper entrypoints: `onReport`
  *      (Chainlink CRE) and `checker` (Gelato). Run one network at a time; the other is redundancy.
- *      Requires `setAutomation` on the processor to point back here.
+ *      The processor holds this adapter as an immutable, so changing the pairing means redeploying both.
  */
 contract PaymentAutomation is IPaymentAutomation, IReceiver {
     /// @notice The payment processor whose due-task queue this contract drives.
-    ISimplePaymentProcessor public immutable processor;
+    ISimplePaymentProcessor public immutable PROCESSOR;
 
     /// @notice Reference to the external Payment Processor storage contract, used for owner checks.
-    IPaymentProcessorStorage public immutable ppStorage;
+    IPaymentProcessorStorage public immutable PP_STORAGE;
 
     /// @notice Address of the CRE (Keystone) forwarder contract responsible for delivering workflow reports via `onReport`.
-    address private forwarder;
+    address public immutable FORWARDER;
 
     /// @notice Owner address of the CRE workflow authorized to trigger `onReport`, as reported in the report metadata.
-    address private workflowOwner;
+    address public immutable WORKFLOW_OWNER;
 
     /**
      * @notice Restricts access to the payment processor owner or storage contract.
@@ -39,16 +40,23 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
     }
 
     /**
-     * @notice Wires the adapter to the processor it drives and the storage contract it reads the owner from.
-     * @dev Both addresses are immutable; redeploy and re-point via `setAutomation` to change them.
-     * @param _processorAddress The SimplePaymentProcessor address whose due tasks are processed.
+     * @notice Wires the adapter to the storage contract and the keeper identities it trusts.
+     * @dev The processor is read back from the deployer via {IPendingProcessorProvider} rather than
+     *      passed in, which keeps this contract's address predictable. Everything is immutable.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
+     * @param _forwarderAddress The CRE forwarder allowed to deliver reports to `onReport`.
+     * @param _workflowOwner The CRE workflow owner carried in report metadata.
      */
-    constructor(address _processorAddress, address _paymentProcessorStorageAddress) {
-        if (_processorAddress == address(0) || _paymentProcessorStorageAddress == address(0)) revert InvalidAddress();
+    constructor(address _paymentProcessorStorageAddress, address _forwarderAddress, address _workflowOwner) {
+        if (_paymentProcessorStorageAddress == address(0)) revert InvalidAddress();
 
-        processor = ISimplePaymentProcessor(_processorAddress);
-        ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
+        address processorAddress = IPendingProcessorProvider(msg.sender).pendingProcessor();
+        if (processorAddress == address(0)) revert InvalidAddress();
+
+        PROCESSOR = ISimplePaymentProcessor(processorAddress);
+        PP_STORAGE = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
+        FORWARDER = _forwarderAddress;
+        WORKFLOW_OWNER = _workflowOwner;
     }
 
     /**
@@ -94,28 +102,6 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
     /// @inheritdoc IERC165
     function supportsInterface(bytes4 _interfaceId) external pure returns (bool supported) {
         return _interfaceId == type(IReceiver).interfaceId || _interfaceId == type(IERC165).interfaceId;
-    }
-
-    /// @inheritdoc IPaymentAutomation
-    function setForwarderAddress(address _forwarderAddress) external onlyAuthorized {
-        forwarder = _forwarderAddress;
-        emit ForwarderUpdated(_forwarderAddress);
-    }
-
-    /// @inheritdoc IPaymentAutomation
-    function setWorkflowOwner(address _workflowOwner) external onlyAuthorized {
-        workflowOwner = _workflowOwner;
-        emit WorkflowOwnerUpdated(_workflowOwner);
-    }
-
-    /// @inheritdoc IPaymentAutomation
-    function getForwarder() external view returns (address forwarderAddress) {
-        return forwarder;
-    }
-
-    /// @inheritdoc IPaymentAutomation
-    function getWorkflowOwner() external view returns (address workflowOwnerAddress) {
-        return workflowOwner;
     }
 
     /**

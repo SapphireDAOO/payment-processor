@@ -19,6 +19,23 @@ interface IAuthorizedAddressProvider {
 }
 
 /**
+ * @title IPendingProcessorProvider
+ * @notice Implemented by contracts that deploy PaymentAutomation.
+ * @dev PaymentAutomation calls this on its deployer (`msg.sender`) during construction to learn the
+ *      processor it drives. Passing the processor as a constructor argument instead would make
+ *      PaymentAutomation's init code depend on the processor's address while the processor's init
+ *      code depends on the adapter's, a cycle no CREATE2 prediction can break. Fetching it here
+ *      keeps the adapter's address predictable, so the processor can hold it as an immutable.
+ */
+interface IPendingProcessorProvider {
+    /**
+     * @notice Returns the processor the PaymentAutomation being constructed should drive.
+     * @return processor The SimplePaymentProcessor address.
+     */
+    function pendingProcessor() external view returns (address processor);
+}
+
+/**
  * @title IMasterDeployer
  * @notice Deploys the full payment processor system deterministically via CREATE2.
  * @dev PaymentProcessorStorage's address is predicted upfront: its init code contains only the
@@ -51,6 +68,13 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @param deployed The address the contract was actually deployed at.
      */
     error StorageAddressMismatch(address predicted, address deployed);
+
+    /**
+     * @notice Thrown when a contract deployed away from the address the other contracts were built against.
+     * @param predicted The predicted address.
+     * @param deployed The address the contract was actually deployed at.
+     */
+    error AddressMismatch(address predicted, address deployed);
 
     /**
      * @notice Emitted once the first deployment phase completes.

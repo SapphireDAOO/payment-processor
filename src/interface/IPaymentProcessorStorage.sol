@@ -62,40 +62,11 @@ interface IPaymentProcessorStorage {
      * @notice Sets the key whose signature authorizes the fee receiver supplied when an invoice is
      *         accepted or paid.
      * @dev Callable only by the contract owner. Must be an EOA: the processors recover it with ECDSA,
-     *      so it cannot be the MultiSig that owns this contract.
+     *      so it cannot be the MultiSig that owns this contract. Kept settable so the signing key can
+     *      be rotated without redeploying the system.
      * @param _feeSigner The new fee signer address.
      */
     function setFeeSigner(address _feeSigner) external;
-
-    /**
-     * @notice Sets the address that will receive fees collected from transactions.
-     * @dev Callable only by the contract owner.
-     * @param _feeReceiverAddress The address to receive protocol fees.
-     */
-    function setFeeReceiver(address _feeReceiverAddress) external;
-
-    /**
-     * @notice Updates the fee rate for seller payouts.
-     * @dev Callable only by the contract owner.
-     * @param _feeRate The new fee rate in basis points (1% = 100 basis points).
-     */
-    function setFeeRate(uint96 _feeRate) external;
-
-    /**
-     * @notice Updates the gas threshold used in automated task processing.
-     * @dev Only callable by the contract owner. This threshold determines the minimum gas
-     *      required to continue processing during `onReport` / `processDueTasks`.
-     * @param _newGasThreshold The new gas threshold value (in units of gas).
-     */
-    function setGasThreshold(uint96 _newGasThreshold) external;
-
-    /**
-     * @notice Updates the window of time after invoice creation during which a buyer can pay.
-     * @dev Only callable by the contract owner. Once this period elapses, the invoice is
-     *      considered expired and payment attempts will no longer be possible.
-     * @param _newValidityDuration The new validity window in seconds.
-     */
-    function setPaymentValidityDuration(uint256 _newValidityDuration) external;
 
     /**
      * @notice Halts every value-moving entrypoint on both payment processors.
@@ -230,22 +201,10 @@ interface IPaymentProcessorStorage {
     event IntermediatedPlatformsOperatorUpdated(address indexed intermediatedPlatformsOperator);
 
     /**
-     * @notice Emitted when the platform fee rate is updated.
-     * @param feeRate The new fee rate in basis points.
+     * @notice Emitted when the fee signer is updated.
+     * @param feeSigner The new fee signer address.
      */
-    event FeeRateUpdated(uint96 feeRate);
-
-    /**
-     * @notice Emitted when the automated-upkeep gas threshold is updated.
-     * @param gasThreshold The new gas threshold value.
-     */
-    event GasThresholdUpdated(uint96 gasThreshold);
-
-    /**
-     * @notice Emitted when the payment validity duration is updated.
-     * @param validityDuration The new payment validity window in seconds.
-     */
-    event PaymentValidityDurationUpdated(uint256 validityDuration);
+    event FeeSignerUpdated(address indexed feeSigner);
 
     /**
      * @notice Emitted when the owner pauses the payment processors.

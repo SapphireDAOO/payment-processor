@@ -32,7 +32,9 @@ contract Deploy is Script {
     MockWbtc mockWBtc;
 
     uint96 constant FEE_RATE = 500;
-    uint96 constant DEFAULT_HOLD_PERIOD = 10 minutes;
+    // Hold period applied to every SimplePaymentProcessor invoice.
+    uint32 constant TESTNET_ESCROW_HOLD_PERIOD = 5 minutes;
+    uint32 constant MAINNET_ESCROW_HOLD_PERIOD = 30 days;
     uint256 constant MINIMUM_INVOICE_VALUE = 0.005 ether;
     uint96 constant DEFAULT_GAS_THRESHOLD = 100_000;
 
@@ -75,6 +77,11 @@ contract Deploy is Script {
 
     /// @dev Key whose signature authorizes the per-invoice fee receiver. Override with FEE_SIGNER.
     address constant DEFAULT_FEE_SIGNER = 0x06124927895eF15c6f436988E47C73a80c220c3b;
+
+    // Immutable on PaymentAutomation. address(0) leaves `onReport` unreachable, so set
+    // CRE_FORWARDER and CRE_WORKFLOW_OWNER to enable the CRE keeper path.
+    address constant DEFAULT_CRE_FORWARDER = address(0);
+    address constant DEFAULT_CRE_WORKFLOW_OWNER = address(0);
 
     address constant SIGNER_ONE = 0x60D7dD3b4248D53Abba8DA999B22023656A2E4B3;
     address constant SIGNER_TWO = 0x0f447989b14A3f0bbf08808020Ec1a6DE0b8cbC4;
@@ -204,22 +211,14 @@ contract Deploy is Script {
         console.log("");
         console.log("--- Wiring ---");
 
-        notes.setAuthorized(msg.sender, true);
-        notes.setAuthorized(simplePP, true);
-        notes.setAuthorized(intermediatedPP, true);
-        console.log("Notes authorized: deployer, SimplePaymentProcessor, IntermediatedPaymentProcessor");
+        console.log("Notes authorized at construction: deployer, SimplePaymentProcessor, IntermediatedPaymentProcessor");
         console.log("Storage authorized at construction: SimplePaymentProcessor, IntermediatedPaymentProcessor");
-
         // Must precede the ownership handover below: setFeeSigner is owner-only, and without it every
         // acceptPayment and payInvoice reverts with InvalidFeeAuthorization.
         address feeSigner = vm.envOr("FEE_SIGNER", DEFAULT_FEE_SIGNER);
         _masterDeployer.ppStorage().setFeeSigner(feeSigner);
         console.log("Fee signer set:                   ", feeSigner);
-
-        // The keeper entrypoints live on PaymentAutomation; the processor only trusts its address.
-        // The CRE forwarder and workflow owner are still set on PaymentAutomation post-deploy.
-        SimplePaymentProcessor(payable(simplePP)).setAutomation(automation);
-        console.log("SimplePaymentProcessor automation set:", automation);
+        console.log("Automation fixed at construction: ", automation);
 
         _setPriceFeeds(_masterDeployer.oracleManager(), _addr, _isMainnet);
 

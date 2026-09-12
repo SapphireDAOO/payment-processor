@@ -10,8 +10,7 @@ import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 
 import { BASIS_POINTS } from "src/constants/Intermediated.sol";
 
-// Escrow hold period applied to invoices built by these helpers; must be non-zero.
-uint32 constant TEST_ESCROW_HOLD_PERIOD = 1 days;
+uint32 constant TEST_INVOICE_HOLD_PERIOD = 1 days;
 
 /**
  * @notice Builds a single invoice creation parameter struct.

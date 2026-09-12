@@ -2,7 +2,11 @@
 pragma solidity 0.8.28;
 
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
-import { IAuthorizedAddressProvider, IMasterDeployer } from "./interface/IMasterDeployer.sol";
+import {
+    IAuthorizedAddressProvider,
+    IMasterDeployer,
+    IPendingProcessorProvider
+} from "./interface/IMasterDeployer.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { SimplePaymentProcessor } from "./SimplePaymentProcessor.sol";
 import { PaymentAutomation } from "./PaymentAutomation.sol";
@@ -17,9 +21,9 @@ import { Sweeper } from "./Sweeper.sol";
  * @notice Deploys the full payment processor system deterministically via CREATE2.
  * @dev See {IMasterDeployer} for the deployment flow and address-prediction scheme.
  */
-contract MasterDeployer is IMasterDeployer {
+contract MasterDeployer is IMasterDeployer, IPendingProcessorProvider {
     /// @notice The only address allowed to trigger the deployment.
-    address public immutable deployer;
+    address public immutable DEPLOYER;
 
     /// @notice The deployed MultiSig.
     MultiSig public multiSig;
@@ -77,16 +81,29 @@ contract MasterDeployer is IMasterDeployer {
         predicted = Create2.computeAddress(_salt, keccak256(_storageInitCode(_ppStorageCreationCode, _config)));
     }
 
+    /// @inheritdoc IPendingProcessorProvider
+    function pendingProcessor() external view returns (address processor) {
+        processor = address(simplePaymentProcessor);
+    }
+
     /// @inheritdoc IMasterDeployer
     function deployCore(Params calldata _params, CoreInitCodes calldata _initCodes)
         external
         returns (address predictedStorageAddress)
     {
-        if (msg.sender != deployer) revert NotDeployer();
+        if (msg.sender != DEPLOYER) revert NotDeployer();
         if (address(multiSig) != address(0)) revert AlreadyDeployed();
 
         address predicted = predictStorageAddress(_params.salt, _params.config, _initCodes.ppStorage);
         predictedStorage = predicted;
+
+        // Neither init code names the other's address, so the processor can hold both as immutables.
+        address notesAddress =
+            Create2.computeAddress(_params.salt, keccak256(_notesInitCode(_initCodes.notes, predicted)));
+        address automationAddress = Create2.computeAddress(
+            _params.salt, keccak256(_automationInitCode(_initCodes.paymentAutomation, predicted, _params))
+        );
+        predictedNotes = notesAddress;
 
         multiSig = MultiSig(
             Create2.deploy(
@@ -96,32 +113,26 @@ contract MasterDeployer is IMasterDeployer {
             )
         );
 
-        notes = Notes(Create2.deploy(0, _params.salt, abi.encodePacked(_initCodes.notes, abi.encode(predicted))));
-
         simplePaymentProcessor = SimplePaymentProcessor(
             payable(Create2.deploy(
                     0,
                     _params.salt,
                     abi.encodePacked(
                         _initCodes.simplePaymentProcessor,
-                        abi.encode(predicted, _params.minimumInvoiceValue, address(notes), _params.weth)
+                        abi.encode(predicted, notesAddress, automationAddress, _params.escrowHoldPeriod)
                     )
                 ))
         );
 
         paymentAutomation = PaymentAutomation(
-            Create2.deploy(
-                0,
-                _params.salt,
-                abi.encodePacked(_initCodes.paymentAutomation, abi.encode(address(simplePaymentProcessor), predicted))
-            )
+            Create2.deploy(0, _params.salt, _automationInitCode(_initCodes.paymentAutomation, predicted, _params))
         );
 
-        pendingAuthorized.push(address(simplePaymentProcessor));
+        if (address(paymentAutomation) != automationAddress) {
+            revert AddressMismatch(automationAddress, address(paymentAutomation));
+        }
 
-        emit CoreDeployed(
-            address(multiSig), address(notes), address(simplePaymentProcessor), address(paymentAutomation)
-        );
+        emit CoreDeployed(address(multiSig), notesAddress, address(simplePaymentProcessor), address(paymentAutomation));
 
         predictedStorageAddress = predicted;
     }
@@ -146,17 +157,27 @@ contract MasterDeployer is IMasterDeployer {
         );
 
         intermediatedPaymentProcessor = IntermediatedPaymentProcessor(
-            Create2.deploy(
-                0,
-                _params.salt,
-                abi.encodePacked(
-                    _initCodes.intermediatedPaymentProcessor, abi.encode(predicted, address(oracleManager))
-                )
-            )
+            payable(Create2.deploy(
+                    0,
+                    _params.salt,
+                    abi.encodePacked(
+                        _initCodes.intermediatedPaymentProcessor, abi.encode(predicted, address(oracleManager))
+                    )
+                ))
         );
 
         sweeper = Sweeper(Create2.deploy(0, _params.salt, abi.encodePacked(_initCodes.sweeper, abi.encode(predicted))));
 
+        // The deployer may write notes; the storage contract deliberately does not authorize it.
+        pendingAuthorized.push(address(simplePaymentProcessor));
+        pendingAuthorized.push(address(intermediatedPaymentProcessor));
+        pendingAuthorized.push(DEPLOYER);
+
+        notes = Notes(Create2.deploy(0, _params.salt, _notesInitCode(_initCodes.notes, predicted)));
+        if (address(notes) != predictedNotes) revert AddressMismatch(predictedNotes, address(notes));
+
+        delete pendingAuthorized;
+        pendingAuthorized.push(address(simplePaymentProcessor));
         pendingAuthorized.push(address(intermediatedPaymentProcessor));
 
         ppStorage = PaymentProcessorStorage(

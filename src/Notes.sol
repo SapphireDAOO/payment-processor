@@ -3,11 +3,12 @@ pragma solidity 0.8.28;
 
 import { INotes } from "./interface/INotes.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
+import { IAuthorizedAddressProvider } from "./interface/IMasterDeployer.sol";
 
 /**
  * @title Notes
  * @notice Stores encrypted invoice notes and tracks per-user opened state.
- * @dev Access is gated by an allowlist controlled via setAuthorized.
+ * @dev Access is gated by an allowlist fixed at construction via {IAuthorizedAddressProvider}.
  */
 contract Notes is INotes {
     /// @notice Authorization flag indicating access is denied.
@@ -16,10 +17,10 @@ contract Notes is INotes {
     uint256 public constant ALLOWED = 1;
 
     /// @notice Active note encryption version used for newly created notes.
-    uint8 private currentVersion;
+    uint8 public constant CURRENT_VERSION = 1;
 
     /// @notice Reference to the external Payment Processor storage contract.
-    IPaymentProcessorStorage public immutable ppStorage;
+    IPaymentProcessorStorage public immutable PP_STORAGE;
 
     /// @notice Stores notes per invoice.
     mapping(uint216 invoiceId => mapping(uint256 noteId => Note data)) private notes;
@@ -53,8 +54,12 @@ contract Notes is INotes {
      * @param _paymentProcessorStorageAddress The address of the storage contract.
      */
     constructor(address _paymentProcessorStorageAddress) {
-        ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
-        currentVersion = 1;
+        PP_STORAGE = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
+
+        address[] memory authorized = IAuthorizedAddressProvider(msg.sender).authorizedAddresses();
+        for (uint256 i; i < authorized.length; i++) {
+            auth[authorized[i]] = ALLOWED;
+        }
     }
 
     /// @inheritdoc INotes
@@ -67,8 +72,9 @@ contract Notes is INotes {
 
         noteId = noteCount[_invoiceId];
 
-        notes[_invoiceId][noteId] =
-            Note({ author: _author, share: _share, content: _encryptedContent, exists: true, version: currentVersion });
+        notes[_invoiceId][noteId] = Note({
+            author: _author, share: _share, content: _encryptedContent, exists: true, version: CURRENT_VERSION
+        });
 
         noteCount[_invoiceId] = noteId + 1;
 
@@ -128,17 +134,11 @@ contract Notes is INotes {
     }
 
     /// @inheritdoc INotes
-    function updateVersion(uint8 _newVersion) external {
-        if (msg.sender != _owner()) revert Unauthorized();
-        currentVersion = _newVersion;
-    }
-
-    /// @inheritdoc INotes
     function setPublicKey(bytes calldata _publicKey) external {
         if (publicKeys[msg.sender].key.length != 0) revert PublicKeyAlreadySet();
         if (_publicKey.length != 64) revert InvalidPublicKey();
 
-        uint8 version = currentVersion;
+        uint8 version = CURRENT_VERSION;
         publicKeys[msg.sender] = PublicKey({ key: _publicKey, version: version });
 
         emit PublicKeySet(msg.sender, _publicKey, version);
@@ -149,24 +149,13 @@ contract Notes is INotes {
         return publicKeys[_account];
     }
 
-    /// @inheritdoc INotes
-    function setAuthorized(address _user, bool _enabled) external {
-        if (msg.sender != _owner()) revert Unauthorized();
-        auth[_user] = _enabled ? ALLOWED : NOT_ALLOWED;
-    }
-
-    /// @inheritdoc INotes
-    function getCurrentVersion() external view returns (uint8 v) {
-        return currentVersion;
-    }
-
     /**
      * @notice Returns the owner of the PaymentProcessorStorage contract.
      * @dev This helper reads the owner directly from the linked PaymentProcessorStorage instance.
      * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
      */
     function _owner() internal view returns (address ownerAddress) {
-        ownerAddress = PaymentProcessorStorage(address(ppStorage)).owner();
+        ownerAddress = PaymentProcessorStorage(address(PP_STORAGE)).owner();
     }
 
     /**

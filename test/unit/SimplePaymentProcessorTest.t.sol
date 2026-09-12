@@ -16,63 +16,33 @@ import {
     REFUNDED,
     RELEASED,
     BURNED,
-    BASIS_POINTS
+    BASIS_POINTS,
+    MINIMUM_INVOICE_VALUE,
+    SELLER_DEFAULT_DECISION_WINDOW
 } from "src/constants/Simple.sol";
 
 error NotAuthorized();
 
 contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_storageState() public view {
-        assertEq(ppStorage.getFeeRate(), FEE_RATE);
-        assertEq(ppStorage.getFeeReceiver(), feeReceiver);
+        assertEq(ppStorage.FEE_RATE(), FEE_RATE);
+        assertEq(ppStorage.FEE_RECEIVER(), feeReceiver);
         assertEq(simplePP.getNextInvoiceNonce(), 1);
-        assertEq(simplePP.getMinimumInvoiceValue(), MINIMUM_INVOICE_VALUE);
-        assertEq(simplePP.getAutomation(), address(automation));
+        assertEq(MINIMUM_INVOICE_VALUE, MINIMUM_INVOICE_VALUE);
+        assertEq(simplePP.AUTOMATION(), address(automation));
     }
 
-    function test_setAutomation() public {
-        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
-        simplePP.setAutomation(address(2));
+    function test_configurationIsFixedAtDeployment() public view {
+        // The automation pairing, minimum invoice value and decision window can no longer change.
+        assertEq(simplePP.AUTOMATION(), address(automation));
+        assertEq(MINIMUM_INVOICE_VALUE, MINIMUM_INVOICE_VALUE);
+        assertEq(SELLER_DEFAULT_DECISION_WINDOW, SELLER_DEFAULT_DECISION_WINDOW);
     }
 
-    function test_setMinimumInvoiceValue() public {
-        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
-        simplePP.setMinimumInvoiceValue(1 ether);
-    }
-
-    function test_setAutomationAuthorizedCanSet() public {
-        address newAutomation = address(0xcafe);
-        vm.prank(admin);
-        vm.expectEmit(true, false, false, false);
-        emit ISimplePaymentProcessor.AutomationUpdated(newAutomation);
-        simplePP.setAutomation(newAutomation);
-
-        assertEq(simplePP.getAutomation(), newAutomation);
-    }
-
-    function test_setMinimumInvoiceValueAuthorizedCanSet() public {
-        vm.prank(admin);
-        simplePP.setMinimumInvoiceValue(2 ether);
-
-        assertEq(simplePP.getMinimumInvoiceValue(), 2 ether);
-
+    function test_invoiceBelowTheFixedMinimumIsRejected() public {
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.ValueIsTooLow.selector);
-        simplePP.createInvoice(1 ether, HOLD_PERIOD, "", false);
-    }
-
-    function test_setDecisionWindow() public {
-        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
-        simplePP.setDecisionWindow(1 days);
-
-        vm.startPrank(admin);
-        vm.expectRevert(ISimplePaymentProcessor.InvalidDecisionWindow.selector);
-        simplePP.setDecisionWindow(0);
-
-        simplePP.setDecisionWindow(1 days);
-        vm.stopPrank();
-
-        assertEq(simplePP.getDecisionWindow(), 1 days);
+        simplePP.createInvoice(MINIMUM_INVOICE_VALUE - 1, "", false);
     }
 
     function test_invoiceCreation() public {
@@ -342,10 +312,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
-        vm.prank(admin);
-        ppStorage.setFeeRate(uint96(FEE_RATE * 4));
-
-        vm.warp(block.timestamp + HOLD_PERIOD + 1);
+        vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
         vm.prank(sellerOne);
         simplePP.release(invoiceId);
 
@@ -465,45 +432,40 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.warp(block.timestamp + 3 days);
 
-        vm.prank(admin);
+        vm.prank(address(automation));
         simplePP.processDueTasks();
 
         uint256 buyerBalanceAfterRefund = address(buyerOne).balance;
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
         assertEq(buyerBalanceBeforeRefund + invoicePrice, buyerBalanceAfterRefund);
-        assertEq(simplePP.getItems().length, 0);
+        (uint216[] memory drained,) = simplePP.getItems();
+        assertEq(drained.length, 0);
     }
 
-    function test_dynamicInvalidationPeriod() public {
-        vm.prank(admin);
-        ppStorage.setPaymentValidityDuration(2 days);
-
+    function test_invoiceExpiresAfterTheFixedValidityPeriod() public {
         uint256 invoicePrice = 100 ether;
 
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
-        vm.warp(block.timestamp + 2 days + 1);
+        vm.warp(block.timestamp + ppStorage.DEFAULT_PAYMENT_VALIDITY_PERIOD() + 1);
 
         vm.prank(buyerOne);
         vm.expectRevert(ISimplePaymentProcessor.InvoiceIsNoLongerValid.selector);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
     }
 
-    function test_dynamicAcceptanceDuration() public {
+    function test_acceptanceWindowUsesTheFixedDecisionWindow() public {
         uint256 invoicePrice = 100 ether;
 
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
-
-        vm.prank(admin);
-        simplePP.setDecisionWindow(1 days);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
-        vm.warp(block.timestamp + 1 days + 1);
+        vm.warp(block.timestamp + SELLER_DEFAULT_DECISION_WINDOW + 1);
 
-        vm.prank(admin);
+        vm.prank(address(automation));
         simplePP.processDueTasks();
 
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
@@ -559,11 +521,8 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
     }
 
-    function test_processDueTasksRevertsForDeregisteredAutomation() public {
-        vm.prank(admin);
-        simplePP.setAutomation(address(0xcafe));
-
-        vm.prank(address(automation));
+    function test_processDueTasksRejectsAnUnpairedCaller() public {
+        vm.prank(address(0xcafe));
         vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
         simplePP.processDueTasks();
     }

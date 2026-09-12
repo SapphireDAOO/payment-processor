@@ -37,25 +37,21 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     using TaskQueueLib for TaskQueueLib.Heap;
 
     /// @notice Notes contract used for encrypted invoice notes.
-    INotes private immutable notes;
+    INotes private immutable NOTES;
 
     /// @notice Internal min-heap used to efficiently manage scheduled invoice tasks by release time.
     TaskQueueLib.Heap private heap;
 
     /// @notice Reference to the external Payment Processor storage contract.
-    IPaymentProcessorStorage public immutable ppStorage;
+    IPaymentProcessorStorage public immutable PP_STORAGE;
 
     /// @notice Wrapped native token the platform fee is paid in.
-    IWETH public immutable weth;
-
-    /// @notice The minimum allowed value (in wei) required to create a new invoice.
-    uint256 private minimumInvoiceValue;
-
-    /// @notice The window of time allowed for accepting a transaction after creation.
-    uint256 private decisionWindow;
+    /// @notice Seconds an escrow holds a payment after acceptance, before release.
+    uint32 public immutable ESCROW_HOLD_PERIOD;
 
     /// @notice Address of the {PaymentAutomation} adapter allowed to drain due tasks on a keeper's behalf.
-    address private automation;
+    /// @notice Keeper adapter allowed to drive `processDueTasks`; fixed at deployment.
+    address public immutable AUTOMATION;
 
     /// @dev True only while a fee is in flight from escrow to `weth`, so `receive` accepts nothing else.
     bool transient wrappingFee;
@@ -93,25 +89,25 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /**
-     * @notice Initializes the payment processor with its storage, notes contract, and minimum invoice value.
+     * @notice Initializes the payment processor with the contracts it is permanently paired with.
+     * @dev Every dependency here is immutable; changing one means redeploying the processor.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
-     * @param _minimumInvoicePrice The new minimum default invoice value to set (in wei).
      * @param _notesAddress Address of the notes contract used for invoice notes.
+     * @param _automationAddress The keeper adapter allowed to drive `processDueTasks`.
+     * @param _escrowHoldPeriod Seconds an escrow holds a payment before release. Must be non-zero.
      */
     constructor(
         address _paymentProcessorStorageAddress,
-        uint256 _minimumInvoicePrice,
         address _notesAddress,
-        address _wethAddress
+        address _automationAddress,
+        uint32 _escrowHoldPeriod
     ) {
-        ppStorage = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
-        notes = INotes(_notesAddress);
-        weth = IWETH(_wethAddress);
-        decisionWindow = SELLER_DEFAULT_DECISION_WINDOW;
-        // Assigned directly rather than via setMinimumInvoiceValue: this contract is deployed against a
-        // predicted storage address before the storage contract exists, so the setter's owner check
-        // (which calls into ppStorage) would revert here.
-        minimumInvoiceValue = _minimumInvoicePrice;
+        if (_escrowHoldPeriod == 0) revert InvalidHoldPeriod();
+
+        PP_STORAGE = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
+        NOTES = INotes(_notesAddress);
+        AUTOMATION = _automationAddress;
+        ESCROW_HOLD_PERIOD = _escrowHoldPeriod;
     }
 
     /**
@@ -538,35 +534,8 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     }
 
     /// @inheritdoc ISimplePaymentProcessor
-    function setMinimumInvoiceValue(uint256 _newMinimumInvoiceValue) public onlyAuthorized {
-        minimumInvoiceValue = _newMinimumInvoiceValue;
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function setAutomation(address _automationAddress) external onlyAuthorized {
-        automation = _automationAddress;
-        emit AutomationUpdated(_automationAddress);
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function setDecisionWindow(uint256 _newDecisionWindow) external onlyAuthorized {
-        if (_newDecisionWindow == 0) revert InvalidDecisionWindow();
-        decisionWindow = _newDecisionWindow;
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function getAutomation() external view returns (address automationAddress) {
-        return automation;
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
-    function getDecisionWindow() external view returns (uint256 decisionWindowValue) {
-        return decisionWindow;
-    }
-
-    /// @inheritdoc ISimplePaymentProcessor
     function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceValue) {
-        return ppStorage.getNextInvoiceNonce();
+        return PP_STORAGE.getNextInvoiceNonce();
     }
 
     /// @inheritdoc ISimplePaymentProcessor

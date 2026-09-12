@@ -105,28 +105,22 @@ contract OracleManagerTest is BaseSetUp {
         assertEq(oracle.getUsdPerToken(TOKEN), uint256(INITIAL_PRICE));
     }
 
-    // ── setSequencerUptimeFeed ────────────────────────────────────────────────────
+    // ── sequencer uptime feed ─────────────────────────────────────────────────────
 
-    function test_setSequencerUptimeFeed_revertsForNonOwner() public {
-        vm.expectRevert(IOracleManager.NotAuthorized.selector);
-        oracle.setSequencerUptimeFeed(address(seqFeed));
+    function test_sequencerUptimeFeedIsFixedAtConstruction() public view {
+        assertEq(oracle.SEQUENCER_UPTIME_FEED(), address(seqFeed));
     }
 
-    function test_setSequencerUptimeFeed_owner() public {
-        address newFeed = address(0xbeef);
+    function test_zeroSequencerFeedDisablesTheCheck() public {
+        OracleManager noSeqOracle = new OracleManager(address(ppStorage), address(0));
         vm.prank(admin);
-        oracle.setSequencerUptimeFeed(newFeed);
+        noSeqOracle.setPriceFeed(
+            TOKEN,
+            IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT, allowed: true })
+        );
 
-        assertEq(oracle.getSequencerUptimeFeed(), newFeed);
-    }
-
-    function test_setSequencerUptimeFeed_toZeroDisablesCheck() public {
-        vm.prank(admin);
-        oracle.setSequencerUptimeFeed(address(0));
-
-        assertEq(oracle.getSequencerUptimeFeed(), address(0));
-        // Should still return price without sequencer check
-        assertEq(oracle.getUsdPerToken(TOKEN), uint256(INITIAL_PRICE));
+        assertEq(noSeqOracle.SEQUENCER_UPTIME_FEED(), address(0));
+        assertEq(noSeqOracle.getUsdPerToken(TOKEN), uint256(INITIAL_PRICE));
     }
 
     // ── getUsdPerToken — sequencer validation ─────────────────────────────────────

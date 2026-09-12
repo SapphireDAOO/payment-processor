@@ -21,7 +21,7 @@ contract NotesTest is NotesSetUp {
         assertEq(share, true);
         assertEq(content, bytes("hello everyone"));
         assertEq(openedStatus, true);
-        assertEq(version, notes.getCurrentVersion());
+        assertEq(version, notes.CURRENT_VERSION());
 
         noteId = notes.createNote(invoiceId, address(1), "how is it going?", true);
 
@@ -33,7 +33,7 @@ contract NotesTest is NotesSetUp {
         assertEq(share, true);
         assertEq(content, bytes("how is it going?"));
         assertEq(openedStatus, true);
-        assertEq(version, notes.getCurrentVersion());
+        assertEq(version, notes.CURRENT_VERSION());
 
         assertEq(notes.isOpened(invoiceId, noteId, address(this)), false);
     }
@@ -57,7 +57,7 @@ contract NotesTest is NotesSetUp {
         assertEq(share, true);
         assertEq(content, bytes("hello everyone"));
         assertEq(openedStatus, true);
-        assertEq(version, notes.getCurrentVersion());
+        assertEq(version, notes.CURRENT_VERSION());
 
         noteId = notes.createNote(invoiceId, address(this), "what is the result", false);
 
@@ -77,18 +77,19 @@ contract NotesTest is NotesSetUp {
         notes.getNote(invoiceId, noteId);
     }
 
-    function test_newVersion() public {
-        vm.expectRevert(INotes.Unauthorized.selector);
-        notes.updateVersion(2);
-
-        vm.prank(admin);
-        notes.updateVersion(2);
-
+    function test_notesCarryTheFixedVersion() public {
+        // The encryption version is a compile-time constant now, so every note carries it.
         uint216 invoiceId = 1;
 
         uint256 noteId = notes.createNote(invoiceId, address(this), "hello everyone", false);
         (,,,, uint8 version) = notes.getNote(invoiceId, noteId);
-        assertEq(version, notes.getCurrentVersion());
+        assertEq(version, notes.CURRENT_VERSION());
+    }
+
+    function test_unauthorizedAccountCannotCreateNotes() public {
+        vm.prank(address(0xa0));
+        vm.expectRevert(INotes.Unauthorized.selector);
+        notes.createNote(1, address(0xa0), "hello", false);
     }
 
     // ── setPublicKey ──────────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ contract NotesTest is NotesSetUp {
     function test_setPublicKeyRegistersTheCallersOwnKey() public {
         Vm.Wallet memory wallet = vm.createWallet("public-key-owner");
         bytes memory publicKey = _publicKey(wallet);
-        uint8 version = notes.getCurrentVersion();
+        uint8 version = notes.CURRENT_VERSION();
 
         assertEq(notes.getPublicKey(wallet.addr).key.length, 0, "should start unregistered");
 
@@ -111,22 +112,12 @@ contract NotesTest is NotesSetUp {
     }
 
     function test_setPublicKeyRecordsTheVersionActiveAtRegistration() public {
-        vm.prank(admin);
-        notes.updateVersion(7);
-
         Vm.Wallet memory wallet = vm.createWallet("public-key-owner");
 
         vm.prank(wallet.addr);
         notes.setPublicKey(_publicKey(wallet));
 
-        assertEq(notes.getPublicKey(wallet.addr).version, 7);
-
-        // A later version bump does not rewrite an already-registered key.
-        vm.prank(admin);
-        notes.updateVersion(8);
-
-        assertEq(notes.getPublicKey(wallet.addr).version, 7);
-        assertEq(notes.getCurrentVersion(), 8);
+        assertEq(notes.getPublicKey(wallet.addr).version, notes.CURRENT_VERSION());
     }
 
     function test_setPublicKeyOnlyEverWritesTheCallersOwnSlot() public {

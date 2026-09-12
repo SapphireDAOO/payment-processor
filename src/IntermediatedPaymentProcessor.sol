@@ -41,17 +41,17 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     using { SafeCastLib.toUint256 } for int256;
     using { FixedPointMathLib.mulDiv, FixedPointMathLib.mulDivUp } for uint256;
 
-    /// @notice Minimum USD price (8 decimals) an invoice must meet to be accepted by the processor.
-    uint256 private minimumPrice;
-
     /// @notice Reference to the external Payment Processor storage contract.
-    IPaymentProcessorStorage public immutable ppStorage;
+    IPaymentProcessorStorage public immutable PP_STORAGE;
 
     /// @notice OracleManager used to convert USD-denominated invoice prices into payment-token amounts.
-    IOracleManager public oracle;
+    IOracleManager public immutable ORACLE;
 
     /// @notice The next available meta-invoice ID to be assigned.
     uint216 private nextMetaInvoiceNonce;
+
+    /// @dev True only while a fee is in flight from escrow to WETH, so `receive` accepts nothing else.
+    bool transient wrappingFee;
 
     /**
      * @notice Mapping from unique invoice ID to its invoice data.
@@ -347,18 +347,6 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         invoices[_invoiceId] = i;
 
         emit UpdateReleaseTime(_invoiceId, _holdPeriod);
-    }
-
-    /// @inheritdoc IIntermediatedPaymentProcessor
-    function setMinimumPrice(uint256 _newMinimumPrice) external onlyOwner {
-        minimumPrice = _newMinimumPrice;
-    }
-
-    /// @inheritdoc IIntermediatedPaymentProcessor
-    function setOracle(address _oracle) external onlyOwner {
-        if (_oracle == address(0)) revert InvalidOracle();
-        emit OracleUpdated(address(oracle), _oracle);
-        oracle = IOracleManager(_oracle);
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor

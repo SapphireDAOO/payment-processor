@@ -51,11 +51,8 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
 
     /// @notice Initializes the base setup and deploys the intermediated processor.
     function setUp() public virtual {
-        (address storageAddress, address notesAddress) = initialize();
-
-        address ca = address(_intermediatedPaymentProcessorSetUp(storageAddress));
-        vm.prank(admin);
-        Notes(notesAddress).setAuthorized(ca, true);
+        (address storageAddress,) = initialize();
+        _intermediatedPaymentProcessorSetUp(storageAddress);
     }
 
     /// @dev Deploys the oracle and processor against the predicted storage address so the

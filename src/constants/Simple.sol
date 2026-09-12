@@ -28,6 +28,9 @@ uint8 constant BURNED = 8;
 // Basis points denominator used for percentage calculations (1% = 100).
 uint256 constant BASIS_POINTS = 10_000;
 
+// Smallest invoice a seller may create, in wei.
+uint256 constant MINIMUM_INVOICE_VALUE = 0.005 ether;
+
 // Default decision period for the seller after an invoice is paid.
 uint256 constant SELLER_DEFAULT_DECISION_WINDOW = 6 hours;
 

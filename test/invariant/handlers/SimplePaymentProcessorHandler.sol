@@ -119,18 +119,6 @@ contract SimplePaymentProcessorHandler is Test {
         pp.release(invoiceId);
     }
 
-    function setMinimumInvoiceValue(uint256 _newMin) public {
-        _newMin = bound(_newMin, 0, 100 ether);
-        vm.prank(admin);
-        pp.setMinimumInvoiceValue(_newMin);
-    }
-
-    function setDecisionWindow(uint256 _newWindow) public {
-        _newWindow = bound(_newWindow, 1 hours, 7 days);
-        vm.prank(admin);
-        pp.setDecisionWindow(_newWindow);
-    }
-
     function refundBuyer(uint256 _index) public invoiceExists {
         _index = _bound(_index);
         uint216 invoiceId = invoiceIds[_index];

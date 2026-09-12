@@ -20,7 +20,7 @@ contract Sweeper is ISweeper {
     using { SafeTransferLib.safeTransferFrom, SafeTransferLib.balanceOf } for address;
 
     /// @notice Reference to the external Payment Processor storage contract, which holds the owner.
-    IPaymentProcessorStorage public immutable ppStorage;
+    IPaymentProcessorStorage public immutable PP_STORAGE;
 
     /**
      * @notice Restricts function access to the owner of the PaymentProcessorStorage contract.

@@ -8,55 +8,39 @@ import { IERC165, IReceiver } from "../../src/interface/IReceiver.sol";
 import { SimplePaymentProcessorSetUp } from "../utils/SimplePaymentProcessorSetUp.sol";
 
 import { CRE_SOURCE, GELATO_SOURCE } from "src/constants/Automation.sol";
-import { PAID, REFUNDED, RELEASED } from "src/constants/Simple.sol";
+import { PAID, REFUNDED, RELEASED, SELLER_DEFAULT_DECISION_WINDOW } from "src/constants/Simple.sol";
 
 contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
     function test_constructorState() public view {
-        assertEq(address(automation.processor()), address(simplePP));
-        assertEq(address(automation.ppStorage()), address(ppStorage));
-        assertEq(automation.getForwarder(), FORWARDER_TWO);
-        assertEq(automation.getWorkflowOwner(), WORKFLOW_OWNER);
+        assertEq(address(automation.PROCESSOR()), address(simplePP));
+        assertEq(address(automation.PP_STORAGE()), address(ppStorage));
+        assertEq(automation.FORWARDER(), FORWARDER_TWO);
+        assertEq(automation.WORKFLOW_OWNER(), WORKFLOW_OWNER);
     }
 
-    function test_constructorRejectsZeroAddresses() public {
-        vm.expectRevert(IPaymentAutomation.InvalidAddress.selector);
-        new PaymentAutomation(address(0), address(ppStorage));
+    function test_constructorRejectsZeroStorage() public {
+        // The test contract answers {pendingProcessor}, so only the storage address is checked here.
+        pendingProcessorAddress = address(simplePP);
 
         vm.expectRevert(IPaymentAutomation.InvalidAddress.selector);
-        new PaymentAutomation(address(simplePP), address(0));
+        new PaymentAutomation(address(0), FORWARDER_TWO, WORKFLOW_OWNER);
+    }
+
+    function test_constructorRejectsAnAbsentProcessor() public {
+        pendingProcessorAddress = address(0);
+
+        vm.expectRevert(IPaymentAutomation.InvalidAddress.selector);
+        new PaymentAutomation(address(ppStorage), FORWARDER_TWO, WORKFLOW_OWNER);
     }
 
     // ================================================================
     //                        CONFIGURATION
     // ================================================================
 
-    function test_setForwarderAuthorized() public {
-        vm.prank(buyerOne);
-        vm.expectRevert(IPaymentAutomation.NotAuthorized.selector);
-        automation.setForwarderAddress(address(2));
-
-        address newForwarder = address(0xcafe);
-
-        vm.prank(admin);
-        vm.expectEmit(address(automation));
-        emit IPaymentAutomation.ForwarderUpdated(newForwarder);
-        automation.setForwarderAddress(newForwarder);
-
-        assertEq(automation.getForwarder(), newForwarder);
-    }
-
-    function test_setWorkflowOwner() public {
-        vm.prank(buyerOne);
-        vm.expectRevert(IPaymentAutomation.NotAuthorized.selector);
-        automation.setWorkflowOwner(address(2));
-
-        address newWorkflowOwner = address(0xa0);
-        vm.prank(admin);
-        vm.expectEmit(address(automation));
-        emit IPaymentAutomation.WorkflowOwnerUpdated(newWorkflowOwner);
-        automation.setWorkflowOwner(newWorkflowOwner);
-
-        assertEq(automation.getWorkflowOwner(), newWorkflowOwner);
+    function test_forwarderAndWorkflowOwnerAreFixedAtConstruction() public view {
+        // Both are immutable now; changing either means redeploying the adapter.
+        assertEq(automation.FORWARDER(), FORWARDER_TWO);
+        assertEq(automation.WORKFLOW_OWNER(), WORKFLOW_OWNER);
     }
 
     function test_supportsInterface() public view {
@@ -162,26 +146,26 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         _payInvoice();
         assertFalse(automation.hasDueTasks());
 
-        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
+        vm.warp(block.timestamp + SELLER_DEFAULT_DECISION_WINDOW + 1);
         assertTrue(automation.hasDueTasks());
         assertEq(automation.hasDueTasks(), simplePP.hasDueTasks());
     }
 
-    function test_processDueTasksRevertsOnceDeregistered() public {
+    function test_processDueTasksRejectsAnyOtherCaller() public {
+        // The adapter pairing is immutable, so the processor can only ever be driven by this one
+        // adapter or by the owner.
         _payInvoiceAndWarpPastDecisionWindow();
 
-        vm.prank(admin);
-        simplePP.setAutomation(address(0));
-
+        vm.prank(buyerOne);
         vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
-        automation.processDueTasks();
+        simplePP.processDueTasks();
     }
 
     function test_automatedReleaseAfterHoldPeriod() public {
         uint256 invoicePrice = 10 ether;
 
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);

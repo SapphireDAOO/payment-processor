@@ -20,14 +20,17 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @notice How long an emergency pause holds without owner approval.
     uint256 public constant EMERGENCY_PAUSE_DURATION = 24 hours;
 
+    /// @notice Platform fee rate in basis points (BPS). 500 BPS = 5%.
+    uint96 public constant FEE_RATE = 500;
+
+    /// @notice Minimum gas that must remain to continue processing automated tasks.
+    uint96 public constant GAS_THRESHOLD = 100_000;
+
     /**
      * @notice The next available unique invoice nonce.
      * @dev Used to track and increment standalone or sub-invoice nonces.
      */
     uint216 private nextInvoiceNonce;
-
-    /// @notice Window of time (in seconds) after invoice creation during which a buyer can pay.
-    uint256 private paymentValidityDuration;
 
     /**
      * @notice Tracks whether an address is authorized to perform restricted actions.
@@ -35,16 +38,21 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
      */
     mapping(address caller => bool state) private isAuthorized;
 
-    /**
-     * @notice Stores the configuration settings for the contract (e.g., default hold period, gas threshold).
-     *  @dev Struct containing modifiable parameters used throughout the contract.
-     */
-    Configuration private config;
+    /// @notice Address that receives platform fees. Fixed at construction.
+    address public immutable FEE_RECEIVER;
+
+    /// @notice Wrapped native token both processors pay platform fees in.
+    address public immutable WETH;
+
+    /// @notice Address authorized to call the privileged IntermediatedPaymentProcessor functions.
+    /// @dev Settable so the operating wallet can be replaced without redeploying.
+    address private intermediatedPlatformsOperator;
 
     /// @notice Address allowed to trigger an emergency pause.
     address private emergencyPauser;
 
     /// @notice Key whose signature authorizes the fee receiver supplied when an invoice is accepted or paid.
+    /// @dev Settable so the signing key can be rotated without redeploying.
     address private feeSigner;
 
     /// @notice Start of an unresolved emergency pause; 0 when none is pending.
@@ -64,19 +72,20 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
 
     /**
      * @notice Initializes the contract with the given configuration.
-     * @dev Sets the contract owner, stores the initial configuration parameters, and initializes the invoice nonce counter.
-     *      The addresses to authorize are fetched from the deployer (`msg.sender`) via
-     *      {IAuthorizedAddressProvider.authorizedAddresses}, so the deployer must be a contract implementing that
-     *      interface. Keeping the list out of the constructor args keeps it out of the CREATE2 init code, making this
-     *      contract's address predictable before the authorized processors are deployed. Authorization is fixed here,
-     *      at deployment, and cannot be changed afterwards.
-     * @param _configuration The initial configuration parameters including owner, gas threshold, and hold period.
+     * @dev The addresses to authorize are fetched from the deployer via
+     *      {IAuthorizedAddressProvider.authorizedAddresses} rather than passed in, which keeps them out
+     *      of the CREATE2 init code so this contract's address is predictable before the processors
+     *      exist. Authorization is fixed here and cannot be changed afterwards.
+     * @param _configuration The initial configuration parameters.
      */
     constructor(Configuration memory _configuration) {
+        if (_configuration.weth == address(0)) revert InvalidWeth();
+
         _initializeOwner(_configuration.owner);
-        config = _configuration;
+        FEE_RECEIVER = _configuration.feeReceiver;
+        WETH = _configuration.weth;
+        intermediatedPlatformsOperator = _configuration.intermediatedPlatformsOperator;
         nextInvoiceNonce = 1;
-        paymentValidityDuration = DEFAULT_PAYMENT_VALIDITY_PERIOD;
 
         address[] memory authorized = IAuthorizedAddressProvider(msg.sender).authorizedAddresses();
         for (uint256 i; i < authorized.length; i++) {
@@ -94,33 +103,8 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function setFeeReceiver(address _feeReceiverAddress) external onlyOwner {
-        config.feeReceiver = _feeReceiverAddress;
-        emit FeeReceiverUpdated(_feeReceiverAddress);
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function setFeeRate(uint96 _newFeeRate) external onlyOwner {
-        if (_newFeeRate > BASIS_POINTS) revert InvalidFeeRate();
-        config.feeRate = _newFeeRate;
-        emit FeeRateUpdated(_newFeeRate);
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function setGasThreshold(uint96 _newGasThreshold) external onlyOwner {
-        config.gasThreshold = _newGasThreshold;
-        emit GasThresholdUpdated(_newGasThreshold);
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function setPaymentValidityDuration(uint256 _newValidityDuration) external onlyOwner {
-        paymentValidityDuration = _newValidityDuration;
-        emit PaymentValidityDurationUpdated(_newValidityDuration);
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
     function setIntermediatedPlatformsOperator(address _intermediatedPlatformsOperatorWallet) external onlyOwner {
-        config.intermediatedPlatformsOperator = _intermediatedPlatformsOperatorWallet;
+        intermediatedPlatformsOperator = _intermediatedPlatformsOperatorWallet;
         emit IntermediatedPlatformsOperatorUpdated(_intermediatedPlatformsOperatorWallet);
     }
 

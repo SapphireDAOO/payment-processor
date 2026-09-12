@@ -16,11 +16,11 @@ contract OracleManager is IOracleManager {
     using { SafeCastLib.toUint256 } for int256;
 
     /// @notice Shared storage contract whose owner controls oracle writes.
-    PaymentProcessorStorage public immutable ppStorage;
+    PaymentProcessorStorage public immutable PP_STORAGE;
 
     /// @notice Chainlink L2 sequencer uptime feed. Returns answer=0 when up, answer=1 when down.
-    /// @dev Set to address(0) to disable the sequencer check (e.g. on L1 or local testnets).
-    address private sequencerUptimeFeed;
+    /// @dev address(0) disables the sequencer check (e.g. on L1 or local testnets).
+    address public immutable SEQUENCER_UPTIME_FEED;
 
     /// @notice Default number of decimals used for internal fixed-point arithmetic (e.g., 1e18 = 1.0)
     uint8 public constant DEFAULT_DECIMAL = 18;
@@ -89,25 +89,15 @@ contract OracleManager is IOracleManager {
         emit PriceFeedSet(_token, _config.aggregator, _config.heartbeat);
     }
 
-    /// @inheritdoc IOracleManager
-    function setSequencerUptimeFeed(address _sequencerUptimeFeed) external onlyAuthorized {
-        sequencerUptimeFeed = _sequencerUptimeFeed;
-    }
-
-    /// @inheritdoc IOracleManager
-    function getSequencerUptimeFeed() external view returns (address feed) {
-        return sequencerUptimeFeed;
-    }
-
     /**
      * @notice Reverts unless the L2 sequencer is up and past its post-restart grace period.
      * @dev Skipped when `sequencerUptimeFeed == address(0)` (L1 or local testnets). Shared by
      *      {getUsdPerToken} and {getUsdPerTokenBatch} so a batch call checks it only once.
      */
     function _checkSequencer() internal view {
-        if (sequencerUptimeFeed == address(0)) return;
+        if (SEQUENCER_UPTIME_FEED == address(0)) return;
 
-        try AggregatorV3Interface(sequencerUptimeFeed).latestRoundData() returns (
+        try AggregatorV3Interface(SEQUENCER_UPTIME_FEED).latestRoundData() returns (
             uint80, int256 seqAnswer, uint256 startedAt, uint256, uint80
         ) {
             if (seqAnswer != 0) revert SequencerDown();

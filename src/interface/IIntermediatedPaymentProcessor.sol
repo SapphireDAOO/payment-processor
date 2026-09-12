@@ -323,19 +323,6 @@ interface IIntermediatedPaymentProcessor {
     function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external;
 
     /**
-     * @notice Sets the minimum USD price an invoice must have to be created.
-     * @param _newMinimumPrice The new minimum price threshold (8 decimals, same unit as invoice prices).
-     */
-    function setMinimumPrice(uint256 _newMinimumPrice) external;
-
-    /**
-     * @notice Updates the OracleManager contract used for token price conversions.
-     * @dev Only callable by the owner. Reverts with `InvalidOracle` if `_oracle` is the zero address.
-     * @param _oracle The address of the new OracleManager contract.
-     */
-    function setOracle(address _oracle) external;
-
-    /**
      * @notice Retrieves the invoice data for a specific invoice ID.
      * @param _invoiceId The ID of the invoice.
      * @return i The invoice data.

@@ -51,39 +51,26 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     }
 
     function test_storageConfig() public {
-        vm.startPrank(admin);
-        ppStorage.setFeeReceiver(address(0xa0));
+        assertEq(FEE_RATE, ppStorage.FEE_RATE());
+        assertEq(DEFAULT_GAS_Threshold, ppStorage.GAS_THRESHOLD());
+        assertEq(feeReceiver, ppStorage.FEE_RECEIVER());
 
-        vm.expectRevert(InvalidFeeRate.selector);
-        ppStorage.setFeeRate(uint96(BASIS_POINTS + 1));
-
-        ppStorage.setFeeRate(100);
-        ppStorage.setGasThreshold(20_000);
-
+        vm.prank(admin);
         ppStorage.setIntermediatedPlatformsOperator(address(0xb0));
-        vm.stopPrank();
-
-        assertEq(address(0xa0), ppStorage.getFeeReceiver());
-        assertEq(100, ppStorage.getFeeRate());
-        assertEq(20_000, ppStorage.getGasThreshold());
         assertEq(address(0xb0), ppStorage.getIntermediatedPlatformsOperator());
     }
 
-    function test_setMinimumPrice() public {
-        vm.prank(buyerOne);
-        vm.expectRevert(IIntermediatedPaymentProcessor.NotAuthorized.selector);
-        intermediatedPP.setMinimumPrice(200e8);
-
-        uint256 newMin = 200e8;
-        vm.prank(admin);
-        intermediatedPP.setMinimumPrice(newMin);
+    function test_minimumPriceIsFixed() public {
+        uint256 minimum = DEFAULT_MINIMUM_INVOICE_PRICE;
 
         uint256 nextNonce = ppStorage.getNextInvoiceNonce();
         vm.expectRevert(IIntermediatedPaymentProcessor.PriceIsTooLow.selector);
-        intermediatedPP.createSingleInvoice(getInvoiceCreationParam(nextNonce, sellerOne, 100e8, _testPaymentTokens()));
+        intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(nextNonce, sellerOne, minimum - 1, _testPaymentTokens())
+        );
 
         intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, newMin, _testPaymentTokens())
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, minimum, _testPaymentTokens())
         );
     }
 
@@ -855,10 +842,6 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
             invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
         );
 
-        // Global fee rate change after creation must not affect this invoice.
-        vm.prank(admin);
-        ppStorage.setFeeRate(uint96(FEE_RATE * 4));
-
         uint256 sellerBalance = sellerOne.balance;
         uint256 expectedFee = (tokenValue * FEE_RATE) / BASIS_POINTS;
 
@@ -882,10 +865,6 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         );
 
         intermediatedPP.createDispute(invoiceId);
-
-        // Global fee rate change after creation must not affect this invoice.
-        vm.prank(admin);
-        ppStorage.setFeeRate(uint96(FEE_RATE * 4));
 
         uint256 sellerShare = 5000;
         uint256 buyerReceiving = applyBasisPoints(tokenValue, BASIS_POINTS - sellerShare);

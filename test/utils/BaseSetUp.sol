@@ -2,13 +2,15 @@
 pragma solidity 0.8.28;
 
 import { Notes } from "src/Notes.sol";
+import { MockWeth } from "../mock/MockWeth.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
-import { IAuthorizedAddressProvider } from "../../src/interface/IMasterDeployer.sol";
+import { IAuthorizedAddressProvider, IPendingProcessorProvider } from "../../src/interface/IMasterDeployer.sol";
 import { Test } from "forge-std/Test.sol";
 
-abstract contract BaseSetUp is Test, IAuthorizedAddressProvider {
+abstract contract BaseSetUp is Test, IAuthorizedAddressProvider, IPendingProcessorProvider {
     PaymentProcessorStorage ppStorage;
     Notes notes;
+    MockWeth weth;
 
     address internal admin = address(1);
     address internal buyerOne = address(2);
@@ -24,17 +26,26 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider {
     uint256 constant INITIAL_BALANCE = 100_000 ether;
     uint256 public constant FEE_RATE = 500;
 
-    uint256 constant DEFAULT_HOLD_PERIOD = 1 days;
+    /// @dev The system-wide escrow hold period every test invoice runs with.
+    uint32 constant TEST_ESCROW_HOLD_PERIOD = 1 days;
     uint256 constant DEFAULT_GAS_Threshold = 100_000;
 
     bytes32 internal constant TEST_SALT = keccak256("payment-processor.test");
 
-    /// @dev Read back by PaymentProcessorStorage's constructor; populated via {_authorize}.
+    /// @dev Read back by PaymentProcessorStorage's and Notes' constructors; populated via {_authorize}.
     address[] private pendingAuthorized;
+
+    /// @dev Read back by PaymentAutomation's constructor, which takes no processor argument.
+    address internal pendingProcessorAddress;
 
     /// @inheritdoc IAuthorizedAddressProvider
     function authorizedAddresses() external view returns (address[] memory authorized) {
         authorized = pendingAuthorized;
+    }
+
+    /// @inheritdoc IPendingProcessorProvider
+    function pendingProcessor() external view returns (address processor) {
+        processor = pendingProcessorAddress;
     }
 
     /**

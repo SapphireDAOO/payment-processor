@@ -48,12 +48,13 @@ contract MultiSigHandler is Test {
         ghostThreshold = _initialThreshold;
     }
 
-    function propose(uint256 _signerIndex, uint96 _feeRate) external hasSigners {
+    function propose(uint256 _signerIndex, uint256 _operatorSeed) external hasSigners {
         _signerIndex = bound(_signerIndex, 0, signers.length - 1);
-        _feeRate = uint96(bound(uint256(_feeRate), 0, 10_000));
         address signer = signers[_signerIndex];
 
-        bytes memory data = abi.encodeCall(IPaymentProcessorStorage.setFeeRate, _feeRate);
+        // Any owner-only call works as a payload; the fee rate is a constant now.
+        address operator = address(uint160(bound(_operatorSeed, 1, type(uint160).max)));
+        bytes memory data = abi.encodeCall(IPaymentProcessorStorage.setIntermediatedPlatformsOperator, operator);
 
         vm.prank(signer);
         bytes32 txHash = multisig.proposeTransaction(address(ppStorage), 0, data);

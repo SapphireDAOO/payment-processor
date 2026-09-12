@@ -78,15 +78,6 @@ interface INotes {
     function isOpened(uint216 _invoiceId, uint256 _noteId, address _user) external view returns (bool isOpen);
 
     /**
-     * @notice Updates the active note encryption version.
-     * @dev Only owner. This affects only notes created after the update.
-     * Existing notes retain their original version and remain decryptable
-     * using the encrypter associated with their stored version.
-     * @param _newVersion The new note encryption version identifier to use.
-     */
-    function updateVersion(uint8 _newVersion) external;
-
-    /**
      * @notice Get a single note if visible to the caller.
      * @dev Reverts with Unauthorized if the caller is not the note author and the note is
      *      not shared. Only the author can read a private note; shared notes are readable
@@ -103,14 +94,6 @@ interface INotes {
         external
         view
         returns (address author, bool share, bytes memory content, bool openedStatus, uint8 version);
-
-    /**
-     * @notice Updates the authorization status for a user.
-     * @dev Only owner.
-     * @param _user The address to update.
-     * @param _enabled Whether the user should be authorized.
-     */
-    function setAuthorized(address _user, bool _enabled) external;
 
     /**
      * @notice Registers the caller's wallet public key, so others can encrypt notes to it.
@@ -158,6 +141,9 @@ interface INotes {
      * @param version The note encryption version active at registration.
      */
     event PublicKeySet(address indexed account, bytes publicKey, uint8 version);
+
+    /// @notice The note encryption version applied to new notes. Compile-time constant.
+    function CURRENT_VERSION() external view returns (uint8 version);
 
     /**
      * @notice Emitted when a user changes their opened state for a note.

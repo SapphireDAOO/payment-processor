@@ -192,21 +192,6 @@ interface ISimplePaymentProcessor {
     function refundBuyer(uint216 _invoiceId) external;
 
     /**
-     * @notice Updates the minimum allowed invoice value required for creating an invoice.
-     * @dev Only callable by the owner or the storage contract.
-     * @param _minimumInvoiceValue The new minimum invoice value to set (in wei).
-     */
-    function setMinimumInvoiceValue(uint256 _minimumInvoiceValue) external;
-
-    /**
-     * @notice Updates the automation adapter allowed to drain due tasks on a keeper network's behalf.
-     * @dev Only callable by the owner or the storage contract. Set to address(0) to leave the owner as
-     *      the only caller of `processDueTasks`.
-     * @param _automationAddress The new automation adapter address to set.
-     */
-    function setAutomation(address _automationAddress) external;
-
-    /**
      * @notice Processes due invoice tasks (auto-release and auto-refund) within the gas threshold.
      * @dev Callable by the owner or the registered automation adapter. Stops once remaining gas drops
      *      below the configured threshold; leftovers are picked up on the next call.
@@ -219,12 +204,6 @@ interface ISimplePaymentProcessor {
      * @return dueTasksExist True when the earliest scheduled task is due.
      */
     function hasDueTasks() external view returns (bool dueTasksExist);
-
-    /**
-     * @notice Updates the decision window sellers have to accept/reject payments after buyer payment.
-     * @param _newDecisionWindow The new decision window in seconds.
-     */
-    function setDecisionWindow(uint256 _newDecisionWindow) external;
 
     /**
      * @notice Returns the nonce that will be assigned to the next invoice.

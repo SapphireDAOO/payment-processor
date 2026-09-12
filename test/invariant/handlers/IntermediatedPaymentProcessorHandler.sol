@@ -257,12 +257,6 @@ contract IntermediatedPaymentProcessorHandler is Test {
         intermediatedPP.setInvoiceReleaseTime(invoiceId, _holdPeriod);
     }
 
-    function setMinimumPrice(uint256 _newMin) public {
-        _newMin = bound(_newMin, 1e6, 1_000e8);
-        vm.prank(admin);
-        intermediatedPP.setMinimumPrice(_newMin);
-    }
-
     /// @notice Returns the total number of single invoices created by the handler.
     function getTotalSingleInvoiceCreated() public view returns (uint256 totalSingleInvoices) {
         return totalSingleInvoiceCreated;

@@ -4,24 +4,17 @@ pragma solidity 0.8.28;
 import { SimplePaymentProcessor } from "../../src/SimplePaymentProcessor.sol";
 import { PaymentAutomation } from "../../src/PaymentAutomation.sol";
 import { BaseSetUp } from "./BaseSetUp.sol";
-import { Notes } from "src/Notes.sol";
-import { MockWeth } from "../mock/MockWeth.sol";
 
 abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     SimplePaymentProcessor simplePP;
     PaymentAutomation automation;
-    MockWeth weth;
-    uint256 constant MINIMUM_INVOICE_VALUE = 1 ether;
-
-    uint32 constant HOLD_PERIOD = 2 days;
 
     address constant FORWARDER_TWO = address(0xb0);
     address constant WORKFLOW_OWNER = address(0xc0ffee);
 
-    /// @notice Initializes the base setup and wires the simple payment processor.
+    /// @notice Initializes the base setup, which deploys and wires the simple payment processor.
     function setUp() public virtual {
-        (address storageAddress, address notesAddress) = initialize();
-        _simplePaymentProcessorSetUp(storageAddress, notesAddress);
+        initialize();
     }
 
     /// @dev Deploys the processor against the predicted storage address so it can be authorized at
@@ -29,33 +22,23 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     ///      `processDueTasks` on the processor.
     function _deployAuthorized(address _predictedStorage, address _notesAddress) internal virtual override {
         super._deployAuthorized(_predictedStorage, _notesAddress);
-        weth = new MockWeth();
-        simplePP = new SimplePaymentProcessor(_predictedStorage, MINIMUM_INVOICE_VALUE, _notesAddress, address(weth));
-        automation = new PaymentAutomation(address(simplePP), _predictedStorage);
+
+        address predictedAutomation = vm.computeCreate2Address(
+            TEST_SALT,
+            keccak256(
+                abi.encodePacked(
+                    type(PaymentAutomation).creationCode, abi.encode(_predictedStorage, FORWARDER_TWO, WORKFLOW_OWNER)
+                )
+            ),
+            address(this)
+        );
+
+        simplePP =
+            new SimplePaymentProcessor(_predictedStorage, _notesAddress, predictedAutomation, TEST_ESCROW_HOLD_PERIOD);
+        pendingProcessorAddress = address(simplePP);
+        automation = new PaymentAutomation{ salt: TEST_SALT }(_predictedStorage, FORWARDER_TWO, WORKFLOW_OWNER);
+        require(address(automation) == predictedAutomation, "automation deployed away from prediction");
         _authorize(address(simplePP));
-    }
-
-    /**
-     * @notice Configures the SimplePaymentProcessor deployed during {initialize}.
-     * @param _storageAddress The PaymentProcessorStorage address.
-     * @param _notesAddress The Notes contract address.
-     * @return simplePaymentProcessor The configured processor instance.
-     */
-    function _simplePaymentProcessorSetUp(address _storageAddress, address _notesAddress)
-        internal
-        virtual
-        returns (SimplePaymentProcessor simplePaymentProcessor)
-    {
-        vm.prank(admin);
-        Notes(_notesAddress).setAuthorized(address(simplePP), true);
-
-        vm.startPrank(_storageAddress);
-        simplePP.setAutomation(address(automation));
-        automation.setForwarderAddress(FORWARDER_TWO);
-        automation.setWorkflowOwner(WORKFLOW_OWNER);
-        vm.stopPrank();
-
-        simplePaymentProcessor = simplePP;
     }
 
     /**

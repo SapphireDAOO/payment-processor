@@ -76,19 +76,8 @@ interface IOracleManager {
      */
     function setPriceFeed(address _token, PriceFeedConfig memory _config) external;
 
-    /**
-     * @notice Sets the Chainlink L2 sequencer uptime feed address.
-     * @dev Callable only by the owner. Set to address(0) to disable the sequencer check
-     *      (e.g. on L1 deployments or local testnets where no uptime feed exists).
-     * @param _sequencerUptimeFeed The sequencer uptime feed address, or address(0) to disable.
-     */
-    function setSequencerUptimeFeed(address _sequencerUptimeFeed) external;
-
-    /**
-     * @notice Returns the configured sequencer uptime feed address.
-     * @return feed The sequencer uptime feed address, or address(0) if the check is disabled.
-     */
-    function getSequencerUptimeFeed() external view returns (address feed);
+    /// @notice The sequencer uptime feed, or address(0) when the check is disabled. Fixed at construction.
+    function SEQUENCER_UPTIME_FEED() external view returns (address feed);
 
     /**
      * @notice Emitted when the price feed configuration for a token is updated.

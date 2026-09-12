@@ -17,7 +17,7 @@ contract MultiSigTest is MultiSigSetUp {
     }
 
     function test_proposeTransaction() public {
-        bytes memory data = _encodeSetFeeRate(1000);
+        bytes memory data = _encodeSetFeeSigner(address(0xf005));
         address target = address(ppStorage);
 
         vm.expectRevert(IMultiSig.NotSigner.selector);
@@ -46,7 +46,7 @@ contract MultiSigTest is MultiSigSetUp {
     }
 
     function test_approveTransaction() public {
-        bytes memory data = _encodeSetFeeRate(1000);
+        bytes memory data = _encodeSetFeeSigner(address(0xf005));
 
         bytes32 txHash = _propose(data);
 
@@ -80,8 +80,8 @@ contract MultiSigTest is MultiSigSetUp {
     }
 
     function test_executeTransaction() public {
-        uint96 newThreshold = 250_000;
-        bytes memory data = _encodeSetGasThreshold(newThreshold);
+        address newOperator = address(0x0b5e);
+        bytes memory data = _encodeSetOperator(newOperator);
 
         bytes32 txHash = _propose(data);
 
@@ -216,7 +216,7 @@ contract MultiSigTest is MultiSigSetUp {
     }
 
     function test_cancelTransaction() public {
-        bytes memory data = _encodeSetFeeRate(1000);
+        bytes memory data = _encodeSetFeeSigner(address(0xf005));
 
         bytes32 txHash = _propose(data);
 

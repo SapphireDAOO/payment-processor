@@ -49,33 +49,6 @@ interface IPaymentAutomation {
      */
     function hasDueTasks() external view returns (bool dueTasksExist);
 
-    /**
-     * @notice Updates the address of the CRE (Keystone) forwarder contract that delivers workflow reports.
-     * @dev Only callable by the owner or the storage contract. Only the configured forwarder may call `onReport`.
-     * @param _forwarderAddress The new forwarder contract address to be set.
-     */
-    function setForwarderAddress(address _forwarderAddress) external;
-
-    /**
-     * @notice Updates the CRE workflow owner authorized to trigger `onReport`.
-     * @dev Only callable by the owner or the storage contract. Rejects reports whose metadata carries
-     *      a different workflow owner.
-     * @param _workflowOwner The address that owns the authorized CRE workflow.
-     */
-    function setWorkflowOwner(address _workflowOwner) external;
-
-    /**
-     * @notice Returns the address of the configured CRE forwarder contract.
-     * @return forwarderAddress The configured forwarder address.
-     */
-    function getForwarder() external view returns (address forwarderAddress);
-
-    /**
-     * @notice Returns the CRE workflow owner authorized to trigger `onReport`.
-     * @return workflowOwnerAddress The authorized workflow owner address.
-     */
-    function getWorkflowOwner() external view returns (address workflowOwnerAddress);
-
     // ================================================================
     //                              EVENTS
     // ================================================================
