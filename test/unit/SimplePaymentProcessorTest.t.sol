@@ -571,7 +571,8 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_burnedInvoiceIsRemovedFromTheQueue() public {
         uint216 invoiceId = _burnInvoiceViaFailedRefunds(10 ether);
 
-        assertEq(simplePP.getItems().length, 0);
+        (uint216[] memory drained,) = simplePP.getItems();
+        assertEq(drained.length, 0);
         assertFalse(simplePP.hasDueTasks());
         assertEq(simplePP.getInvoiceData(invoiceId).state, BURNED);
     }

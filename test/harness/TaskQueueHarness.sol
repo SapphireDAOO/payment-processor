@@ -29,7 +29,7 @@ contract TaskQueueHarness {
         return TaskQueueLib.due(heap);
     }
 
-    function getItems() external view returns (uint216[] memory) {
+    function getItems() external view returns (uint216[] memory items, uint40[] memory time) {
         return TaskQueueLib.getItems(heap);
     }
 

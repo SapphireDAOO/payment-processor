@@ -75,7 +75,7 @@ contract TaskQueueLibTest is Test {
         h.insert(20, 100);
         h.insert(30, 200);
 
-        uint216[] memory items = h.getItems();
+        (uint216[] memory items,) = h.getItems();
         assertEq(items.length, 3);
         assertEq(items[0], 20);
     }
@@ -105,7 +105,7 @@ contract TaskQueueLibTest is Test {
         assertEq(h.size(), 2);
         assertEq(h.indexOf(1), 0);
 
-        uint216[] memory items = h.getItems();
+        (uint216[] memory items,) = h.getItems();
         assertEq(items[0], 2);
     }
 
@@ -128,7 +128,7 @@ contract TaskQueueLibTest is Test {
 
         h.reschedule(1, 50);
 
-        uint216[] memory items = h.getItems();
+        (uint216[] memory items,) = h.getItems();
         assertEq(items[0], 1);
     }
 
@@ -139,7 +139,7 @@ contract TaskQueueLibTest is Test {
 
         h.reschedule(1, 500);
 
-        uint216[] memory items = h.getItems();
+        (uint216[] memory items,) = h.getItems();
         assertTrue(items[0] != 1, "rescheduled task should no longer be root");
     }
 
@@ -210,7 +210,8 @@ contract TaskQueueLibTest is Test {
     }
 
     function test_getItemsEmptyHeap() public view {
-        assertEq(h.getItems().length, 0);
+        (uint216[] memory emptyIds,) = h.getItems();
+        assertEq(emptyIds.length, 0);
     }
 
     function test_getItemsReturnsAllIds() public {
@@ -218,6 +219,7 @@ contract TaskQueueLibTest is Test {
         h.insert(2, 200);
         h.insert(3, 300);
 
-        assertEq(h.getItems().length, 3);
+        (uint216[] memory keptIds,) = h.getItems();
+        assertEq(keptIds.length, 3);
     }
 }

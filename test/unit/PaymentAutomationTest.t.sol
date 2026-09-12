@@ -136,7 +136,8 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         vm.prank(buyerTwo);
         automation.processDueTasks();
 
-        assertEq(simplePP.getItems().length, 1);
+        (uint216[] memory queued,) = simplePP.getItems();
+        assertEq(queued.length, 1);
         assertEq(simplePP.getInvoiceData(invoiceId).state, PAID);
     }
 

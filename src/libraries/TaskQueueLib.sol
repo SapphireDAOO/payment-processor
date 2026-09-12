@@ -246,13 +246,17 @@ library TaskQueueLib {
      *      Items are not sorted; callers should sort by due time off-chain if needed.
      * @param _heap The heap storage struct.
      * @return items Array of task IDs in heap order.
+     * @return time Each task's due timestamp, index-aligned with `items`.
      */
-    function getItems(Heap storage _heap) internal view returns (uint216[] memory items) {
+    function getItems(Heap storage _heap) internal view returns (uint216[] memory items, uint40[] memory time) {
         uint256 size = _heap.data.length;
-        if (size == 0) return new uint216[](0);
+        if (size == 0) return (new uint216[](0), new uint40[](0));
         items = new uint216[](size);
+        time = new uint40[](size);
         for (uint256 i = 0; i < size; i++) {
-            items[i] = uint216(_heap.data[i]);
+            (uint216 id, uint40 dueAt) = _decode(_heap.data[i]);
+            items[i] = id;
+            time[i] = dueAt;
         }
     }
 }
