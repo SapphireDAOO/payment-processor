@@ -357,12 +357,6 @@ interface IIntermediatedPaymentProcessor {
     function totalMetaInvoiceCreated() external view returns (uint216 totalMetaInvoices);
 
     /**
-     * @notice Returns the minimum USD price an invoice must meet to be created.
-     * @return minimumPrice The current minimum price threshold (8 decimals).
-     */
-    function getMinimumPrice() external view returns (uint256 minimumPrice);
-
-    /**
      * @notice Returns the nonce that will be assigned to the next invoice.
      * @return nextInvoiceNonce The next invoice nonce value.
      */

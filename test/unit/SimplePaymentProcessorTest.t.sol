@@ -185,12 +185,12 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
     function test_paymentAcceptanceAfterDecisionWindow() public {
         uint256 invoicePrice = 100 ether;
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
-        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
+        vm.warp(block.timestamp + SELLER_DEFAULT_DECISION_WINDOW + 1);
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.AcceptanceWindowExceeded.selector);
         simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
@@ -209,7 +209,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.expectRevert(ISimplePaymentProcessor.InvoiceNotEligibleForRefund.selector);
         simplePP.refundBuyer(invoiceId);
 
-        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
+        vm.warp(block.timestamp + SELLER_DEFAULT_DECISION_WINDOW + 1);
         simplePP.refundBuyer(invoiceId);
         vm.stopPrank();
 
@@ -225,11 +225,11 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         uint256 invoicePrice = 100 ether;
 
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.startPrank(thisBuyer);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
-        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
+        vm.warp(block.timestamp + SELLER_DEFAULT_DECISION_WINDOW + 1);
         simplePP.refundBuyer(invoiceId);
 
         assertEq(simplePP.getInvoiceData(invoiceId).withdrawalRetries, 1);
@@ -500,12 +500,12 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         uint256 invoicePrice = 10 ether;
 
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
-        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
+        vm.warp(block.timestamp + SELLER_DEFAULT_DECISION_WINDOW + 1);
 
         vm.prank(address(automation));
         simplePP.processDueTasks();
@@ -523,12 +523,12 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         uint256 invoicePrice = 10 ether;
 
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
-        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
+        vm.warp(block.timestamp + SELLER_DEFAULT_DECISION_WINDOW + 1);
 
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.AcceptanceWindowExceeded.selector);
@@ -553,13 +553,13 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         NoReceiveEther noReceiveBuyer = new NoReceiveEther{ value: invoicePrice }();
 
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.deal(address(noReceiveBuyer), invoicePrice);
         vm.prank(address(noReceiveBuyer));
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);
 
-        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
+        vm.warp(block.timestamp + SELLER_DEFAULT_DECISION_WINDOW + 1);
 
         vm.startPrank(address(noReceiveBuyer));
         simplePP.refundBuyer(invoiceId);
@@ -823,25 +823,25 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
         vm.prank(sellerOne);
         vm.expectRevert(ISimplePaymentProcessor.ContractPaused.selector);
-        simplePP.createInvoice(10 ether, HOLD_PERIOD, "", false);
+        simplePP.createInvoice(10 ether, "", false);
 
         vm.warp(block.timestamp + ppStorage.EMERGENCY_PAUSE_DURATION());
 
         vm.prank(sellerOne);
-        simplePP.createInvoice(10 ether, HOLD_PERIOD, "", false);
+        simplePP.createInvoice(10 ether, "", false);
     }
 
     function _burnInvoiceViaFailedRefunds(uint256 _price) internal returns (uint216 invoiceId) {
         NoReceiveEther noReceiveBuyer = new NoReceiveEther{ value: _price }();
 
         vm.prank(sellerOne);
-        invoiceId = simplePP.createInvoice(_price, HOLD_PERIOD, "", false);
+        invoiceId = simplePP.createInvoice(_price, "", false);
 
         vm.deal(address(noReceiveBuyer), _price);
         vm.prank(address(noReceiveBuyer));
         simplePP.pay{ value: _price }(invoiceId, "", false);
 
-        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
+        vm.warp(block.timestamp + SELLER_DEFAULT_DECISION_WINDOW + 1);
 
         // 4 calls: retries 0 -> 1, 1 -> 2, 2 -> 3, then 3+1 > MAX_WITHDRAWAL_RETRIES -> burn
         vm.startPrank(address(noReceiveBuyer));

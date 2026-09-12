@@ -254,6 +254,6 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
     /// @dev Same as {_payInvoice}, then warps past the seller's decision window so the task is due.
     function _payInvoiceAndWarpPastDecisionWindow() internal returns (uint216 invoiceId) {
         invoiceId = _payInvoice();
-        vm.warp(block.timestamp + simplePP.getDecisionWindow() + 1);
+        vm.warp(block.timestamp + SELLER_DEFAULT_DECISION_WINDOW + 1);
     }
 }

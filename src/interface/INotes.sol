@@ -116,12 +116,6 @@ interface INotes {
     function getPublicKey(address _account) external view returns (PublicKey memory publicKey);
 
     /**
-     * @notice Returns the active note encryption version.
-     * @return v The current note version.
-     */
-    function getCurrentVersion() external view returns (uint8 v);
-
-    /**
      * @notice Emitted when a new note is created for an invoice.
      * @param invoiceId The unique identifier of the invoice the note is associated with.
      * @param noteId The unique identifier of the created note.

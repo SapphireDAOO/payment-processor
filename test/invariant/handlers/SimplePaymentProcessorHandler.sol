@@ -53,12 +53,12 @@ contract SimplePaymentProcessorHandler is Test {
     }
 
     function createInvoice(uint256 _price, uint32 _holdPeriod) public {
-        uint256 minValue = pp.getMinimumInvoiceValue();
+        uint256 minValue = MINIMUM_INVOICE_VALUE;
         if (minValue > INVOICE_PRICE) return;
         _price = bound(_price, minValue, INVOICE_PRICE);
         _holdPeriod = uint32(bound(uint256(_holdPeriod), 0, 30 days));
         vm.prank(seller);
-        uint216 invoiceId = pp.createInvoice(_price, _holdPeriod, "", false);
+        uint216 invoiceId = pp.createInvoice(_price, "", false);
         price[invoiceId] = _price;
         invoiceIds.push(invoiceId);
         totalInvoiceCreated++;

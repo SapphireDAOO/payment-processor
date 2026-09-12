@@ -188,11 +188,6 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getPaymentValidityDuration() external view returns (uint256 validDuration) {
-        return paymentValidityDuration;
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
     function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceValue) {
         return nextInvoiceNonce;
     }
@@ -203,27 +198,12 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getFeeRate() external view returns (uint256 feeRate) {
-        return config.feeRate;
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function getFeeReceiver() external view returns (address feeReceiver) {
-        return config.feeReceiver;
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
     function getFeeSigner() external view returns (address feeSignerAddress) {
         return feeSigner;
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function getIntermediatedPlatformsOperator() external view returns (address intermediatedPlatformsOperator) {
-        return config.intermediatedPlatformsOperator;
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function getGasThreshold() external view returns (uint256 gasThreshold) {
-        return config.gasThreshold;
+    function getIntermediatedPlatformsOperator() external view returns (address operator) {
+        return intermediatedPlatformsOperator;
     }
 }

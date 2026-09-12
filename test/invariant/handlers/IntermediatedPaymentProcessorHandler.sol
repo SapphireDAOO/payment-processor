@@ -89,8 +89,8 @@ contract IntermediatedPaymentProcessorHandler is Test {
     }
 
     function createMetaInvoice(uint256 _priceO, uint256 _priceT) public {
-        _priceO = bound(_priceO, intermediatedPP.getMinimumPrice(), 1_000e8);
-        _priceT = bound(_priceT, intermediatedPP.getMinimumPrice(), 1_000e8);
+        _priceO = bound(_priceO, DEFAULT_MINIMUM_INVOICE_PRICE, 1_000e8);
+        _priceT = bound(_priceT, DEFAULT_MINIMUM_INVOICE_PRICE, 1_000e8);
 
         address[] memory sellers = new address[](2);
         sellers[0] = seller;

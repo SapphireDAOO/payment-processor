@@ -133,24 +133,6 @@ interface IPaymentProcessorStorage {
     function totalInvoiceCreated() external view returns (uint216 totalInvoices);
 
     /**
-     * @notice Returns the window of time after invoice creation during which a buyer can pay.
-     * @return validDuration The payment validity window in seconds.
-     */
-    function getPaymentValidityDuration() external view returns (uint256 validDuration);
-
-    /**
-     * @notice Returns the current platform fee rate in basis points.
-     * @return feeRate The platform fee rate in basis points.
-     */
-    function getFeeRate() external view returns (uint256 feeRate);
-
-    /**
-     * @notice Returns the address that receives collected platform fees.
-     * @return feeReceiver The fee receiver address.
-     */
-    function getFeeReceiver() external view returns (address feeReceiver);
-
-    /**
      * @notice Returns the key whose signature authorizes a per-invoice fee receiver.
      * @return feeSigner The fee signer address.
      */
