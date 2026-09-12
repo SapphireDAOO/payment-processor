@@ -173,7 +173,7 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
-        vm.warp(block.timestamp + HOLD_PERIOD + 1);
+        vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
 
         (bool canExec,) = automation.checker();
         assertTrue(canExec);
@@ -245,7 +245,7 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         uint256 invoicePrice = 10 ether;
 
         vm.prank(sellerOne);
-        invoiceId = simplePP.createInvoice(invoicePrice, HOLD_PERIOD, "", false);
+        invoiceId = simplePP.createInvoice(invoicePrice, "", false);
 
         vm.prank(buyerOne);
         simplePP.pay{ value: invoicePrice }(invoiceId, "", false);

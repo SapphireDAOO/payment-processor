@@ -451,7 +451,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         }
 
         if (_i.releaseAt == 0) {
-            _i.releaseAt = (block.timestamp + _i.escrowHoldPeriod).toUint40();
+            _i.releaseAt = (block.timestamp + _i.holdPeriod).toUint40();
         }
 
         emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, _tokenPrice, _i.releaseAt, _feeReceiver);
@@ -505,8 +505,8 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     {
         if (_param.seller == address(0)) revert InvalidSeller();
         if (_param.price == 0) revert PriceCannotBeZero();
-        if (_param.price < minimumPrice) revert PriceIsTooLow();
-        if (_param.escrowHoldPeriod == 0) revert HoldPeriodCanNotBeZero();
+        if (_param.price < DEFAULT_MINIMUM_INVOICE_PRICE) revert PriceIsTooLow();
+        if (_param.holdPeriod == 0) revert HoldPeriodCanNotBeZero();
         if (_param.paymentTokens.length == 0) revert NoPaymentTokens();
         Invoice memory i;
         i.seller = _param.seller;

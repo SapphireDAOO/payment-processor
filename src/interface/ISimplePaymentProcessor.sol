@@ -11,6 +11,9 @@ interface ISimplePaymentProcessor {
     // ================================================================
 
     /// @notice Thrown when the caller lacks the required role or permission.
+    /// @notice Thrown when deploying with a zero escrow hold period.
+    error InvalidHoldPeriod();
+
     error NotAuthorized();
 
     /// @notice Thrown when the provided value is lower than the required minimum.
@@ -81,7 +84,6 @@ interface ISimplePaymentProcessor {
         uint40 releaseAt;
         uint40 expiresAt;
         uint40 sellerActionDeadline;
-        uint32 escrowHoldPeriod;
         uint8 state;
         uint8 withdrawalRetries;
         uint16 feeRate;
@@ -102,15 +104,12 @@ interface ISimplePaymentProcessor {
      * @dev Optionally stores a reference to the user's off-chain notes file. The hold period is fixed here
      *      and cannot be changed afterwards, including by the owner.
      * @param _price The price of the invoice in wei.
-     * @param _holdPeriod How long (in seconds) funds stay in escrow after the seller accepts payment.
      *        Pass 0 to make funds releasable immediately on acceptance.
      * @param _storageRef A bytes-encoded reference to the user's notes storage.
      * @param _share Whether the note is shared with the other party.
      * @return invoiceId The unique ID of the newly created invoice.
      */
-    function createInvoice(uint256 _price, uint32 _holdPeriod, bytes memory _storageRef, bool _share)
-        external
-        returns (uint216 invoiceId);
+    function createInvoice(uint256 _price, bytes memory _storageRef, bool _share) external returns (uint216 invoiceId);
 
     /**
      * @notice Pays for an existing invoice and optionally updates the user's notes storage reference.
@@ -127,7 +126,7 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Marks the specified invoice as accepted by the seller.
      * @dev Only callable by the seller within the decision window. Transitions the invoice to
-     *      ACCEPTED and sets `releaseAt` to now plus the `escrowHoldPeriod` fixed at invoice creation.
+     *      ACCEPTED and sets `releaseAt` to now plus `ESCROW_HOLD_PERIOD`.
      *      The invoice's heap entry is rescheduled from `sellerActionDeadline` to `releaseAt` for automated
      *      fund release after the hold period. `_feeReceiver` is recorded on the invoice and paid the
      *      platform fee on release, so it must be authorized by the fee signer via `_data`.

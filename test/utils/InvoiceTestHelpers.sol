@@ -29,7 +29,7 @@ function getInvoiceCreationParam(
     invoiceParam.invoiceId = LibString.toString(_invoiceNonce);
     invoiceParam.seller = _seller;
     invoiceParam.price = _price;
-    invoiceParam.escrowHoldPeriod = TEST_ESCROW_HOLD_PERIOD;
+    invoiceParam.holdPeriod = TEST_INVOICE_HOLD_PERIOD;
     invoiceParam.paymentTokens = _paymentTokens;
 }
 

@@ -28,7 +28,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
     function test_payInvoice() public {
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, "", false);
 
         vm.prank(NATIVE_TOKEN_BUYER);
         address escrow = simplePP.pay{ value: INVOICE_PRICE }(invoiceId, "", false);
@@ -44,7 +44,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
     function test_sellerCancelInvoice() public {
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, "", false);
 
         vm.prank(sellerOne);
         simplePP.cancelInvoice(invoiceId);
@@ -54,7 +54,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
     function test_rejectPayment() public {
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, "", false);
 
         vm.prank(NATIVE_TOKEN_BUYER);
         simplePP.pay{ value: INVOICE_PRICE }(invoiceId, "", false);
@@ -70,7 +70,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
     function test_acceptAndReleaseInvoice() public {
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, "", false);
 
         vm.prank(NATIVE_TOKEN_BUYER);
         simplePP.pay{ value: INVOICE_PRICE }(invoiceId, "", false);
@@ -82,7 +82,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
         vm.prank(sellerOne);
         simplePP.acceptPayment(invoiceId, feeReceiver, _feeSig(address(simplePP), invoiceId, feeReceiver));
 
-        vm.warp(block.timestamp + HOLD_PERIOD + 1);
+        vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
 
         vm.prank(sellerOne);
         simplePP.release(invoiceId);
@@ -98,7 +98,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
     function test_refundBuyerAfterDecisionWindowExpires() public {
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, "", false);
 
         vm.prank(NATIVE_TOKEN_BUYER);
         simplePP.pay{ value: INVOICE_PRICE }(invoiceId, "", false);
@@ -115,7 +115,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
     function test_processDueTasks_autoReleasesAcceptedInvoice() public {
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, "", false);
 
         vm.prank(NATIVE_TOKEN_BUYER);
         simplePP.pay{ value: INVOICE_PRICE }(invoiceId, "", false);
@@ -139,7 +139,7 @@ contract SimplePaymentProcessorInteractions is SimplePaymentProcessorSetUp {
 
     function test_processDueTasks_autoRefundsBuyerWhenSellerDoesNotAct() public {
         vm.prank(sellerOne);
-        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, HOLD_PERIOD, "", false);
+        uint216 invoiceId = simplePP.createInvoice(INVOICE_PRICE, "", false);
 
         vm.prank(NATIVE_TOKEN_BUYER);
         simplePP.pay{ value: INVOICE_PRICE }(invoiceId, "", false);

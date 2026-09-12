@@ -13,8 +13,8 @@ import {
     getInvoiceCreationParam,
     getInvoiceCreationParams,
     applyBasisPoints,
-    TEST_ESCROW_HOLD_PERIOD,
-    getEscrowAddress
+    getEscrowAddress,
+    TEST_INVOICE_HOLD_PERIOD
 } from "../utils/InvoiceTestHelpers.sol";
 
 import {
@@ -758,7 +758,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(intermediatedPP.getInvoice(invoiceId).balance, remaining);
         assertEq(intermediatedPP.getInvoice(invoiceId).state, PAID);
 
-        vm.warp(block.timestamp + DEFAULT_HOLD_PERIOD + 1);
+        vm.warp(block.timestamp + TEST_INVOICE_HOLD_PERIOD + 1);
 
         uint256 sellerUsdcBefore = mockUsdc.balanceOf(sellerOne);
         uint256 expectedFee = (remaining * FEE_RATE) / BASIS_POINTS;
@@ -894,17 +894,16 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(metaInv.price, prices[0] + prices[1] + prices[2]);
     }
 
-    function test_customEscrowHoldPeriodIsUsedWhenSet() public {
+    function test_invoiceHoldPeriodGovernsReleaseTime() public {
         uint256 price = 100e8;
         uint32 customHold = 7 days;
 
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
             getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens());
-        param.escrowHoldPeriod = customHold;
+        param.holdPeriod = customHold;
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(param);
-
-        assertEq(intermediatedPP.getInvoice(invoiceId).escrowHoldPeriod, customHold);
+        assertEq(intermediatedPP.getInvoice(invoiceId).holdPeriod, customHold);
 
         uint256 amountInToken = intermediatedPP.getTokenValueFromUsd(address(0), price);
         uint256 paidAt = block.timestamp;
@@ -915,30 +914,28 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         );
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
-
         assertEq(inv.releaseAt, paidAt + customHold);
         assertEq(inv.state, PAID);
     }
 
-    function test_createInvoiceRevertsWhenEscrowHoldPeriodIsZero() public {
+    function test_createInvoiceRevertsWhenHoldPeriodIsZero() public {
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
             getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, 100e8, _testPaymentTokens());
-        param.escrowHoldPeriod = 0;
+        param.holdPeriod = 0;
 
         vm.expectRevert(HoldPeriodCanNotBeZero.selector);
         intermediatedPP.createSingleInvoice(param);
     }
 
-    function test_customEscrowHoldPeriod_cannotReleaseBeforeIt() public {
+    function test_releaseOnlyAfterTheInvoiceHoldPeriodElapses() public {
         uint256 price = 100e8;
         uint32 customHold = 7 days;
 
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
             getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens());
-        param.escrowHoldPeriod = customHold;
+        param.holdPeriod = customHold;
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(param);
-
         uint256 amountInToken = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
         vm.prank(buyerOne);
@@ -971,8 +968,8 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory invoiceIds) =
             getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
-        params[0].escrowHoldPeriod = customHold;
-        params[1].escrowHoldPeriod = customHold;
+        params[0].holdPeriod = customHold;
+        params[1].holdPeriod = customHold;
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(params);
 
@@ -1595,7 +1592,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
             address(0),
             intermediatedPP.getEscrowAddress(sellerOne, buyerOne, invoiceId),
             tokenValue,
-            uint40(block.timestamp + TEST_ESCROW_HOLD_PERIOD),
+            uint40(block.timestamp + TEST_INVOICE_HOLD_PERIOD),
             feeReceiver
         );
         intermediatedPP.payInvoice{ value: tokenValue }(
@@ -1622,13 +1619,13 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         );
 
         uint256 fee = applyBasisPoints(intermediatedPP.getInvoice(invoiceId).balance, FEE_RATE);
-        uint256 globalFeeReceiverBalance = feeReceiver.balance;
+        uint256 globalFeeReceiverBalance = weth.balanceOf(feeReceiver);
 
-        vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
+        vm.warp(block.timestamp + TEST_INVOICE_HOLD_PERIOD + 1);
         intermediatedPP.release(invoiceId);
 
-        assertEq(invoiceFeeReceiver.balance, fee);
-        assertEq(feeReceiver.balance, globalFeeReceiverBalance, "global fee receiver should not be paid");
+        assertEq(weth.balanceOf(invoiceFeeReceiver), fee);
+        assertEq(weth.balanceOf(feeReceiver), globalFeeReceiverBalance, "global fee receiver should not be paid");
     }
 
     function test_metaInvoiceGivesEachSubInvoiceItsOwnFeeReceiver() public {
@@ -1662,12 +1659,12 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 feeOne = applyBasisPoints(intermediatedPP.getInvoice(subInvoiceIds[0]).balance, FEE_RATE);
         uint256 feeTwo = applyBasisPoints(intermediatedPP.getInvoice(subInvoiceIds[1]).balance, FEE_RATE);
 
-        vm.warp(block.timestamp + TEST_ESCROW_HOLD_PERIOD + 1);
+        vm.warp(block.timestamp + TEST_INVOICE_HOLD_PERIOD + 1);
         intermediatedPP.release(subInvoiceIds[0]);
         intermediatedPP.release(subInvoiceIds[1]);
 
-        assertEq(receivers[0].balance, feeOne);
-        assertEq(receivers[1].balance, feeTwo);
+        assertEq(weth.balanceOf(receivers[0]), feeOne);
+        assertEq(weth.balanceOf(receivers[1]), feeTwo);
     }
 
     function test_metaInvoiceRejectsAMismatchedOrTamperedFeeReceiverArray() public {

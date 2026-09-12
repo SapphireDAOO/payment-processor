@@ -164,7 +164,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         i.state = ACCEPTED;
         i.feeReceiver = _feeReceiver;
 
-        i.releaseAt = (block.timestamp + i.escrowHoldPeriod).toUint40();
+        i.releaseAt = (block.timestamp + ESCROW_HOLD_PERIOD).toUint40();
         heap.reschedule(_invoiceId, i.releaseAt, index);
 
         invoices[_invoiceId] = i;

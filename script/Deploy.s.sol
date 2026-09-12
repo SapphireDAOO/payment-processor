@@ -101,7 +101,7 @@ contract Deploy is Script {
         console.log("");
         console.log("--- Config ---");
         console.log("Fee rate (bps):      ", FEE_RATE);
-        console.log("Hold period (s):     ", DEFAULT_HOLD_PERIOD);
+        console.log("Hold period (s):     ", _escrowHoldPeriod());
         console.log("Min invoice (wei):   ", MINIMUM_INVOICE_VALUE);
         console.log("Gas threshold:       ", DEFAULT_GAS_THRESHOLD);
         console.log("MultiSig threshold:  ", INITIAL_THRESHOLD);
@@ -356,6 +356,11 @@ contract Deploy is Script {
     }
 
     /// @notice Human-readable network label for the current chain id.
+    /// @notice 30 days on Base mainnet, 5 minutes everywhere else.
+    function _escrowHoldPeriod() internal view returns (uint32 holdPeriod) {
+        holdPeriod = block.chainid == MAINNET_CHAIN_ID ? MAINNET_ESCROW_HOLD_PERIOD : TESTNET_ESCROW_HOLD_PERIOD;
+    }
+
     function _networkName() internal view returns (string memory) {
         if (block.chainid == MAINNET_CHAIN_ID) return "Base Mainnet";
         if (block.chainid == LOCAL_CHAIN_ID) return "Localhost (Anvil)";
