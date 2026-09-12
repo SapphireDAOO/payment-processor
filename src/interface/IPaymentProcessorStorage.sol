@@ -25,19 +25,20 @@ interface IPaymentProcessorStorage {
     /// @notice Thrown when setting the fee signer to the zero address.
     error InvalidFeeSigner();
 
-    /// @notice Holds core configuration parameters for the contract.
-    /// @param owner The address authorized to modify configuration parameters.
-    /// @param feeRate Platform fee rate in basis points (BPS). i.e 100 BPS = 1%; 10,000 BPS = 100%.
+    /// @notice Thrown when deploying with the zero address as the wrapped native token.
+    error InvalidWeth();
+
+    /// @notice Initial configuration for the storage contract.
+    /// @param owner The address authorized to pause and to set the emergency pauser.
     /// @param feeReceiver Address that receives platform fees.
     /// @param intermediatedPlatformsOperator Address authorized to interact with invoice creation and specific
     ///        management functions.
-    /// @param gasThreshold The minimum amount of gas that must remain to continue processing tasks.
+    /// @param weth Wrapped native token both processors pay platform fees in.
     struct Configuration {
         address owner;
-        uint96 feeRate;
         address feeReceiver;
         address intermediatedPlatformsOperator;
-        uint96 gasThreshold;
+        address weth;
     }
 
     /**

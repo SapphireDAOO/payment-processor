@@ -103,6 +103,9 @@ interface IIntermediatedPaymentProcessor {
     /// @notice Thrown when the escrow withdrawal fails during a manual refund.
     error EscrowWithdrawFailed();
 
+    /// @notice Thrown when native currency arrives outside a fee-wrapping withdrawal.
+    error UnexpectedNativeTransfer();
+
     /// @notice Thrown when attempting to set the oracle address to the zero address.
     error InvalidOracle();
 

@@ -846,10 +846,10 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         intermediatedPP.release(invoiceId);
 
         assertEq(sellerOne.balance, sellerBalance + tokenValue - expectedFee);
-        assertEq(feeReceiver.balance, expectedFee);
+        assertEq(weth.balanceOf(feeReceiver), expectedFee);
     }
 
-    function test_feeRateSnapshotAtCreationIsUsedOnDisputeSettlement() public {
+    function test_invoiceFeeRateSnapshotIsUsedOnDisputeSettlement() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
             getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
@@ -872,7 +872,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         intermediatedPP.handleDispute(invoiceId, DISPUTE_SETTLED, sellerShare);
 
         assertEq(sellerOne.balance, sellerBalance + sellerReceiving - expectedFee);
-        assertEq(feeReceiver.balance, expectedFee);
+        assertEq(weth.balanceOf(feeReceiver), expectedFee);
     }
 
     function test_MetaInvoiceTotalPrice() public {
@@ -1322,7 +1322,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         uint256 sellerBefore = sellerOne.balance;
         uint256 buyerBefore = buyerOne.balance;
-        uint256 feeReceiverBefore = feeReceiver.balance;
+        uint256 feeReceiverBefore = weth.balanceOf(feeReceiver);
 
         intermediatedPP.handleDispute(invoiceId, uint8(DISPUTE_SETTLED), _sellerShare);
 
@@ -1332,7 +1332,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         assertEq(sellerOne.balance, sellerBefore + sellerGross - fee);
         assertEq(buyerOne.balance, buyerBefore + buyerRefund);
-        assertEq(feeReceiver.balance, feeReceiverBefore + fee);
+        assertEq(weth.balanceOf(feeReceiver), feeReceiverBefore + fee);
 
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
         assertEq(inv.state, DISPUTE_SETTLED);

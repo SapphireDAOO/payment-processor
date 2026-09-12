@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import { Test } from "forge-std/Test.sol";
 import { MultiSig } from "../../src/MultiSig.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
+import { MockWeth } from "../mock/MockWeth.sol";
 import { IAuthorizedAddressProvider } from "../../src/interface/IMasterDeployer.sol";
 
 abstract contract MultiSigSetUp is Test, IAuthorizedAddressProvider {
@@ -47,8 +48,7 @@ abstract contract MultiSigSetUp is Test, IAuthorizedAddressProvider {
             owner: address(multisig),
             feeReceiver: feeReceiver,
             intermediatedPlatformsOperator: address(this),
-            feeRate: FEE_RATE,
-            gasThreshold: GAS_THRESHOLD
+            weth: address(new MockWeth())
         });
 
         ppStorage = new PaymentProcessorStorage(config);

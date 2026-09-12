@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import { EscrowFactory } from "./EscrowFactory.sol";
 import { IEscrow } from "./interface/IEscrow.sol";
+import { IWETH } from "./interface/IWETH.sol";
 import { IOracleManager } from "./interface/IOracleManager.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { IIntermediatedPaymentProcessor } from "./interface/IIntermediatedPaymentProcessor.sol";
@@ -314,7 +315,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         invoices[_invoiceId].balance = 0;
 
         address feeReceiver = _feeReceiverFor(i.feeReceiver);
-        if (!IEscrow(i.escrow).withdraw(i.paymentToken, feeReceiver, fee)) {
+        if (!_payFee(i.escrow, i.paymentToken, feeReceiver, fee)) {
             emit TransferFailed(_invoiceId, feeReceiver, fee);
         }
 
@@ -592,7 +593,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
             if (_revertOnFail) revert EscrowWithdrawFailed();
         }
 
-        if (!IEscrow(_i.escrow).withdraw(_i.paymentToken, _feeReceiverFor(_i.feeReceiver), fee)) {
+        if (!_payFee(_i.escrow, _i.paymentToken, _feeReceiverFor(_i.feeReceiver), fee)) {
             if (_revertOnFail) revert EscrowWithdrawFailed();
         }
     }
