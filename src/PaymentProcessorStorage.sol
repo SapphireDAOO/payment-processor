@@ -123,8 +123,14 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     }
 
     /// @inheritdoc IPaymentProcessorStorage
-    function unpause() external onlyOwner {
+    function unpause() external {
+        bool isOwner = msg.sender == owner();
+        if (!isOwner && msg.sender != emergencyPauser) revert Unauthorized();
         if (!ownerPaused && emergencyPausedAt == 0) revert NotPaused();
+
+        // The pauser lifts only its own emergency pause; an owner pause outranks it.
+        if (!isOwner && ownerPaused) revert NotAuthorized();
+
         ownerPaused = false;
         emergencyPausedAt = 0;
         emit Unpaused(msg.sender);

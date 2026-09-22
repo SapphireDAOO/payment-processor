@@ -78,7 +78,9 @@ interface IPaymentProcessorStorage {
 
     /**
      * @notice Lifts a pause and clears any unresolved emergency pause.
-     * @dev Only callable by the contract owner.
+     * @dev Callable by the owner, or by the emergency pauser to lift its own emergency pause. The
+     *      pauser cannot lift an owner pause, so approving an emergency pause also puts it beyond
+     *      the pauser's reach.
      */
     function unpause() external;
 

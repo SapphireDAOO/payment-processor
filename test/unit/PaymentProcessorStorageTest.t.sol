@@ -191,6 +191,55 @@ contract PaymentProcessorStorageTest is BaseSetUp {
         ppStorage.approveEmergencyPause();
     }
 
+    function test_pauserCanLiftItsOwnEmergencyPause() public {
+        vm.prank(PAUSER);
+        ppStorage.emergencyPause();
+        assertTrue(ppStorage.isPaused());
+
+        vm.prank(PAUSER);
+        vm.expectEmit(address(ppStorage));
+        emit IPaymentProcessorStorage.Unpaused(PAUSER);
+        ppStorage.unpause();
+
+        assertFalse(ppStorage.isPaused());
+        assertEq(ppStorage.getEmergencyPauseExpiry(), 0);
+    }
+
+    function test_pauserCannotLiftAnOwnerPause() public {
+        vm.prank(admin);
+        ppStorage.pause();
+
+        vm.prank(PAUSER);
+        vm.expectRevert(IPaymentProcessorStorage.NotAuthorized.selector);
+        ppStorage.unpause();
+
+        assertTrue(ppStorage.isPaused());
+    }
+
+    function test_pauserCannotLiftAnApprovedEmergencyPause() public {
+        vm.prank(PAUSER);
+        ppStorage.emergencyPause();
+
+        // Approval converts it into an owner pause, putting it beyond the pauser's reach.
+        vm.prank(admin);
+        ppStorage.approveEmergencyPause();
+
+        vm.prank(PAUSER);
+        vm.expectRevert(IPaymentProcessorStorage.NotAuthorized.selector);
+        ppStorage.unpause();
+
+        assertTrue(ppStorage.isPaused());
+    }
+
+    function test_unpauseRevertsForAnyoneElse() public {
+        vm.prank(PAUSER);
+        ppStorage.emergencyPause();
+
+        vm.prank(STRANGER);
+        vm.expectRevert(Ownable.Unauthorized.selector);
+        ppStorage.unpause();
+    }
+
     function test_ownerCanUnpauseAnEmergencyPauseEarly() public {
         vm.prank(PAUSER);
         ppStorage.emergencyPause();
