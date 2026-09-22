@@ -191,6 +191,35 @@ contract PaymentProcessorStorageTest is BaseSetUp {
         ppStorage.approveEmergencyPause();
     }
 
+    function test_getPauseStateReportsBothValues() public {
+        (bool paused, uint256 expiry) = ppStorage.getPauseState();
+        assertFalse(paused);
+        assertEq(expiry, 0);
+
+        uint256 expected = block.timestamp + ppStorage.EMERGENCY_PAUSE_DURATION();
+        vm.prank(PAUSER);
+        ppStorage.emergencyPause();
+
+        (paused, expiry) = ppStorage.getPauseState();
+        assertTrue(paused);
+        assertEq(expiry, expected);
+
+        // Once it lapses the expiry stays set while the pause itself is no longer in effect.
+        vm.warp(expected);
+        (paused, expiry) = ppStorage.getPauseState();
+        assertFalse(paused);
+        assertEq(expiry, expected);
+    }
+
+    function test_getPauseStateMatchesTheSingleValueGetters() public {
+        vm.prank(admin);
+        ppStorage.pause();
+
+        (bool paused, uint256 expiry) = ppStorage.getPauseState();
+        assertEq(paused, ppStorage.isPaused());
+        assertEq(expiry, ppStorage.getEmergencyPauseExpiry());
+    }
+
     function test_pauserCanLiftItsOwnEmergencyPause() public {
         vm.prank(PAUSER);
         ppStorage.emergencyPause();

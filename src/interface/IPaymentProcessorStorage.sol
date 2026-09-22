@@ -124,6 +124,15 @@ interface IPaymentProcessorStorage {
     function getEmergencyPauseExpiry() external view returns (uint256 expiry);
 
     /**
+     * @notice Returns the pause state and the emergency pause expiry together.
+     * @dev Reads both from one call, so a caller cannot see them at different blocks.
+     * @return pausedState True for an owner pause, or an emergency pause that has not yet expired.
+     * @return expiry The emergency pause expiry timestamp, or 0 when none is pending. Non-zero with
+     *         `pausedState` false means the pause lapsed without being approved or lifted.
+     */
+    function getPauseState() external view returns (bool pausedState, uint256 expiry);
+
+    /**
      * @notice Returns the nonce that will be assigned to the next invoice.
      * @return nextInvoiceNonceValue The next invoice nonce value.
      */

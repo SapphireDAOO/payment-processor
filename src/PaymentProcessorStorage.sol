@@ -177,6 +177,13 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         return startedAt == 0 ? 0 : startedAt + EMERGENCY_PAUSE_DURATION;
     }
 
+    /// @inheritdoc IPaymentProcessorStorage
+    function getPauseState() external view returns (bool pausedState, uint256 expiry) {
+        uint40 startedAt = emergencyPausedAt;
+        pausedState = ownerPaused || _emergencyPauseActive();
+        expiry = startedAt == 0 ? 0 : startedAt + EMERGENCY_PAUSE_DURATION;
+    }
+
     /// @dev True while a pending emergency pause is still within its window.
     function _emergencyPauseActive() internal view returns (bool active) {
         uint40 startedAt = emergencyPausedAt;
