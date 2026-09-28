@@ -20,6 +20,9 @@ interface IOracleManager {
     /// @notice Thrown when the Chainlink price feed returns a zero or negative answer.
     error InvalidPrice();
 
+    /// @notice Thrown when the zero address is supplied as the target currency aggregator.
+    error InvalidAggregator();
+
     /// @notice Configuration for a Chainlink price feed associated with a payment token.
     /// @param aggregator Address of the Chainlink AggregatorV3 contract.
     /// @param heartbeat Maximum acceptable age (in seconds) of a price update before it is considered stale.
@@ -57,6 +60,25 @@ interface IOracleManager {
      * @return prices Each token's USD price with 8 decimals, index-aligned with `_paymentTokens`.
      */
     function getUsdPerTokenBatch(address[] calldata _paymentTokens) external view returns (uint256[] memory prices);
+
+    /**
+     * @notice Converts an amount of a payment token into a target currency, via USD.
+     * @dev Prices the token with its registered feed, then divides by the target feed's rate. The
+     *      target aggregator is taken as given: it is not checked against the registered feeds, so
+     *      it carries no `allowed` flag and no heartbeat, and only round completeness and a positive
+     *      answer are verified. Callers must therefore supply an aggregator they trust; treat the
+     *      result as informational rather than as a basis for moving funds.
+     *
+     *      Both feeds are assumed to report {FEED_DECIMAL} decimals, as Chainlink USD pairs do.
+     * @param _paymentToken The token being converted; `address(0)` for native currency.
+     * @param _amount The amount of `_paymentToken`, in that token's own decimals.
+     * @param _toAggregator Aggregator quoting USD per unit of the target currency (e.g. EUR/USD).
+     * @return value The converted amount, with {FEED_DECIMAL} decimals.
+     */
+    function getValueInCurrency(address _paymentToken, uint256 _amount, address _toAggregator)
+        external
+        view
+        returns (uint256 value);
 
     /**
      * @notice Reports whether a token is allowed as payment.
