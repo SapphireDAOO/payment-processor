@@ -456,7 +456,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
             _i.releaseAt = (block.timestamp + _i.holdPeriod).toUint40();
         }
 
-        emit InvoicePaid(_invoiceId, _paymentToken, escrowAddress, _tokenPrice, _i.releaseAt, _feeReceiver);
+        emit InvoicePaid(_invoiceId, msg.sender, _paymentToken, escrowAddress, _tokenPrice, _i.releaseAt, _feeReceiver);
         return _i.amountPaid;
     }
 

@@ -1588,6 +1588,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         vm.expectEmit(address(intermediatedPP));
         emit IIntermediatedPaymentProcessor.InvoicePaid(
             invoiceId,
+            buyerOne,
             address(0),
             intermediatedPP.getEscrowAddress(sellerOne, buyerOne, invoiceId),
             tokenValue,

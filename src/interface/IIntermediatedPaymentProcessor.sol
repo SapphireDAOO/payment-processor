@@ -400,6 +400,7 @@ interface IIntermediatedPaymentProcessor {
     /**
      * @notice Emitted when an invoice is successfully paid and an escrow contract is created.
      * @param invoiceId The unique identifier of the paid invoice.
+     * @param payer The address that paid, recorded as the invoice's buyer.
      * @param paymentToken The address of the token used for payment (address(0) for native ETH).
      * @param escrowAddress The address of the escrow contract created to hold the payment.
      * @param amount The amount paid, denominated in the token’s smallest unit.
@@ -409,6 +410,7 @@ interface IIntermediatedPaymentProcessor {
      */
     event InvoicePaid(
         uint216 indexed invoiceId,
+        address indexed payer,
         address paymentToken,
         address escrowAddress,
         uint256 amount,
