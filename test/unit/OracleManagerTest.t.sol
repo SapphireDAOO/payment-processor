@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import { OracleManager } from "../../src/OracleManager.sol";
 import { IOracleManager } from "../../src/interface/IOracleManager.sol";
 import { MockV3Aggregator } from "../mock/MockV3Aggregator.sol";
+import { MockUsdc } from "../mock/mERC20.sol";
 import { BaseSetUp } from "../utils/BaseSetUp.sol";
 
 contract OracleManagerTest is BaseSetUp {
@@ -54,15 +55,13 @@ contract OracleManagerTest is BaseSetUp {
 
     // ── setPriceFeed ─────────────────────────────────────────────────────────────
 
-    function test_setPriceFeed_revertsForNonOwner() public {
+    function test_setPriceFeed_owner() public {
         vm.expectRevert(IOracleManager.NotAuthorized.selector);
         oracle.setPriceFeed(
             TOKEN,
             IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: HEARTBEAT, allowed: true })
         );
-    }
 
-    function test_setPriceFeed_owner() public {
         MockV3Aggregator newFeed = new MockV3Aggregator(8, 3000e8);
         vm.prank(admin);
         oracle.setPriceFeed(
@@ -103,6 +102,57 @@ contract OracleManagerTest is BaseSetUp {
 
         assertTrue(oracle.isSupportedToken(TOKEN));
         assertEq(oracle.getUsdPerToken(TOKEN), uint256(INITIAL_PRICE));
+    }
+
+    // ── getValueInCurrency ────────────────────────────────────────────────────────
+
+    function test_getValueInCurrency_convertsViaUsd() public {
+        // TOKEN is $2,000. 3 tokens = $6,000. At 1.25 USD per unit of the target, that is 4,800.
+        MockV3Aggregator target = new MockV3Aggregator(8, 1.25e8);
+
+        uint256 value = oracle.getValueInCurrency(TOKEN, 3e18, address(target));
+        assertEq(value, 4800e8);
+    }
+
+    function test_getValueInCurrency_usesTheTokensOwnDecimals() public {
+        // A 6-decimal token priced at $1: 250 units is $250, and 1 USD per target unit keeps it there.
+        MockUsdc sixDecimals = new MockUsdc("Mock Usdc", "mUsdc");
+        vm.prank(admin);
+        oracle.setPriceFeed(
+            address(sixDecimals),
+            IOracleManager.PriceFeedConfig({ aggregator: address(priceFeedTwo), heartbeat: HEARTBEAT, allowed: true })
+        );
+
+        MockV3Aggregator target = new MockV3Aggregator(8, 1e8);
+
+        assertEq(oracle.getValueInCurrency(address(sixDecimals), 250e6, address(target)), 250e8);
+    }
+
+    function test_getValueInCurrency_rejectsAnUnsupportedSourceToken() public {
+        MockV3Aggregator target = new MockV3Aggregator(8, 1e8);
+
+        vm.expectRevert(IOracleManager.UnsupportedToken.selector);
+        oracle.getValueInCurrency(address(0xdeadbeef), 1e18, address(target));
+    }
+
+    function test_getValueInCurrency_rejectsTheZeroAggregator() public {
+        vm.expectRevert(IOracleManager.InvalidAggregator.selector);
+        oracle.getValueInCurrency(TOKEN, 1e18, address(0));
+    }
+
+    function test_getValueInCurrency_rejectsANonPositiveTargetPrice() public {
+        MockV3Aggregator target = new MockV3Aggregator(8, 0);
+
+        vm.expectRevert(IOracleManager.InvalidPrice.selector);
+        oracle.getValueInCurrency(TOKEN, 1e18, address(target));
+    }
+
+    function test_getValueInCurrency_appliesTheSequencerCheck() public {
+        MockV3Aggregator target = new MockV3Aggregator(8, 1e8);
+        seqFeed.updateAnswer(1);
+
+        vm.expectRevert(IOracleManager.SequencerDown.selector);
+        oracle.getValueInCurrency(TOKEN, 1e18, address(target));
     }
 
     // ── sequencer uptime feed ─────────────────────────────────────────────────────
