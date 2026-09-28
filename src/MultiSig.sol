@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import { IMultiSig } from "./interface/IMultiSig.sol";
-import { PROPOSED, APPROVED, EXECUTED, CANCELED, MINIMUM_THRESHOLD, MINIMUM_SIGNERS } from "./constants/MultiSig.sol";
+import { PROPOSED, APPROVED, EXECUTED, CANCELED, MINIMUM_SIGNERS } from "./constants/MultiSig.sol";
 import { LibCall } from "solady/utils/LibCall.sol";
 
 /**
@@ -61,7 +61,7 @@ contract MultiSig is IMultiSig {
     constructor(address[] memory _initialSigners, uint256 _initialThreshold) {
         uint256 len = _initialSigners.length;
         if (len < MINIMUM_SIGNERS) revert InsufficientSigners();
-        if (_initialThreshold < MINIMUM_THRESHOLD || _initialThreshold > len) revert InvalidThreshold();
+        if (_initialThreshold < _majorityOf(len) || _initialThreshold > len) revert InvalidThreshold();
 
         for (uint256 i; i < len; i++) {
             signers[_initialSigners[i]] = true;
@@ -140,23 +140,27 @@ contract MultiSig is IMultiSig {
         signerCount++;
         signers[_signer] = true;
         emit SignerAdded(_signer);
+
+        _syncThreshold();
     }
 
     /// @inheritdoc IMultiSig
     function removeSigner(address _signer) external onlySelf {
         if (!signers[_signer]) revert NotASigner();
-        if (threshold > signerCount - 1) revert SignerCountBelowThreshold();
+        if (signerCount - 1 < MINIMUM_SIGNERS) revert InsufficientSigners();
 
         signerCount--;
         signers[_signer] = false;
         emit SignerRemoved(_signer);
+
+        _syncThreshold();
     }
 
     /// @inheritdoc IMultiSig
     function updateThreshold(uint256 _newThreshold) external onlySelf {
         if (_newThreshold == 0) revert ThresholdCannotBeZero();
         if (_newThreshold > signerCount) revert SignerCountBelowThreshold();
-        if (_newThreshold < MINIMUM_THRESHOLD) revert InvalidThreshold();
+        if (_newThreshold < _majorityOf(signerCount)) revert InvalidThreshold();
 
         emit ThresholdUpdated(threshold, _newThreshold);
         threshold = _newThreshold;
@@ -175,6 +179,29 @@ contract MultiSig is IMultiSig {
     /// @inheritdoc IMultiSig
     function isSigner(address _account) external view returns (bool) {
         return signers[_account];
+    }
+
+    /**
+     * @notice The smallest approval count that is a majority of `_signerCount`.
+     * @param _signerCount The number of signers to measure against.
+     * @return majority `floor(_signerCount / 2) + 1`.
+     */
+    function _majorityOf(uint256 _signerCount) internal pure returns (uint256 majority) {
+        majority = _signerCount / 2 + 1;
+    }
+
+    /**
+     * @notice Resets the threshold to a majority of the current signer set.
+     * @dev Called after every add or remove, so a threshold set by {updateThreshold} only holds
+     *      until the signer set next changes.
+     */
+    function _syncThreshold() internal {
+        uint256 currentThreshold = threshold;
+        uint256 newThreshold = _majorityOf(signerCount);
+        if (currentThreshold != newThreshold) {
+            threshold = newThreshold;
+            emit ThresholdUpdated(currentThreshold, newThreshold);
+        }
     }
 
     /// @inheritdoc IMultiSig

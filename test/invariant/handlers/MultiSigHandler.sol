@@ -7,7 +7,7 @@ import { IMultiSig } from "src/interface/IMultiSig.sol";
 import { IPaymentProcessorStorage } from "src/interface/IPaymentProcessorStorage.sol";
 import { PaymentProcessorStorage } from "src/PaymentProcessorStorage.sol";
 
-import { PROPOSED, APPROVED, MINIMUM_THRESHOLD } from "src/constants/MultiSig.sol";
+import { PROPOSED, APPROVED, MINIMUM_SIGNERS } from "src/constants/MultiSig.sol";
 
 contract MultiSigHandler is Test {
     MultiSig public multisig;
@@ -119,10 +119,11 @@ contract MultiSigHandler is Test {
         if (!_proposeApproveExecute(data, address(multisig))) return;
 
         signers.push(_newSigner);
+        ghostThreshold = multisig.getThreshold();
     }
 
     function governRemoveSigner(uint256 _removeIndex) external hasSigners {
-        if (signers.length <= ghostThreshold) return;
+        if (signers.length <= MINIMUM_SIGNERS) return;
         _removeIndex = bound(_removeIndex, 0, signers.length - 1);
         address toRemove = signers[_removeIndex];
 
@@ -131,15 +132,17 @@ contract MultiSigHandler is Test {
 
         signers[_removeIndex] = signers[signers.length - 1];
         signers.pop();
+        ghostThreshold = multisig.getThreshold();
     }
 
     function governUpdateThreshold(uint256 _newThreshold) external hasSigners {
-        _newThreshold = bound(_newThreshold, MINIMUM_THRESHOLD, signers.length);
+        _newThreshold = bound(_newThreshold, signers.length / 2 + 1, signers.length);
 
         bytes memory data = abi.encodeCall(IMultiSig.updateThreshold, _newThreshold);
         if (!_proposeApproveExecute(data, address(multisig))) return;
 
         ghostThreshold = _newThreshold;
+        ghostThreshold = multisig.getThreshold();
     }
 
     function getTxCount() external view returns (uint256) {
@@ -175,7 +178,8 @@ contract MultiSigHandler is Test {
     }
 
     function _proposeApproveExecute(bytes memory _data, address _target) internal returns (bool) {
-        if (signers.length < ghostThreshold) return false;
+        uint256 currentThreshold = multisig.getThreshold();
+        if (signers.length < currentThreshold) return false;
 
         address proposer = signers[0];
 
@@ -186,7 +190,7 @@ contract MultiSigHandler is Test {
         ghostApprovals[txHash][proposer] = true;
         ghostNonce++;
 
-        uint256 needed = ghostThreshold - 1;
+        uint256 needed = currentThreshold - 1;
         if (needed == 0) return false;
 
         for (uint256 i = 1; i < signers.length && needed > 0; i++) {

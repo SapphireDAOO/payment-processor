@@ -157,11 +157,59 @@ contract MultiSigTest is MultiSigSetUp {
         multisig.executeTransaction(txHash);
 
         vm.prank(address(multisig));
-        vm.expectRevert(IMultiSig.SignerCountBelowThreshold.selector);
+        vm.expectRevert(IMultiSig.InsufficientSigners.selector);
         multisig.removeSigner(signerOne);
 
         assertFalse(multisig.isSigner(signerTwo));
         assertEq(multisig.getSignerCount(), signerCountBefore - 1);
+    }
+
+    function test_thresholdTracksMajorityAsSignersAreAdded() public {
+        // 3 signers, majority 2.
+        assertEq(multisig.getThreshold(), 2);
+
+        vm.prank(address(multisig));
+        vm.expectEmit(address(multisig));
+        emit IMultiSig.ThresholdUpdated(2, 3);
+        multisig.addSigner(outsider);
+
+        // 4 signers, majority 3.
+        assertEq(multisig.getThreshold(), 3);
+        assertEq(multisig.getSignerCount(), 4);
+    }
+
+    function test_removingASignerResetsTheThresholdToMajority() public {
+        vm.startPrank(address(multisig));
+        multisig.addSigner(outsider);
+        multisig.addSigner(address(0xa5));
+
+        // 5 signers, majority 3; raise it to unanimity.
+        multisig.updateThreshold(5);
+        assertEq(multisig.getThreshold(), 5);
+
+        // Removal recomputes the majority outright, so the supermajority does not survive it.
+        vm.expectEmit(address(multisig));
+        emit IMultiSig.ThresholdUpdated(5, 3);
+        multisig.removeSigner(outsider);
+        assertEq(multisig.getThreshold(), 3);
+        vm.stopPrank();
+    }
+
+    function test_thresholdBelowMajorityIsRejected() public {
+        // 3 signers: a majority is 2, so 1 is not allowed even though it is non-zero.
+        vm.prank(address(multisig));
+        vm.expectRevert(IMultiSig.InvalidThreshold.selector);
+        multisig.updateThreshold(1);
+    }
+
+    function test_constructorRejectsAThresholdBelowMajority() public {
+        address[] memory initialSigners = new address[](3);
+        initialSigners[0] = signerOne;
+        initialSigners[1] = signerTwo;
+        initialSigners[2] = signerThree;
+
+        vm.expectRevert(IMultiSig.InvalidThreshold.selector);
+        new MultiSig(initialSigners, 1);
     }
 
     function test_updateThreshold() public {
@@ -188,6 +236,10 @@ contract MultiSigTest is MultiSigSetUp {
         bytes32 txHash = multisig.proposeTransaction(address(multisig), 0, data);
 
         vm.prank(signerThree);
+        multisig.approveTransaction(txHash);
+
+        // The fourth signer lifted the majority to 3, so two approvals no longer execute.
+        vm.prank(signerTwo);
         multisig.approveTransaction(txHash);
 
         uint256 thresholdBefore = multisig.getThreshold();
