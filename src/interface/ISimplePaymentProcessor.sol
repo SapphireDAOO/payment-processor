@@ -225,10 +225,22 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Emitted when a new invoice is created.
+     * @dev Carries only the fields set at creation; buyer, escrow and release data arrive with later events.
      * @param invoiceId The unique identifier for the created invoice.
-     * @param invoice The full invoice struct containing buyer, price, timestamps, state, and metadata.
+     * @param seller The address of the seller who created the invoice.
+     * @param invoiceNonce The nonce assigned to the invoice.
+     * @param price The price of the invoice in wei.
+     * @param expiresAt The timestamp after which the invoice is no longer payable.
+     * @param feeRate The platform fee rate (in basis points) captured for this invoice.
      */
-    event InvoiceCreated(uint216 indexed invoiceId, Invoice invoice);
+    event InvoiceCreated(
+        uint216 indexed invoiceId,
+        address indexed seller,
+        uint216 invoiceNonce,
+        uint256 price,
+        uint40 expiresAt,
+        uint16 feeRate
+    );
 
     /**
      * @notice Emitted when an invoice payment is made.

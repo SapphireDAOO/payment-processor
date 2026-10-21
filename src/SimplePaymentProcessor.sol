@@ -142,7 +142,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
         if (_storageRef.length != 0) NOTES.createNote(invoiceId, msg.sender, _storageRef, _share);
 
-        emit InvoiceCreated(invoiceId, i);
+        emit InvoiceCreated(invoiceId, msg.sender, newNonce, _price, i.expiresAt, i.feeRate);
 
         return invoiceId;
     }

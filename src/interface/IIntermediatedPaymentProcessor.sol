@@ -385,10 +385,28 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Emitted when a new invoice is created.
+     * @dev Carries only the fields set at creation; payment, escrow and release data arrive with later events.
      * @param invoiceId The ID of the newly created invoice.
-     * @param invoice The invoice data.
+     * @param seller The address of the seller.
+     * @param metaInvoiceId The meta-invoice this invoice belongs to, or 0 for a standalone invoice.
+     * @param orderId The caller-supplied order identifier the invoice ID was derived from.
+     * @param invoiceNonce The nonce assigned to the invoice.
+     * @param price The invoice amount expressed in USD (8 decimals).
+     * @param expiresAt The timestamp after which the invoice is no longer payable.
+     * @param holdPeriod Seconds the escrow holds the payment after it is paid.
+     * @param feeRate The platform fee rate (in basis points) captured for this invoice.
      */
-    event InvoiceCreated(uint216 indexed invoiceId, Invoice invoice);
+    event InvoiceCreated(
+        uint216 indexed invoiceId,
+        address indexed seller,
+        uint216 indexed metaInvoiceId,
+        string orderId,
+        uint216 invoiceNonce,
+        uint256 price,
+        uint40 expiresAt,
+        uint32 holdPeriod,
+        uint16 feeRate
+    );
 
     /**
      * @notice Emitted when a meta-invoice is successfully created.

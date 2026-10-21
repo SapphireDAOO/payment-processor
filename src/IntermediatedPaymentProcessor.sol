@@ -532,7 +532,17 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
             allowedPaymentTokens[invoiceId][_param.paymentTokens[j]] = true;
         }
 
-        emit InvoiceCreated(invoiceId, i);
+        emit InvoiceCreated(
+            invoiceId,
+            i.seller,
+            i.metaInvoiceId,
+            _param.invoiceId,
+            i.invoiceNonce,
+            i.price,
+            i.expiresAt,
+            i.holdPeriod,
+            i.feeRate
+        );
         emit PaymentTokensRegistered(invoiceId, _param.paymentTokens);
         return invoiceId;
     }
