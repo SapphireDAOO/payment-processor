@@ -14,6 +14,7 @@ import {
     DISPUTE_RESOLVED,
     DISPUTE_DISMISSED,
     DISPUTE_SETTLED,
+    DISPUTE_EXPIRED,
     BASIS_POINTS,
     DEFAULT_MINIMUM_INVOICE_PRICE
 } from "src/constants/Intermediated.sol";
@@ -222,13 +223,22 @@ contract IntermediatedPaymentProcessorHandler is Test {
         _sellerShare = bound(_sellerShare, 100, 10_000);
         uint216 invoiceId = singleInvoiceIds[_index];
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
-        if (inv.state != PAID) return;
-        if (block.timestamp <= inv.releaseAt) {
-            vm.warp(inv.releaseAt + 1);
-        }
+        if (!_isReleasable(inv.state)) return;
 
         vm.prank(intermediatedPP.PP_STORAGE().getIntermediatedPlatformsOperator());
         intermediatedPP.release(invoiceId);
+    }
+
+    function expireDispute(uint256 _index) public onlyExistingInvoice {
+        if (singleInvoiceIds.length == 0) return;
+        _index = bound(_index, 0, singleInvoiceIds.length - 1);
+        uint216 invoiceId = singleInvoiceIds[_index];
+
+        IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
+        if (inv.state != DISPUTED) return;
+
+        vm.prank(intermediatedPP.PP_STORAGE().getIntermediatedPlatformsOperator());
+        intermediatedPP.expireDispute(invoiceId);
     }
 
     function resolveDispute(uint256 _index, uint256 _senderIndex) public onlyExistingInvoice {
@@ -249,10 +259,14 @@ contract IntermediatedPaymentProcessorHandler is Test {
         _index = bound(_index, 0, singleAndSubInvoice.length - 1);
         uint216 invoiceId = singleAndSubInvoice[_index];
         IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
-        if (inv.state != PAID && inv.state != DISPUTE_RESOLVED && inv.state != DISPUTE_DISMISSED) return;
+        if (!_isReleasable(inv.state)) return;
         _holdPeriod = bound(_holdPeriod, 1 hours, 30 days);
         vm.prank(admin);
         intermediatedPP.setInvoiceReleaseTime(invoiceId, _holdPeriod);
+    }
+
+    function _isReleasable(uint8 _state) internal pure returns (bool) {
+        return _state == PAID || _state == DISPUTE_RESOLVED || _state == DISPUTE_DISMISSED || _state == DISPUTE_EXPIRED;
     }
 
     /// @notice Returns the total number of single invoices created by the handler.

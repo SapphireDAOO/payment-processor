@@ -37,7 +37,7 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 | ADV-1 | `invariant_intermediatedInvoiceStateConsistency` | If `state` is `CREATED` or `CANCELED`: `balance == 0`, `amountPaid == 0`, `escrow == address(0)`, `buyer == address(0)` |
 | ADV-2 | `invariant_intermediatedInvoiceStateConsistency` | For non-created/non-canceled invoices: escrow exists, buyer exists, `amountPaid > 0`, and `balance <= amountPaid` |
 | ADV-3 | `invariant_intermediatedInvoiceStateConsistency` | If `state` is `RELEASED`, `REFUNDED`, or `DISPUTE_SETTLED`: `balance == 0` |
-| ADV-4 | `invariant_intermediatedInvoiceStateConsistency` | If `state` is `PAID`/`DISPUTED`/`DISPUTE_RESOLVED`/`DISPUTE_DISMISSED`/`LOCKED`: escrow asset balance equals invoice `balance` (ETH or ERC20) |
+| ADV-4 | `invariant_intermediatedInvoiceStateConsistency` | If `state` is `PAID`/`DISPUTED`/`DISPUTE_RESOLVED`/`DISPUTE_DISMISSED`/`DISPUTE_EXPIRED`/`LOCKED`: escrow asset balance equals invoice `balance` (ETH or ERC20) |
 | ADV-5 | `invariant_intermediatedInvoiceStateConsistency` | If `state` is `LOCKED`: `balance > 0` (funds remain in escrow, not drained) |
 
 ## Meta-Invoice Invariants

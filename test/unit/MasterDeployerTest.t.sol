@@ -91,6 +91,24 @@ contract MasterDeployerTest is Test {
         assertEq(deployer.predictedStorage(), address(deployer.ppStorage()));
     }
 
+    function test_anExistingOracleManagerIsReused() public {
+        address existing = address(deployer.oracleManager());
+
+        MasterDeployer fresh = new MasterDeployer(address(this));
+        IMasterDeployer.Params memory params = _params();
+        params.salt = keccak256("payment-processor.master-deployer.reuse");
+        params.oracleManager = existing;
+
+        IMasterDeployer.SystemInitCodes memory initCodes = _systemInitCodes();
+        initCodes.oracleManager = "";
+
+        fresh.deployCore(params, _coreInitCodes());
+        fresh.deploySystem(params, initCodes);
+
+        assertEq(address(fresh.oracleManager()), existing);
+        assertEq(address(fresh.intermediatedPaymentProcessor().ORACLE()), existing);
+    }
+
     function test_onlyDeployerCanRunEitherPhase() public {
         MasterDeployer fresh = new MasterDeployer(address(this));
 

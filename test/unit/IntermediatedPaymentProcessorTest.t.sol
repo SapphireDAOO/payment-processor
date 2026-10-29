@@ -27,6 +27,7 @@ import {
     DISPUTE_RESOLVED,
     DISPUTE_DISMISSED,
     DISPUTE_SETTLED,
+    DISPUTE_EXPIRED,
     RELEASED,
     BASIS_POINTS,
     DEFAULT_DECIMAL,
@@ -949,6 +950,43 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(intermediatedPP.getInvoice(invoiceId).releaseAt, block.timestamp + customHold);
         intermediatedPP.release(invoiceId);
 
+        assertEq(intermediatedPP.getInvoice(invoiceId).state, RELEASED);
+    }
+
+    function test_expiredDispute() public {
+        uint256 price = 100e8;
+        uint216 invoiceId = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+        );
+        uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
+
+        vm.prank(buyerOne);
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
+
+        // Only a disputed invoice can expire.
+        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidInvoiceState.selector);
+        intermediatedPP.expireDispute(invoiceId);
+
+        intermediatedPP.createDispute(invoiceId);
+
+        vm.prank(buyerOne);
+        vm.expectRevert(IIntermediatedPaymentProcessor.NotAuthorized.selector);
+        intermediatedPP.expireDispute(invoiceId);
+
+        vm.expectEmit(address(intermediatedPP));
+        emit IIntermediatedPaymentProcessor.DisputeExpired(invoiceId);
+        intermediatedPP.expireDispute(invoiceId);
+
+        IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
+        assertEq(inv.state, DISPUTE_EXPIRED);
+        assertEq(inv.escrow.balance, tokenValue);
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidInvoiceState.selector);
+        intermediatedPP.expireDispute(invoiceId);
+
+        intermediatedPP.release(invoiceId);
         assertEq(intermediatedPP.getInvoice(invoiceId).state, RELEASED);
     }
 
