@@ -929,7 +929,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         intermediatedPP.createSingleInvoice(param);
     }
 
-    function test_releaseOnlyAfterTheInvoiceHoldPeriodElapses() public {
+    function test_releaseDoesNotWaitForTheHoldPeriod() public {
         uint256 price = 100e8;
         uint32 customHold = 7 days;
 
@@ -945,12 +945,8 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
             invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
         );
 
-        // Past the helper default, short of this invoice's own hold period.
-        vm.warp(block.timestamp + TEST_INVOICE_HOLD_PERIOD + 1);
-        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidInvoiceState.selector);
-        intermediatedPP.release(invoiceId);
-
-        vm.warp(block.timestamp + customHold);
+        // releaseAt is still recorded, but the operator may release before it.
+        assertEq(intermediatedPP.getInvoice(invoiceId).releaseAt, block.timestamp + customHold);
         intermediatedPP.release(invoiceId);
 
         assertEq(intermediatedPP.getInvoice(invoiceId).state, RELEASED);

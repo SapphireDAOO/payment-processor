@@ -304,7 +304,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     /// @inheritdoc IIntermediatedPaymentProcessor
     function release(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
-        if (!_isReleasable(i.state) || block.timestamp < i.releaseAt) revert InvalidInvoiceState();
+        if (!_isReleasable(i.state)) revert InvalidInvoiceState();
 
         uint256 fee = _applyBasisPoints(i.balance, i.feeRate);
         uint256 sellerNetAmount = i.balance - fee;

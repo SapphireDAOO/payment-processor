@@ -289,7 +289,7 @@ interface IIntermediatedPaymentProcessor {
      *      `_resolution` must be either DISPUTE_DISMISSED or DISPUTE_SETTLED; DISPUTE_RESOLVED
      *      is a separate flow handled by `resolveDispute`.
      *      `_sellerShare` must be between 0 and 10,000 BPS (0 = full refund to buyer).
-     *      If dismissed, the invoice becomes releasable again once `releaseAt` is reached.
+     *      If dismissed, the invoice becomes releasable again.
      *      If settled, funds are immediately distributed between seller and buyer according
      *      to `_sellerShare` and the invoice balance is zeroed.
      * @param _invoiceId The ID of the invoice.
@@ -316,11 +316,11 @@ interface IIntermediatedPaymentProcessor {
     function expireDispute(uint216 _invoiceId) external;
 
     /**
-     * @notice Releases escrowed funds to the seller after the release window has passed.
+     * @notice Releases escrowed funds to the seller.
      * @dev Callable only by the Intermediated Platforms Operator. Valid for invoices in the PAID, DISPUTE_RESOLVED,
-     *      DISPUTE_DISMISSED, or DISPUTE_EXPIRED state once `releaseAt` has been reached. Platform fees are
-     *      deducted before the net amount is transferred to the seller. The invoice transitions
-     *      to RELEASED and its balance is zeroed.
+     *      DISPUTE_DISMISSED, or DISPUTE_EXPIRED state. `releaseAt` is recorded on the invoice but not
+     *      enforced here; the operator decides when to release. Platform fees are deducted before the net
+     *      amount is transferred to the seller. The invoice transitions to RELEASED and its balance is zeroed.
      * @param _invoiceId The ID of the invoice.
      */
     function release(uint216 _invoiceId) external;
@@ -495,8 +495,8 @@ interface IIntermediatedPaymentProcessor {
     /**
      * @notice Emitted when a dispute is resolved in the seller's favor via `resolveDispute`.
      * @dev The invoice transitions to DISPUTE_RESOLVED and becomes releasable. The seller receives
-     *      the full escrow balance (minus platform fees) once `release` is called after `releaseAt`
-     *      is reached. No funds are distributed at the time this event is emitted.
+     *      the full escrow balance (minus platform fees) once `release` is called. No funds are
+     *      distributed at the time this event is emitted.
      * @param invoiceId The ID of the invoice involved in the dispute.
      */
     event DisputeResolved(uint216 indexed invoiceId);
