@@ -25,11 +25,14 @@ uint8 constant DISPUTE_DISMISSED = 7;
 // Dispute has been settled with a split payout.
 uint8 constant DISPUTE_SETTLED = 8;
 
+// Dispute lapsed without a resolution; the invoice is releasable again.
+uint8 constant DISPUTE_EXPIRED = 9;
+
 // Payment has been released to the seller after acceptance or resolution.
-uint8 constant RELEASED = 9;
+uint8 constant RELEASED = 10;
 
 // Invoice is permanently locked after all automated withdrawal retries (seller + buyer) failed.
-uint8 constant LOCKED = 10;
+uint8 constant LOCKED = 11;
 
 // Total basis points used for percentage calculations. 10_000 = 100%.
 uint256 constant BASIS_POINTS = 10_000;

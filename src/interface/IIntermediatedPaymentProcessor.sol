@@ -308,9 +308,17 @@ interface IIntermediatedPaymentProcessor {
     function resolveDispute(uint216 _invoiceId) external;
 
     /**
+     * @notice Marks a dispute as expired after it lapsed without a resolution.
+     * @dev Callable only by the Intermediated Platforms Operator. Transitions the invoice state from DISPUTED
+     *      to DISPUTE_EXPIRED, after which the invoice is releasable again. No funds move.
+     * @param _invoiceId The unique identifier of the disputed invoice.
+     */
+    function expireDispute(uint216 _invoiceId) external;
+
+    /**
      * @notice Releases escrowed funds to the seller after the release window has passed.
      * @dev Callable only by the Intermediated Platforms Operator. Valid for invoices in the PAID, DISPUTE_RESOLVED,
-     *      or DISPUTE_DISMISSED state once `releaseAt` has been reached. Platform fees are
+     *      DISPUTE_DISMISSED, or DISPUTE_EXPIRED state once `releaseAt` has been reached. Platform fees are
      *      deducted before the net amount is transferred to the seller. The invoice transitions
      *      to RELEASED and its balance is zeroed.
      * @param _invoiceId The ID of the invoice.
@@ -319,7 +327,8 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Sets a custom release time for a given invoice by adding a hold period to the current timestamp.
-     * @dev Callable only by the owner. Valid for invoices in the PAID, DISPUTE_RESOLVED, or DISPUTE_DISMISSED state.
+     * @dev Callable only by the owner. Valid for invoices in the PAID, DISPUTE_RESOLVED, DISPUTE_DISMISSED, or
+     *      DISPUTE_EXPIRED state.
      * @param _invoiceId The ID of the invoice to update.
      * @param _holdPeriod Additional hold period (in seconds) to add to the current timestamp.
      */
@@ -491,6 +500,13 @@ interface IIntermediatedPaymentProcessor {
      * @param invoiceId The ID of the invoice involved in the dispute.
      */
     event DisputeResolved(uint216 indexed invoiceId);
+
+    /**
+     * @notice Emitted when a dispute lapses without a resolution via `expireDispute`.
+     * @dev The invoice transitions to DISPUTE_EXPIRED and becomes releasable. No funds move.
+     * @param invoiceId The ID of the invoice involved in the dispute.
+     */
+    event DisputeExpired(uint216 indexed invoiceId);
 
     /**
      * @notice Emitted when a dispute is settled and the funds are split between buyer and seller.

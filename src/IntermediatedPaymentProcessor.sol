@@ -24,6 +24,7 @@ import {
     DISPUTE_RESOLVED,
     DISPUTE_DISMISSED,
     DISPUTE_SETTLED,
+    DISPUTE_EXPIRED,
     RELEASED,
     BASIS_POINTS,
     DEFAULT_DECIMAL,
@@ -303,10 +304,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     /// @inheritdoc IIntermediatedPaymentProcessor
     function release(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator whenNotPaused {
         Invoice memory i = invoices[_invoiceId];
-        uint8 state = i.state;
-        bool isReleasable = (state == PAID || state == DISPUTE_RESOLVED || state == DISPUTE_DISMISSED)
-            && block.timestamp >= i.releaseAt;
-        if (!isReleasable) revert InvalidInvoiceState();
+        if (!_isReleasable(i.state) || block.timestamp < i.releaseAt) revert InvalidInvoiceState();
 
         uint256 fee = _applyBasisPoints(i.balance, i.feeRate);
         uint256 sellerNetAmount = i.balance - fee;
@@ -371,12 +369,17 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
+    function expireDispute(uint216 _invoiceId) external onlyIntermediatedPlatformsOperator {
+        if (invoices[_invoiceId].state != DISPUTED) revert InvalidInvoiceState();
+        invoices[_invoiceId].state = DISPUTE_EXPIRED;
+        emit DisputeExpired(_invoiceId);
+    }
+
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function setInvoiceReleaseTime(uint216 _invoiceId, uint256 _holdPeriod) external onlyOwner {
         Invoice memory i = invoices[_invoiceId];
 
-        if (i.state != PAID && i.state != DISPUTE_RESOLVED && i.state != DISPUTE_DISMISSED) {
-            revert InvalidInvoiceState();
-        }
+        if (!_isReleasable(i.state)) revert InvalidInvoiceState();
 
         i.releaseAt = (block.timestamp + _holdPeriod).toUint40();
         invoices[_invoiceId] = i;
@@ -510,6 +513,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         if (_param.price < DEFAULT_MINIMUM_INVOICE_PRICE) revert PriceIsTooLow();
         if (_param.holdPeriod == 0) revert HoldPeriodCanNotBeZero();
         if (_param.paymentTokens.length == 0) revert NoPaymentTokens();
+
         Invoice memory i;
         i.seller = _param.seller;
         i.price = _param.price;
@@ -555,6 +559,15 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      */
     function _applyBasisPoints(uint256 _amount, uint256 _basisPoints) internal pure returns (uint256 value) {
         value = (_amount * _basisPoints) / BASIS_POINTS;
+    }
+
+    /**
+     * @notice Whether an invoice in `_state` can be released to its seller.
+     * @param _state The invoice state.
+     * @return releasable True for PAID and for disputes that ended without a payout.
+     */
+    function _isReleasable(uint8 _state) internal pure returns (bool releasable) {
+        return _state == PAID || _state == DISPUTE_RESOLVED || _state == DISPUTE_DISMISSED || _state == DISPUTE_EXPIRED;
     }
 
     /**
