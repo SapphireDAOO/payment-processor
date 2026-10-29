@@ -6,6 +6,7 @@ import { IOracleManager } from "src/interface/IOracleManager.sol";
 import { IPaymentProcessorStorage } from "src/interface/IPaymentProcessorStorage.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { console } from "forge-std/console.sol";
+import { Vm } from "forge-std/Vm.sol";
 
 import { IntermediatedPaymentProcessorSetUp } from "../utils/IntermediatedPaymentProcessorSetUp.sol";
 
@@ -1074,6 +1075,58 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(inv.price, _price);
         assertEq(inv.seller, sellerOne);
         assertEq(nextInvoiceNonce, 2);
+    }
+
+    function test_createSingleInvoiceEmitsTheOrderId() public {
+        uint216 nonce = ppStorage.getNextInvoiceNonce();
+        IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
+            getInvoiceCreationParam(nonce, sellerOne, 100e8, _testPaymentTokens());
+        uint216 expectedId = uint216(uint256(keccak256(abi.encode(param.invoiceId))) & ((1 << 216) - 1));
+
+        vm.expectEmit(address(intermediatedPP));
+        emit IIntermediatedPaymentProcessor.InvoiceCreated(
+            expectedId,
+            sellerOne,
+            0,
+            param.invoiceId,
+            nonce,
+            100e8,
+            uint40(block.timestamp + ppStorage.DEFAULT_PAYMENT_VALIDITY_PERIOD()),
+            TEST_INVOICE_HOLD_PERIOD,
+            uint16(FEE_RATE)
+        );
+        intermediatedPP.createSingleInvoice(param);
+    }
+
+    function test_createMetaInvoiceEmitsEachSubInvoiceWithItsMetaInvoice() public {
+        address[] memory sellers = new address[](2);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 100e8;
+        prices[1] = 50e8;
+
+        (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory subInvoiceIds) =
+            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+
+        vm.recordLogs();
+        uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(params);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        uint256 seen;
+        for (uint256 j; j < logs.length; j++) {
+            if (logs[j].topics[0] != IIntermediatedPaymentProcessor.InvoiceCreated.selector) continue;
+            assertEq(uint256(logs[j].topics[1]), subInvoiceIds[seen]);
+            assertEq(address(uint160(uint256(logs[j].topics[2]))), sellers[seen]);
+            assertEq(uint256(logs[j].topics[3]), metaInvoiceId);
+            (string memory orderId,, uint256 price,,,) =
+                abi.decode(logs[j].data, (string, uint216, uint256, uint40, uint32, uint16));
+            assertEq(orderId, params[seen].invoiceId);
+            assertEq(price, prices[seen]);
+            seen++;
+        }
+        assertEq(seen, 2);
     }
 
     function test_payInvoice(uint256 _price) public {

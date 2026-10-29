@@ -644,6 +644,25 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(simplePP.getNextInvoiceNonce(), 2);
     }
 
+    function test_invoiceCreationEmitsOnlyCreationFields() public {
+        uint256 price = 1 ether;
+        uint216 nonce = ppStorage.getNextInvoiceNonce();
+        uint216 expectedId =
+            uint216(uint256(keccak256(abi.encode(address(simplePP), sellerOne, uint256(nonce)))) & ((1 << 216) - 1));
+
+        vm.expectEmit(address(simplePP));
+        emit ISimplePaymentProcessor.InvoiceCreated(
+            expectedId,
+            sellerOne,
+            nonce,
+            price,
+            uint40(block.timestamp + ppStorage.DEFAULT_PAYMENT_VALIDITY_PERIOD()),
+            uint16(FEE_RATE)
+        );
+        vm.prank(sellerOne);
+        simplePP.createInvoice(price, "", false);
+    }
+
     function test_createAndPayInvoice(uint256 _invoicePrice) public {
         _invoicePrice = bound(_invoicePrice, 1 ether, 1000 ether);
 
