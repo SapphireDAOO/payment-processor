@@ -152,13 +152,15 @@ contract MasterDeployer is IMasterDeployer, IPendingProcessorProvider {
 
         address predicted = predictedStorage;
 
-        oracleManager = OracleManager(
-            Create2.deploy(
-                0,
-                _params.salt,
-                abi.encodePacked(_initCodes.oracleManager, abi.encode(predicted, _params.sequencerUptimeFeed))
-            )
-        );
+        oracleManager = _params.oracleManager != address(0)
+            ? OracleManager(_params.oracleManager)
+            : OracleManager(
+                Create2.deploy(
+                    0,
+                    _params.salt,
+                    abi.encodePacked(_initCodes.oracleManager, abi.encode(predicted, _params.sequencerUptimeFeed))
+                )
+            );
 
         intermediatedPaymentProcessor = IntermediatedPaymentProcessor(
             payable(Create2.deploy(

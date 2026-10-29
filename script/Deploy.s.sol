@@ -107,6 +107,7 @@ contract Deploy is Script {
         console.log("MultiSig threshold:  ", INITIAL_THRESHOLD);
         console.log("Signer[0]:           ", SIGNER_ONE);
         console.log("Signer[1]:           ", SIGNER_TWO);
+        console.log("OracleManager reuse: ", _existingOracleManager());
         console.log("CREATE2 salt:");
         console.logBytes32(salt);
         console.log("");
@@ -140,6 +141,7 @@ contract Deploy is Script {
             }),
             escrowHoldPeriod: _escrowHoldPeriod(),
             sequencerUptimeFeed: addr.sequencerUptimeFeed,
+            oracleManager: _existingOracleManager(),
             forwarder: vm.envOr("CRE_FORWARDER", DEFAULT_CRE_FORWARDER),
             workflowOwner: vm.envOr("CRE_WORKFLOW_OWNER", DEFAULT_CRE_WORKFLOW_OWNER),
             multiSigSigners: signers,
@@ -158,7 +160,8 @@ contract Deploy is Script {
         });
 
         IMasterDeployer.SystemInitCodes memory systemInitCodes = IMasterDeployer.SystemInitCodes({
-            oracleManager: type(OracleManager).creationCode,
+            // Skipped as calldata when an existing manager is reused.
+            oracleManager: _existingOracleManager() == address(0) ? type(OracleManager).creationCode : bytes(""),
             intermediatedPaymentProcessor: type(IntermediatedPaymentProcessor).creationCode,
             sweeper: type(Sweeper).creationCode,
             notes: type(Notes).creationCode,
@@ -202,7 +205,12 @@ contract Deploy is Script {
         console.log("Notes deployed:                   ", address(notes));
         console.log("SimplePaymentProcessor deployed:  ", simplePP);
         console.log("PaymentAutomation deployed:       ", automation);
-        console.log("OracleManager deployed:           ", address(_masterDeployer.oracleManager()));
+        console.log(
+            _existingOracleManager() == address(0)
+                ? "OracleManager deployed:           "
+                : "OracleManager (existing):         ",
+            address(_masterDeployer.oracleManager())
+        );
         console.log("IntermediatedPaymentProcessor deployed:", intermediatedPP);
         console.log("Sweeper deployed:                 ", address(_masterDeployer.sweeper()));
 
@@ -218,7 +226,12 @@ contract Deploy is Script {
         console.log("Fee signer set:                   ", feeSigner);
         console.log("Automation fixed at construction: ", automation);
 
-        _setPriceFeeds(_masterDeployer.oracleManager(), _addr, _isMainnet);
+        // A reused manager keeps its feeds, and is administered by the system it was deployed with.
+        if (_existingOracleManager() == address(0)) {
+            _setPriceFeeds(_masterDeployer.oracleManager(), _addr, _isMainnet);
+        } else {
+            console.log("Price feeds left as configured on the existing OracleManager");
+        }
 
         _masterDeployer.ppStorage().transferOwnership(multisig);
         console.log("Ownership transferred to MultiSig:", multisig);
@@ -353,6 +366,17 @@ contract Deploy is Script {
             wbtc: address(mockWBtc),
             weth: WETH
         });
+    }
+
+    /**
+     * @notice The OracleManager to reuse instead of deploying one, read from ORACLE_MANAGER.
+     * @dev Unset (address(0)) deploys a fresh manager. A set address must already hold code, so a typo
+     *      cannot leave the IntermediatedPaymentProcessor pricing against an empty account.
+     * @return oracleManager The existing OracleManager, or address(0).
+     */
+    function _existingOracleManager() internal view returns (address oracleManager) {
+        oracleManager = vm.envOr("ORACLE_MANAGER", address(0));
+        require(oracleManager == address(0) || oracleManager.code.length != 0, "ORACLE_MANAGER has no code");
     }
 
     /// @notice Human-readable network label for the current chain id.

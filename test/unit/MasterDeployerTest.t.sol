@@ -115,6 +115,7 @@ contract MasterDeployerTest is Test {
             }),
             escrowHoldPeriod: 1 days,
             sequencerUptimeFeed: address(0),
+            oracleManager: address(0),
             forwarder: address(0xf0),
             workflowOwner: address(0xf1),
             multiSigSigners: signers,

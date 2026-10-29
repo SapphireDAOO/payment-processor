@@ -112,7 +112,10 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
      * @param salt The CREATE2 salt used for every deployment.
      * @param config The initial PaymentProcessorStorage configuration.
      * @param escrowHoldPeriod Seconds a SimplePaymentProcessor escrow holds a payment before release.
-     * @param sequencerUptimeFeed Chainlink sequencer uptime feed; address(0) disables the check.
+     * @param sequencerUptimeFeed Chainlink sequencer uptime feed; address(0) disables the check. Unused
+     *        when `oracleManager` is set, since the existing manager keeps its own.
+     * @param oracleManager An already deployed OracleManager for the IntermediatedPaymentProcessor to
+     *        price against; address(0) deploys a new one.
      * @param forwarder CRE forwarder allowed to deliver reports to PaymentAutomation.
      * @param workflowOwner CRE workflow owner carried in report metadata.
      * @param multiSigSigners Initial MultiSig signers.
@@ -123,6 +126,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
         IPaymentProcessorStorage.Configuration config;
         uint32 escrowHoldPeriod;
         address sequencerUptimeFeed;
+        address oracleManager;
         address forwarder;
         address workflowOwner;
         address[] multiSigSigners;
@@ -151,7 +155,8 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
 
     /**
      * @notice Creation code (without constructor args) for the contracts {deploySystem} deploys.
-     * @param oracleManager OracleManager creation code.
+     * @param oracleManager OracleManager creation code. Ignored, and may be empty, when
+     *        `Params.oracleManager` names an existing manager.
      * @param intermediatedPaymentProcessor IntermediatedPaymentProcessor creation code.
      * @param sweeper Sweeper creation code.
      * @param ppStorage PaymentProcessorStorage creation code. Must match the one passed to
@@ -196,7 +201,9 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
     /**
      * @notice Second deployment phase: OracleManager, IntermediatedPaymentProcessor, Sweeper, and
      *         finally PaymentProcessorStorage at its predicted address with both processors authorized.
-     * @dev Callable once, by the deployer only, and only after {deployCore}. Ownership of the storage
+     * @dev Callable once, by the deployer only, and only after {deployCore}. The OracleManager is
+     *      deployed only when `_params.oracleManager` is address(0); otherwise that one is reused, with
+     *      its price feeds and admin unchanged. Ownership of the storage
      *      contract is left with `_params.config.owner`; post-deploy wiring (notes authorization,
      *      registering the automation adapter on the Simple processor, price feeds, ownership transfer
      *      to the MultiSig) is the deployer's responsibility.

@@ -9,7 +9,8 @@
 #   script/deploy.sh testnet --dry-run  # simulate only, no broadcast
 #
 # Reads from .env: TEST_NET_RPC_URL, MAINNET_RPC, ETHERSCAN_API_KEY, SENDER,
-# and optionally FEE_SIGNER and CREATE2_SALT (both consumed by Deploy.s.sol).
+# and optionally FEE_SIGNER, CREATE2_SALT and ORACLE_MANAGER (all consumed by Deploy.s.sol).
+# Set ORACLE_MANAGER to an already deployed OracleManager to reuse it instead of deploying one.
 
 set -euo pipefail
 
@@ -97,6 +98,7 @@ echo "Signer:     $SIGNER_ADDR (nonce $latest, settled)"
 echo "Fee signer: ${FEE_SIGNER:-<Deploy.s.sol default>}"
 echo "Gas mult:   ${GAS_MULTIPLIER:-130}%"
 echo "Salt:       ${CREATE2_SALT:-<Deploy.s.sol default>}"
+echo "Oracle:     ${ORACLE_MANAGER:-<deploy a new OracleManager>}"
 echo ""
 
 forge script "${FORGE_ARGS[@]}"
