@@ -2,19 +2,21 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FOUNDRY_PROFILE: ci
 
 jobs:
-  check:
-    name: Foundry project
+  build:
+    name: Format and build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
-
     steps:
       - uses: actions/checkout@v6
         with:
@@ -28,14 +30,44 @@ jobs:
 
       - name: Run Forge fmt
         run: forge fmt --check
-        id: fmt
+
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            cache
+            out
+          key: forge-${{ hashFiles('foundry.toml', 'foundry.lock', 'src/**', 'test/**', 'script/**') }}
+          restore-keys: forge-
 
       - name: Run Forge build
         run: forge build --sizes
-        id: build
+
+  test:
+    name: ${{ matrix.suite }} tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [unit, integration, invariant]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            cache
+            out
+          key: forge-${{ hashFiles('foundry.toml', 'foundry.lock', 'src/**', 'test/**', 'script/**') }}
+          restore-keys: forge-
 
       - name: Run Forge tests
         env:
           MAINNET_RPC: ${{ secrets.MAINNET_RPC }}
-        run: forge test -vvv
-        id: test
+        run: forge test --match-path "test/${{ matrix.suite }}/**" -vvv
