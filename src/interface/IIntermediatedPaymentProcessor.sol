@@ -10,7 +10,7 @@ interface IIntermediatedPaymentProcessor {
     //                              ERRORS
     // ================================================================
 
-    /// @notice Thrown when a payment is attempted with a token that is not supported by the processor.
+    /// @notice Thrown when an invoice lists a payment token the OracleManager does not support.
     error UnsupportedToken();
 
     /// @notice Thrown when an invoice is created with the zero address as the seller.
@@ -97,10 +97,10 @@ interface IIntermediatedPaymentProcessor {
     /// @notice Thrown when a value-moving entrypoint is called while the system is paused.
     error ContractPaused();
 
-    /// @notice Thrown when the seller's payout share exceeds the allowed limit (10000 BPS).
+    /// @notice Thrown when a seller or refund share is outside its allowed basis-point range.
     error InvalidSellersPayoutShare();
 
-    /// @notice Thrown when the escrow withdrawal fails during a manual refund.
+    /// @notice Thrown when an escrow withdrawal fails during a release, refund, or dispute settlement.
     error EscrowWithdrawFailed();
 
     /// @notice Thrown when native currency arrives outside a fee-wrapping withdrawal.
@@ -117,12 +117,12 @@ interface IIntermediatedPaymentProcessor {
     /// @param invoiceNonce A unique identifier assigned to this invoice, typically sequentially.
     /// @param paidAt Timestamp when the payment was made.
     /// @param createdAt Timestamp when the invoice was created.
-    /// @param releaseAt The timestamp when funds in escrow can be released to the seller.
+    /// @param releaseAt The intended release time; recorded but not enforced by `release`.
     /// @param expiresAt The timestamp after which the invoice is no longer payable.
     /// @param state Current state of the invoice.
-    /// @param withdrawalRetries Reserved retry counter retained for storage-layout compatibility; unused now that releases are manual. Packed with `state`.
-    /// @param feeRate The platform fee rate (in basis points) captured at invoice creation. Releases and dispute
-    ///        settlements always charge this rate, so later changes to the global fee rate do not affect existing invoices.
+    /// @param withdrawalRetries Unused; always zero, since releases are manual.
+    /// @param feeRate The platform fee rate (in basis points) captured at invoice creation and charged on
+    ///        release and dispute settlement.
     /// @param holdPeriod Seconds the escrow holds the payment after it is paid, set at invoice creation.
     /// @param metaInvoiceId Identifier linking the invoice to a meta invoice. 0 if not part of any meta invoice.
     /// @param buyer Address of the buyer.
@@ -191,7 +191,7 @@ interface IIntermediatedPaymentProcessor {
     function createSingleInvoice(InvoiceCreationParam memory _param) external returns (uint216 invoiceId);
 
     /**
-     * @notice Creates a meta-invoice composed of multiple sub-invoices for a buyer.
+     * @notice Creates a meta-invoice composed of multiple sub-invoices.
      * @dev Only callable by the Intermediated Platforms Operator. Each sub-invoice is created using the
      * provided parameters, and all are linked under a single meta-invoice ID.
      * @param _param An array of parameters used to create each sub-invoice.
@@ -216,11 +216,10 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Pays all sub-invoices in a meta-invoice using native ETH.
-     * @dev Caller must send exactly the oracle-converted total for the meta-invoice price.
-     *      Any dust from per-sub-invoice integer rounding is refunded to the caller.
-     *      Canceled sub-invoices are automatically excluded: each cancellation reduces the
-     *      stored meta-invoice price, so `msg.value` only needs to cover the remaining
-     *      non-canceled sub-invoices. Sub-invoices not in CREATED state are silently skipped.
+     * @dev Caller must send exactly the oracle-converted meta-invoice price. Canceled sub-invoices reduce
+     *      that price; already-paid ones do not. Sub-invoices not in CREATED state are skipped, and the
+     *      difference between `msg.value` and the amount escrowed (including rounding dust) is refunded.
+     *      Reverts if no sub-invoice was paid.
      * @param _invoiceId The meta-invoice ID to pay.
      * @param _feeReceivers The fee receiver for each sub-invoice, in the same order as the meta-invoice's
      *        sub-invoice IDs. One entry per sub-invoice, including any that end up skipped.
@@ -235,9 +234,7 @@ interface IIntermediatedPaymentProcessor {
     /**
      * @notice Pays all sub-invoices in a meta invoice using an ERC20 token.
      * @dev Reverts with InvalidNativePayment for `address(0)`; native payments go through `payMetaInvoiceWithValue`.
-     *      Canceled sub-invoices are automatically excluded: each cancellation reduces the
-     *      stored meta-invoice price, so the caller only pays for the remaining non-canceled
-     *      sub-invoices. Sub-invoices not in CREATED state are silently skipped.
+     *      Each sub-invoice still in CREATED state is paid separately; the rest are skipped.
      * @param _invoiceId The meta invoice ID to be paid.
      * @param _paymentToken The token address used for payment.
      * @param _feeReceivers The fee receiver for each sub-invoice, in the same order as the meta-invoice's
@@ -265,7 +262,7 @@ interface IIntermediatedPaymentProcessor {
      * @notice Creates a dispute for an invoice.
      * @dev Callable only by the Intermediated Platforms Operator. Only valid for invoices in the PAID state.
      *      Transitions the invoice to DISPUTED, blocking release until the dispute is
-     *      resolved or dismissed.
+     *      resolved, dismissed, or expired.
      * @param _invoiceId The ID of the invoice to dispute.
      */
     function createDispute(uint216 _invoiceId) external;
@@ -300,9 +297,8 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Finalizes a dispute and marks the invoice as resolved.
-     * @dev Callable only by the Intermediated Platforms Operator after a dispute has been raised by the buyer.
-     * This function is used when both parties (buyer and seller) have come to an agreement
-     * Transitions the invoice state from DISPUTED to DISPUTE_RESOLVED.
+     * @dev Callable only by the Intermediated Platforms Operator, once buyer and seller have come to an
+     *      agreement. Transitions the invoice from DISPUTED to DISPUTE_RESOLVED, after which it is releasable.
      * @param _invoiceId The unique identifier of the disputed invoice.
      */
     function resolveDispute(uint216 _invoiceId) external;
@@ -328,8 +324,8 @@ interface IIntermediatedPaymentProcessor {
 
     /**
      * @notice Sets a custom release time for a given invoice by adding a hold period to the current timestamp.
-     * @dev Callable only by the owner. Valid for invoices in the PAID, DISPUTE_RESOLVED, DISPUTE_DISMISSED, or
-     *      DISPUTE_EXPIRED state.
+     * @dev Callable only by the storage owner. Valid for invoices in the PAID, DISPUTE_RESOLVED, DISPUTE_DISMISSED,
+     *      or DISPUTE_EXPIRED state. Informational only: `release` does not enforce `releaseAt`.
      * @param _invoiceId The ID of the invoice to update.
      * @param _holdPeriod Additional hold period (in seconds) to add to the current timestamp.
      */
@@ -432,9 +428,8 @@ interface IIntermediatedPaymentProcessor {
      * @param paymentToken The address of the token used for payment (address(0) for native ETH).
      * @param escrowAddress The address of the escrow contract created to hold the payment.
      * @param amount The amount paid, denominated in the token’s smallest unit.
-     * @param releaseAt The UNIX timestamp (in seconds) when the escrowed funds become releasable.
-     * @param feeReceiver The address recorded to be paid this invoice's platform fee. Zero for a
-     *        sub-invoice paid through a meta-invoice, which falls back to the global fee receiver.
+     * @param releaseAt The intended release time; recorded but not enforced by `release`.
+     * @param feeReceiver The authorized address recorded to be paid this invoice's platform fee.
      */
     event InvoicePaid(
         uint216 indexed invoiceId,
@@ -482,13 +477,13 @@ interface IIntermediatedPaymentProcessor {
     event InvoiceCanceled(uint216 indexed invoiceId);
 
     /**
-     * @notice Emitted when a dispute is raised for an invoice by the buyer.
+     * @notice Emitted when the operator opens a dispute on an invoice.
      * @param invoiceId The ID of the disputed invoice.
      */
     event DisputeCreated(uint216 indexed invoiceId);
 
     /**
-     * @notice Emitted when a dispute is dismissed and no party receives a refund or payout.
+     * @notice Emitted when a dispute is dismissed; no funds move and the invoice becomes releasable again.
      * @param invoiceId The ID of the invoice involved in the dispute.
      */
     event DisputeDismissed(uint216 indexed invoiceId);
@@ -534,7 +529,7 @@ interface IIntermediatedPaymentProcessor {
     event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
 
     /**
-     * @notice Emitted when a best-effort fee or payout transfer fails during release or dispute settlement.
+     * @notice Emitted when the platform fee transfer fails during release; the fee stays in escrow.
      * @param invoiceId The invoice whose fee transfer failed.
      * @param recipient The intended recipient of the failed transfer.
      * @param amount The amount that could not be transferred.

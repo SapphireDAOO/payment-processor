@@ -39,8 +39,7 @@ interface INotes {
 
     /**
      * @notice Create a note under an invoice.
-     * @dev Only authorized callers can create notes. The first note created for an invoice
-     *      (noteId 0) automatically marks the author as having opened it.
+     * @dev Only authorized callers can create notes. Marks the author as having opened the note.
      * @param _invoiceId Invoice identifier.
      * @param _author Note author.
      * @param _encryptedContent Encrypted note payload.
@@ -52,7 +51,7 @@ interface INotes {
         returns (uint256 noteId);
 
     /**
-     * @notice Mark a note as opened or unopened for an account.
+     * @notice Marks a shared note as opened for an account.
      * @dev Only authorized callers can update opened state. Reverts with Unauthorized if
      *      the note is not shared — opened state can only be tracked for shared notes.
      * @param _invoiceId Invoice identifier.
@@ -140,11 +139,11 @@ interface INotes {
     function CURRENT_VERSION() external view returns (uint8 version);
 
     /**
-     * @notice Emitted when a user changes their opened state for a note.
+     * @notice Emitted when a note is marked opened for an account.
      * @param invoiceId The unique identifier of the invoice the note belongs to.
      * @param noteId The unique identifier of the note.
      * @param user The address of the user whose note state was updated.
-     * @param opened Whether the note is marked as opened or not by the user.
+     * @param opened Always true; notes cannot be marked unopened.
      */
     event NoteStateChanged(uint216 indexed invoiceId, uint256 indexed noteId, address indexed user, bool opened);
 }

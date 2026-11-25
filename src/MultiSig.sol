@@ -9,8 +9,8 @@ import { LibCall } from "solady/utils/LibCall.sol";
  * @title MultiSig
  * @notice Multisignature governance contract for privileged payment processor administration.
  *         Replaces a single-owner key with collective authorization across a defined signer set.
- *         Administrative calls (fee updates, decision windows, locked fund recovery, etc.) to
- *         SimplePaymentProcessor, IntermediatedPaymentProcessor and PaymentProcessorStorage must pass through this contract.
+ *         Owns PaymentProcessorStorage, so every owner-only call in the system (pausing, operator and
+ *         fee-signer changes, price feeds, sweeps, release times) must pass through this contract.
  */
 contract MultiSig is IMultiSig {
     using LibCall for address;
@@ -18,7 +18,7 @@ contract MultiSig is IMultiSig {
     /// @notice Tracks whether an address is an authorized signer.
     mapping(address signer => bool authorized) private signers;
 
-    /// @notice Minimum number of approvals required to transition a transaction to APPROVED.
+    /// @notice Minimum number of current-signer approvals required to execute a transaction.
     uint256 private threshold;
 
     /// @notice Total number of registered signers.
@@ -55,8 +55,8 @@ contract MultiSig is IMultiSig {
     /**
      * @notice Deploys the multisig with an initial signer set and approval threshold.
      * @param _initialSigners Distinct, non-zero addresses to register as signers (minimum 2).
-     * @param _initialThreshold Minimum approvals required for execution; must be >= 1
-     *        and <= _initialSigners.length.
+     * @param _initialThreshold Minimum approvals required for execution; at least a majority of
+     *        `_initialSigners` and at most its length.
      */
     constructor(address[] memory _initialSigners, uint256 _initialThreshold) {
         uint256 len = _initialSigners.length;

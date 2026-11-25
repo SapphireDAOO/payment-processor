@@ -12,7 +12,7 @@ interface IPaymentAutomation {
     //                              ERRORS
     // ================================================================
 
-    /// @notice Thrown when the caller lacks the required role or permission.
+    /// @notice Thrown when `onReport` is not called by the CRE forwarder.
     error NotAuthorized();
 
     /// @notice Thrown when the processor or storage address supplied to the constructor is the zero address.

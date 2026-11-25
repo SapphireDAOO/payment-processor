@@ -41,8 +41,8 @@ contract OracleManager is IOracleManager {
     mapping(address token => PriceFeedConfig config) private priceFeeds;
 
     /**
-     * @notice Restricts writes to the owner of the shared storage contract.
-     * @dev Reverts with `NotAuthorized` if `msg.sender != ppStorage.owner()`.
+     * @notice Restricts writes to the storage owner or the storage contract itself.
+     * @dev Reverts with `NotAuthorized` otherwise.
      */
     modifier onlyAuthorized() {
         _isAuthorized();
@@ -50,7 +50,7 @@ contract OracleManager is IOracleManager {
     }
 
     /**
-     * @notice Deploys OracleManager and sets the initial sequencer uptime feed.
+     * @notice Deploys OracleManager with a fixed sequencer uptime feed.
      * @param _paymentProcessorStorageAddress The shared storage contract whose owner governs oracle updates.
      * @param _sequencerUptimeFeed Address of the Chainlink sequencer uptime feed.
      *        Pass address(0) to disable the sequencer check (e.g. on L1 or local testnets).
@@ -122,8 +122,8 @@ contract OracleManager is IOracleManager {
 
     /**
      * @notice Reverts unless the L2 sequencer is up and past its post-restart grace period.
-     * @dev Skipped when `sequencerUptimeFeed == address(0)` (L1 or local testnets). Shared by
-     *      {getUsdPerToken} and {getUsdPerTokenBatch} so a batch call checks it only once.
+     * @dev Skipped when `SEQUENCER_UPTIME_FEED == address(0)` (L1 or local testnets). Shared by every
+     *      price read, so a batch call checks it only once.
      */
     function _checkSequencer() internal view {
         if (SEQUENCER_UPTIME_FEED == address(0)) return;
@@ -188,8 +188,8 @@ contract OracleManager is IOracleManager {
     }
 
     /**
-     * @notice Ensures the caller matches the shared storage owner.
-     * @dev Reverts with `NotAuthorized` if the caller is not the storage owner.
+     * @notice Ensures the caller is the storage owner or the storage contract itself.
+     * @dev Reverts with `NotAuthorized` otherwise.
      */
     function _isAuthorized() internal view {
         if (msg.sender != _owner() && msg.sender != address(PP_STORAGE)) {

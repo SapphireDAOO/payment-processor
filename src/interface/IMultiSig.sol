@@ -19,12 +19,13 @@ interface IMultiSig {
     /// @notice Thrown when the referenced transaction hash does not exist.
     error TransactionDoesNotExist();
 
+    /// @notice Thrown when a transaction is not PROPOSED or APPROVED (already executed or canceled).
     error TransactionNotProposedOrApproved();
 
     /// @notice Thrown when an operation requires PROPOSED status but the transaction is not proposed.
     error TransactionNotProposed();
 
-    /// @notice Thrown when execution is attempted but the transaction has not reached APPROVED status.
+    /// @notice Thrown when execution is attempted with fewer than `threshold` valid approvers.
     error TransactionNotApproved();
 
     /// @notice Thrown when a signer attempts to approve a transaction they have already approved.
@@ -38,13 +39,13 @@ interface IMultiSig {
     /// @notice Thrown when the low-level call to the payment processor fails.
     error ExecutionFailed();
 
-    /// @notice Thrown when a provided threshold is zero, exceeds signer count, or is otherwise invalid.
+    /// @notice Thrown when a threshold is below a majority of signers, or above the signer count at construction.
     error InvalidThreshold();
 
     /// @notice Thrown when the target address is the zero address.
     error InvalidTarget();
 
-    /// @notice Thrown when removing a signer would bring the signer count below the current threshold.
+    /// @notice Thrown when a new threshold exceeds the signer count.
     error SignerCountBelowThreshold();
 
     /// @notice Thrown when the provided address is already a registered signer.
@@ -53,7 +54,7 @@ interface IMultiSig {
     /// @notice Thrown when the provided address is not a registered signer.
     error NotASigner();
 
-    /// @notice Thrown when the initial signer array has fewer than two entries.
+    /// @notice Thrown when the signer set would have fewer than `MINIMUM_SIGNERS` signers.
     error InsufficientSigners();
 
     /// @notice Thrown when a signer is the zero address.
@@ -70,7 +71,7 @@ interface IMultiSig {
     // ================================================================
 
     /// @notice Represents a proposed administrative transaction awaiting multisig approval.
-    /// @param target Payment processor contract to call.
+    /// @param target Contract to call.
     /// @param data ABI-encoded admin function call.
     /// @param nonce Unique identifier preventing replay.
     /// @param status Current lifecycle state: PROPOSED (1), APPROVED (2), EXECUTED (3), or CANCELED (4).
@@ -89,7 +90,7 @@ interface IMultiSig {
 
     /// @notice Emitted when a new transaction is proposed by a signer.
     /// @param txHash The keccak256 hash identifying this transaction.
-    /// @param target The payment processor contract address.
+    /// @param target The contract to call.
     /// @param data ABI-encoded calldata.
     /// @param nonce Unique proposal nonce.
     /// @param proposer Address of the signer who proposed.
@@ -134,8 +135,8 @@ interface IMultiSig {
     // ================================================================
 
     /**
-     * @notice Proposes a new administrative transaction targeting a payment processor.
-     * @param target  Payment processor address (SimplePaymentProcessor or IntermediatedPaymentProcessor).
+     * @notice Proposes a new administrative transaction and records the proposer's approval.
+     * @param target  Contract to call, e.g. PaymentProcessorStorage, OracleManager, or this MultiSig.
      * @param data    ABI-encoded payment processor admin function call.
      * @return txHash keccak256 hash of the transaction, used as its identifier.
      */
@@ -167,7 +168,8 @@ interface IMultiSig {
 
     /**
      * @notice Adds a new signer to the authorized set.
-     * @dev Only callable by the multisig contract itself via an executed transaction.
+     * @dev Only callable by the multisig contract itself via an executed transaction. Resets the
+     *      threshold to a majority of the new signer set.
      * @param signer Address to register; must be non-zero and not already a signer.
      */
     function addSigner(address signer) external;
@@ -175,7 +177,8 @@ interface IMultiSig {
     /**
      * @notice Removes a signer from the authorized set.
      * @dev Only callable by the multisig contract itself via an executed transaction.
-     *      Reverts if removal would leave fewer signers than the current threshold.
+     *      Reverts if removal would leave fewer than `MINIMUM_SIGNERS` signers. Resets the threshold to
+     *      a majority of the new signer set; the removed signer's approvals stop counting.
      * @param signer Address to deregister; must be a current signer.
      */
     function removeSigner(address signer) external;
@@ -183,7 +186,7 @@ interface IMultiSig {
     /**
      * @notice Updates the minimum approval threshold.
      * @dev Only callable by the multisig contract itself via an executed transaction.
-     * @param newThreshold New required approval count; must be >= 1 and <= signerCount.
+     * @param newThreshold New required approval count; at least a majority of signers and at most signerCount.
      */
     function updateThreshold(uint256 newThreshold) external;
 

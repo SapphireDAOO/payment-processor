@@ -32,7 +32,7 @@ contract Notes is INotes {
     /// @notice Tracks whether a user has opened a specific note.
     mapping(uint216 invoiceId => mapping(uint256 noteId => mapping(address user => bool isOpened))) private opened;
 
-    /// @notice Tracks which addresses are allowed to create notes.
+    /// @notice Tracks which addresses are allowed to create notes and mark them opened.
     /// @dev Address => ALLOWED/NOT_ALLOWED flag.
     mapping(address => uint256) private auth;
 

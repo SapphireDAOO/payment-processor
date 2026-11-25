@@ -21,7 +21,7 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
     /// @notice The payment processor whose due-task queue this contract drives.
     ISimplePaymentProcessor public immutable PROCESSOR;
 
-    /// @notice Reference to the external Payment Processor storage contract, used for owner checks.
+    /// @notice Reference to the external Payment Processor storage contract, read for the pause state.
     IPaymentProcessorStorage public immutable PP_STORAGE;
 
     /// @notice Address of the CRE (Keystone) forwarder contract responsible for delivering workflow reports via `onReport`.

@@ -6,7 +6,8 @@ import { Ownable } from "solady/auth/Ownable.sol";
 
 /**
  * @title PaymentProcessorStorage
- * @notice Stores global state and metadata for invoices, escrow configurations, and contract parameters.
+ * @notice Holds the configuration shared by the payment processors: operator, fee signer, fee receiver,
+ *         WETH and pause state.
  * @dev Ownable contract; every setter is owner-only, apart from the emergency pause controls.
  */
 contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {

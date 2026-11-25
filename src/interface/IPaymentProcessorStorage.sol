@@ -3,8 +3,7 @@ pragma solidity 0.8.38;
 
 /**
  * @title IPaymentProcessorStorage
- * @notice Interface for storage layer used by payment processor contracts.
- * @dev Allows interaction with invoice data
+ * @notice Interface for the configuration and pause state shared by the payment processors.
  */
 interface IPaymentProcessorStorage {
     /// @notice Thrown when a caller attempts an action without the required authorization.
@@ -29,7 +28,7 @@ interface IPaymentProcessorStorage {
     error InvalidWeth();
 
     /// @notice Initial configuration for the storage contract.
-    /// @param owner The address authorized to pause and to set the emergency pauser.
+    /// @param owner The contract owner, who controls every setter and the owner pause.
     /// @param feeReceiver Address that receives platform fees.
     /// @param intermediatedPlatformsOperator Address authorized to interact with invoice creation and specific
     ///        management functions.
@@ -175,8 +174,8 @@ interface IPaymentProcessorStorage {
     event Paused(address indexed account);
 
     /**
-     * @notice Emitted when the owner lifts a pause.
-     * @param account The owner that unpaused.
+     * @notice Emitted when a pause is lifted.
+     * @param account The owner, or the emergency pauser lifting its own emergency pause.
      */
     event Unpaused(address indexed account);
 

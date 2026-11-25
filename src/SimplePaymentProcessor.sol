@@ -346,7 +346,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
     /**
      * @notice Executes an automated buyer refund with retry logic.
-     * @dev A failed withdrawal leaves the invoice on the heap for the next cycle.
+     * @dev A failed withdrawal leaves the task due, so `processDueTasks` retries it straight away in the same call.
      * @param _invoiceId The invoice to refund.
      * @param _pos The invoice's 1-based heap position.
      * @param _i In-memory snapshot of the invoice.
@@ -492,8 +492,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
     /**
      * @notice Calculates the fee for an amount at a specific fee rate.
-     * @dev Used by release paths with the fee rate snapshotted on the invoice at creation,
-     *      so global fee rate changes never affect already-created invoices.
+     * @dev Used by release paths with the fee rate snapshotted on the invoice at creation.
      * @param _amount The amount to calculate the fee from.
      * @param _feeRate The fee rate in basis points (1% = 100).
      * @return feeValue The calculated fee amount.

@@ -38,7 +38,7 @@ interface IEscrowFactory {
      *      escrow has a unique and reproducible address across all invoice types.
      * @param _seller The address of the invoice seller.
      * @param _buyer The address of the invoice buyer.
-     * @param _invoiceId The unique nonce of the invoice.
+     * @param _invoiceId The invoice ID.
      * @return salt The computed salt for the escrow deployment.
      */
     function computeSalt(address _seller, address _buyer, uint216 _invoiceId) external pure returns (bytes32 salt);

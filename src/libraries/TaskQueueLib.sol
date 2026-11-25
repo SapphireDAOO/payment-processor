@@ -17,7 +17,7 @@ library TaskQueueLib {
     uint256 constant NOT_ELIGIBLE_FOR_RELEASE = 1;
     /// @notice Returned when an error occurs during task processing (e.g. invalid index or heap inconsistency).
     uint256 constant ERROR = 2;
-    /// @notice Returned when a task has been successfully released and removed from the heap.
+    /// @notice Returned when the callback handled the task (released, refunded, burned, or retried).
     uint256 constant SUCCESSFUL = 3;
 
     /// @notice Min-heap struct holding the encoded task keys.
@@ -109,7 +109,8 @@ library TaskQueueLib {
      *      (`block.timestamp < dueAt`), the loop exits immediately — the min-heap ordering
      *      guarantees all remaining tasks are also not yet due. Otherwise, `_callback` is
      *      invoked with the task ID and the result determines control flow:
-     *      - `SUCCESSFUL`: Task released and removed from heap; continues to next task.
+     *      - `SUCCESSFUL`: Task handled; it leaves the heap unless a failed withdrawal keeps it due.
+     *        Continues with the heap root, which may be the same task.
      *      - `NOT_ELIGIBLE_FOR_RELEASE`: Stale entry — removed and loop continues.
      *      - `ERROR`: Stale entry — removed and loop continues.
      * @param _heap The heap data structure storing encoded tasks.

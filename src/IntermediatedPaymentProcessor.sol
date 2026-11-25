@@ -58,10 +58,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     /// @dev True only while a fee is in flight from escrow to WETH, so `receive` accepts nothing else.
     bool transient wrappingFee;
 
-    /**
-     * @notice Mapping from unique invoice ID to its invoice data.
-     * @dev Used for standalone invoices (not part of a meta-invoice).
-     */
+    /// @notice Invoice data by invoice ID, for standalone invoices and sub-invoices alike.
     mapping(uint216 invoiceId => Invoice invoice) private invoices;
 
     /**
@@ -98,7 +95,8 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
     /**
      * @notice Blocks the call while the system is paused.
-     * @dev Reverts with ContractPaused. `cancelInvoice` is exempt: it moves no funds.
+     * @dev Reverts with ContractPaused. `cancelInvoice`, `resolveDispute`, `expireDispute` and
+     *      `setInvoiceReleaseTime` are exempt: they move no funds.
      */
     modifier whenNotPaused() {
         _whenNotPaused();
@@ -193,11 +191,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         if (_paymentToken == address(0)) _refundExtra(msg.value, amountPaid);
     }
 
-    /**
-     * @notice Pays all sub-invoices in a meta-invoice using native ETH.
-     * @dev Caller must send exactly the oracle-converted total. Any dust from integer rounding is refunded.
-     * @param _invoiceId The meta-invoice ID to pay.
-     */
+    /// @inheritdoc IIntermediatedPaymentProcessor
     function payMetaInvoiceWithValue(uint216 _invoiceId, address[] calldata _feeReceivers, bytes memory _data)
         external
         payable
@@ -402,16 +396,10 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /**
-     * @notice Fetches the Chainlink USD price for a payment token and validates feed freshness.
-     * @dev Performs three layers of validation before returning the price:
-     *      1. Sequencer uptime: if `sequencerUptimeFeed` is set, checks that the L2 sequencer is up
-     *         (answer == 0) and that `SEQUENCER_GRACE_PERIOD` has elapsed since it last restarted.
-     *         A reverting or unavailable feed also reverts with `SequencerDown`.
-     *         Skipped when `sequencerUptimeFeed == address(0)` (L1 or local testnets).
-     *      2. Round completeness: reverts with `StalePrice` if `answeredInRound < roundId`.
-     *      3. Heartbeat: reverts with `StalePriceFeed` if the update is older than `config.heartbeat`.
+     * @notice Fetches a payment token's USD price from the OracleManager.
+     * @dev The OracleManager checks sequencer uptime, round completeness and feed freshness.
      * @param _paymentToken The token address (address(0) for native ETH).
-     * @return The token's USD price with 8 decimals as returned by the Chainlink aggregator.
+     * @return The token's USD price with 8 decimals.
      */
     function _usdPerToken(address _paymentToken) internal view returns (uint256) {
         return ORACLE.getUsdPerToken(_paymentToken);
@@ -419,12 +407,14 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
     /**
      * @notice Shared base for all invoice payment paths.
-     * @dev For native ETH payments, the caller must have already validated `msg.value == _tokenPrice`.
-     *      For ERC20 payments, tokens are pulled from the caller via safeTransferFrom.
+     * @dev Native escrows are funded from this contract's balance, so the caller must have checked that
+     *      `msg.value` covers `_tokenPrice`. ERC20 payments are pulled from the caller via safeTransferFrom.
      * @param _i The invoice memory struct to be updated in-place.
      * @param _invoiceId The ID of the invoice being paid.
      * @param _paymentToken The token address (address(0) for native ETH).
      * @param _tokenPrice The oracle-converted price in the payment token's units.
+     * @param _feeReceiver The authorized fee receiver recorded on the invoice.
+     * @return amountPaid The amount escrowed, equal to `_tokenPrice`.
      */
     function _pay(
         Invoice memory _i,
@@ -477,6 +467,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @param _paymentToken The token address (address(0) for native ETH).
      * @param _tokenUsdPrice The oracle USD price per token unit (8 decimals), fetched once by the caller.
      * @param _decimals The token's decimal precision.
+     * @param _feeReceivers The authorized fee receiver for each sub-invoice, index-aligned with `_subInvoiceIds`.
      * @return amountPaid Total token amount paid across all processed sub-invoices.
      */
     function _paySubInvoices(
@@ -508,7 +499,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @param _nonce The unique ID to assign to the new invoice.
      * @param _metaInvoiceId The associated meta-invoice ID, or 0 for standalone invoices.
      * @param _param The parameters required to create the invoice.
-     * @return invoiceId The keccak256 hash representing the invoice ID.
+     * @return invoiceId `keccak256(_param.invoiceId)` truncated to 216 bits.
      */
     function _createInvoice(uint216 _nonce, uint216 _metaInvoiceId, InvoiceCreationParam memory _param)
         internal
@@ -607,8 +598,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @notice Distributes the seller's payout from the escrow, applying platform fees.
      * @param _i The invoice data containing escrow and recipient info.
      * @param _sellerReceivingValue The gross amount owed to the seller before fees.
-     * @param _revertOnFail If true, reverts on failed transfer. If false, emits TransferFailed
-     *        instead so a single failing recipient cannot block the remaining payout.
+     * @param _revertOnFail If true, reverts on a failed transfer. If false, the failure is ignored.
      * @return sellerNetAmount The amount the seller receives after fees are deducted.
      * @return fee The platform fee deducted and sent to the fee receiver.
      */
@@ -665,8 +655,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
     /**
      * @notice Resolves the address that should receive an invoice's platform fee.
-     * @dev Every payment path now records a receiver, so the fallback only covers invoices paid before
-     *      per-invoice receivers existed.
+     * @dev Every payment path records a non-zero receiver, so the `FEE_RECEIVER` fallback is defensive.
      * @param _feeReceiver The fee receiver stored on the invoice; zero when it has none.
      * @return feeReceiver The address to send the fee to.
      */
@@ -675,14 +664,12 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /**
-     * @notice Computes a deterministic ID for a meta-invoice based on the sub-invoice range and a salt.
-     * @dev The hash is based on the contract address, the sub-invoice ID range [lower, upper], and a salt
-     *      (e.g., a sequence number or counter). This prevents collisions when multiple meta-invoices share
-     *      the same buyer and invoice range.
-     * @param _lower The starting sub-invoice ID in the group.
-     * @param _upper The ending sub-invoice ID in the group.
-     * @param _salt A user-provided or system-generated value (e.g., nextMetaInvoiceNonce) to ensure uniqueness.
-     * @return metaInvoiceId A keccak256 hash representing the deterministic meta-invoice order ID.
+     * @notice Computes a deterministic meta-invoice ID.
+     * @dev Hashes the sub-invoice nonce range, the meta-invoice nonce and this contract's address.
+     * @param _lower The first sub-invoice nonce in the group.
+     * @param _upper The last sub-invoice nonce in the group.
+     * @param _salt The meta-invoice nonce.
+     * @return metaInvoiceId The hash truncated to 216 bits.
      */
     function _computeMetaInvoiceId(uint256 _lower, uint256 _upper, uint256 _salt)
         internal
@@ -744,7 +731,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     /**
      * @notice Ensures that the caller is the registered Intermediated Platforms Operator.
      * @dev Reverts with `NotAuthorized` if `msg.sender` is not equal to
-     *      the Intermediated Platforms Operator address stored in `ppStorage`.
+     *      the Intermediated Platforms Operator address stored in `PP_STORAGE`.
      */
     function _onlyIntermediatedPlatformsOperator() internal view {
         if (msg.sender != PP_STORAGE.getIntermediatedPlatformsOperator()) revert NotAuthorized();

@@ -10,10 +10,10 @@ interface ISimplePaymentProcessor {
     //                              ERRORS
     // ================================================================
 
-    /// @notice Thrown when the caller lacks the required role or permission.
     /// @notice Thrown when deploying with a zero escrow hold period.
     error InvalidHoldPeriod();
 
+    /// @notice Thrown when the caller is not the invoice's seller.
     error NotAuthorized();
 
     /// @notice Thrown when the provided value is lower than the required minimum.
@@ -61,7 +61,7 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when native currency is sent to the processor outside of a fee being wrapped.
     error UnexpectedNativeTransfer();
 
-    /// @notice Thrown when the escrow withdrawal fails during a manual release, reject, or refund.
+    /// @notice Thrown when the escrow withdrawal fails during a manual release or reject.
     error EscrowWithdrawFailed();
 
     /// @notice Thrown when a value-moving entrypoint is called while the system is paused.
@@ -100,11 +100,10 @@ interface ISimplePaymentProcessor {
     // ================================================================
 
     /**
-     * @notice Creates a new invoice with a specified price and escrow hold period.
-     * @dev Optionally stores a reference to the user's off-chain notes file. The hold period is fixed here
-     *      and cannot be changed afterwards, including by the owner.
-     * @param _price The price of the invoice in wei.
-     *        Pass 0 to make funds releasable immediately on acceptance.
+     * @notice Creates a new invoice with the caller as seller.
+     * @dev Optionally stores an encrypted note. The escrow hold period is the processor-wide
+     *      `ESCROW_HOLD_PERIOD`, fixed at deployment.
+     * @param _price The price of the invoice in wei; at least `MINIMUM_INVOICE_VALUE`.
      * @param _storageRef A bytes-encoded reference to the user's notes storage.
      * @param _share Whether the note is shared with the other party.
      * @return invoiceId The unique ID of the newly created invoice.
@@ -113,7 +112,7 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Pays for an existing invoice and optionally updates the user's notes storage reference.
-     * @dev The caller must send enough ETH to cover the invoice price. The invoice is inserted
+     * @dev The caller must send exactly the invoice price. The invoice is inserted
      *      into the auto-release heap with priority `sellerActionDeadline`, enabling automated refunds if
      *      the seller does not act within the decision window.
      * @param _invoiceId The ID of the invoice being paid.
@@ -150,7 +149,7 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Cancels an existing invoice.
      * @dev Only callable by the invoice seller. Invoice must be in CREATED state (i.e., not yet
-     *      paid). Transitions the invoice to CANCELLED. No heap interaction occurs since unpaid
+     *      paid). Transitions the invoice to CANCELED. No heap interaction occurs since unpaid
      *      invoices are never inserted into the heap.
      * @param _invoiceId The ID of the invoice to cancel.
      */
@@ -159,26 +158,26 @@ interface ISimplePaymentProcessor {
     /**
      * @notice Releases the funds held in escrow for a specific invoice to the seller.
      * @dev Only callable by the seller. Invoice must be in ACCEPTED state and `releaseAt`
-     *      must have passed. Transitions the invoice to RELEASED, removes it from the heap,
-     *      and zeroes the balance.
+     *      must have passed. Transitions the invoice to RELEASED, removes it from the heap, zeroes the
+     *      balance, and pays the fee in WETH. Reverts with EscrowWithdrawFailed if either transfer fails.
      * @param _invoiceId The ID of the invoice for which funds are released.
      */
     function release(uint216 _invoiceId) external;
 
     /**
      * @notice Refunds the buyer of a specific invoice when the seller fails to act in time.
-     * @dev Invoice must be in PAID state and the decision window (`sellerActionDeadline`) must have elapsed.
-     *      Transitions the invoice to REFUNDED, removes it from the heap, zeroes the balance,
-     *      and returns funds to the buyer. After `MAX_WITHDRAWAL_RETRIES` failures the funds are
-     *      burned to address(0) and the invoice transitions to BURNED instead.
+     * @dev Callable by anyone. Invoice must be in PAID state and the decision window (`sellerActionDeadline`)
+     *      must have elapsed. Transitions the invoice to REFUNDED, removes it from the heap, zeroes the
+     *      balance, and returns funds to the buyer. A failed transfer increments the retry count; once
+     *      `MAX_WITHDRAWAL_RETRIES` is reached the next call burns the funds to address(0) instead.
      * @param _invoiceId The ID of the invoice to be refunded.
      */
     function refundBuyer(uint216 _invoiceId) external;
 
     /**
      * @notice Processes due invoice tasks (auto-release and auto-refund) within the gas threshold.
-     * @dev Callable by anyone. Stops once remaining gas drops below the configured threshold; leftovers
-     *      are picked up on the next call.
+     * @dev Callable by anyone. Stops once remaining gas drops below `GAS_THRESHOLD`; leftovers are picked
+     *      up on the next call. A failed withdrawal stays due, so its retries run within the same call.
      */
     function processDueTasks() external;
 
@@ -203,10 +202,8 @@ interface ISimplePaymentProcessor {
     function getInvoiceData(uint216 _invoiceId) external view returns (Invoice memory i);
 
     /**
-     * @notice Calculates the fee based on the provided amount and the current global fee rate.
-     * @dev Fee rate is expressed in basis points (1% = 100). This quotes the rate that would be
-     *      captured by an invoice created now; releases use the rate snapshotted on the invoice
-     *      at creation, not the current global rate.
+     * @notice Calculates the platform fee on an amount at `FEE_RATE`.
+     * @dev Fee rate is expressed in basis points (1% = 100).
      * @param _amount The amount to calculate the fee from.
      * @return feeValue The calculated fee amount.
      */
@@ -291,11 +288,11 @@ interface ISimplePaymentProcessor {
     event InvoiceReleased(uint216 indexed invoiceId, uint256 sellerAmount, uint256 fee);
 
     /**
-     * @notice Emitted when an ETH transfer to a recipient fails during reject, refund, or release.
-     * @dev Best-effort for fee transfers, which stay in escrow. On the final refund attempt it precedes
-     *      `PaymentBurned`.
+     * @notice Emitted when an automated transfer fails and the processor moves on.
+     * @dev Emitted for a failed fee during auto-release (the fee stays in escrow), for the buyer refund
+     *      before a burn, and for a failed burn.
      * @param invoiceId The invoice whose transfer failed.
-     * @param recipient The intended ETH recipient (buyer or seller).
+     * @param recipient The intended recipient: fee receiver, buyer, or address(0) for a burn.
      * @param amount The amount of ETH that could not be delivered.
      */
     event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
@@ -318,13 +315,14 @@ interface ISimplePaymentProcessor {
     function AUTOMATION() external view returns (address automation);
 
     /**
-     * @notice Emitted when an automated withdrawal fails and the invoice is rescheduled for a retry.
-     * @dev The invoice remains in its current state and the heap entry is rescheduled by RETRY_DELAY.
-     *      After MAX_WITHDRAWAL_RETRIES attempts, the processor falls back to a buyer refund instead.
+     * @notice Emitted when an automated withdrawal fails and the invoice stays due for a retry.
+     * @dev The invoice keeps its state and heap entry, so the retry runs in the same `processDueTasks` call.
+     *      After MAX_WITHDRAWAL_RETRIES seller attempts the processor refunds the buyer; once the buyer
+     *      retries run out the funds are burned.
      * @param invoiceId The invoice being retried.
-     * @param recipient The intended recipient (seller for ACCEPTED, buyer for PAID).
+     * @param recipient The intended recipient (seller for ACCEPTED, buyer for PAID or refund fallback).
      * @param amount The amount that could not be delivered.
-     * @param attempt The retry attempt number (1 through MAX_WITHDRAWAL_RETRIES).
+     * @param attempt The cumulative retry count, up to 2 * MAX_WITHDRAWAL_RETRIES for an accepted invoice.
      */
     event WithdrawalRetried(uint216 indexed invoiceId, address indexed recipient, uint256 amount, uint8 attempt);
 }

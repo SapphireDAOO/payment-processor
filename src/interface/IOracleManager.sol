@@ -5,7 +5,7 @@ interface IOracleManager {
     /// @notice Thrown when a caller attempts an owner-only oracle configuration update.
     error NotAuthorized();
 
-    /// @notice Thrown when a payment is attempted with a token that is not supported by the processor.
+    /// @notice Thrown when a token has no allowed price feed.
     error UnsupportedToken();
 
     /// @notice Thrown when the Chainlink round is incomplete (answeredInRound < roundId).
@@ -39,10 +39,10 @@ interface IOracleManager {
     /**
      * @notice Fetches the Chainlink USD price for a payment token and validates feed freshness.
      * @dev Performs three layers of validation before returning the price:
-     *      1. Sequencer uptime: if `sequencerUptimeFeed` is set, checks that the L2 sequencer is up
+     *      1. Sequencer uptime: if `SEQUENCER_UPTIME_FEED` is set, checks that the L2 sequencer is up
      *         (answer == 0) and that `SEQUENCER_GRACE_PERIOD` has elapsed since it last restarted.
      *         A reverting or unavailable feed also reverts with `SequencerDown`.
-     *         Skipped when `sequencerUptimeFeed == address(0)` (L1 or local testnets).
+     *         Skipped when `SEQUENCER_UPTIME_FEED == address(0)` (L1 or local testnets).
      *      2. Round completeness: reverts with `StalePrice` if `answeredInRound < roundId`.
      *      3. Heartbeat: reverts with `StalePriceFeed` if the update is older than `config.heartbeat`.
      *         Skipped when `config.heartbeat == 0` (e.g. mock feeds on local testnets).
@@ -74,7 +74,7 @@ interface IOracleManager {
      *      result as informational rather than as a basis for moving funds.
      *
      *      Both feeds are assumed to report {FEED_DECIMAL} decimals, as Chainlink USD pairs do.
-     *     * @param _paymentToken The token being converted; `address(0)` for native currency.
+     * @param _paymentToken The token being converted; `address(0)` for native currency.
      * @param _amount The amount of `_paymentToken`, in that token's own decimals.
      * @param _toAggregator Aggregator quoting USD per unit of the target currency (e.g. EUR/USD).
      * @return value The converted amount, with {FEED_DECIMAL} decimals.
@@ -95,8 +95,8 @@ interface IOracleManager {
 
     /**
      * @notice Sets the Chainlink price feed configuration for a specific payment token.
-     * @dev Callable only by the owner. Use address(0) for `_token` to set the native currency feed.
-     *      Setting `_config.aggregator` to address(0) removes the token from accepted payment methods.
+     * @dev Callable only by the storage owner. Use address(0) for `_token` to set the native currency feed.
+     *      Set `_config.allowed` to false to stop accepting the token; the aggregator does not decide support.
      *      A `_config.heartbeat` of 0 disables the staleness check for the feed.
      * @param _token The payment token address, or address(0) for native currency.
      * @param _config The price feed configuration containing the aggregator address and heartbeat interval.
@@ -109,7 +109,7 @@ interface IOracleManager {
     /**
      * @notice Emitted when the price feed configuration for a token is updated.
      * @param token The payment token address (address(0) for the native currency).
-     * @param aggregator The Chainlink aggregator address (address(0) removes the token).
+     * @param aggregator The Chainlink aggregator address.
      * @param heartbeat The maximum acceptable age (in seconds) of a price update.
      */
     event PriceFeedSet(address indexed token, address indexed aggregator, uint96 heartbeat);
