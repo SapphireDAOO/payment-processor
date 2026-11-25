@@ -91,16 +91,21 @@ contract OracleManager is IOracleManager {
     }
 
     /// @inheritdoc IOracleManager
-    function getUsdPerTokenBatch(address[] calldata _paymentTokens) external view returns (uint256[] memory prices) {
+    function getUsdPerTokenBatch(address[] calldata _paymentTokens)
+        external
+        view
+        returns (uint256[] memory prices, uint256[] memory validUntil)
+    {
         _checkSequencer();
 
         uint256 length = _paymentTokens.length;
         prices = new uint256[](length);
+        validUntil = new uint256[](length);
         for (uint256 i; i < length; i++) {
             PriceFeedConfig memory config = priceFeeds[_paymentTokens[i]];
             if (!config.allowed) revert UnsupportedToken();
 
-            (prices[i],) = _usdPerToken(config);
+            (prices[i], validUntil[i]) = _usdPerToken(config);
         }
     }
 
@@ -164,8 +169,7 @@ contract OracleManager is IOracleManager {
      * @notice Reads and validates a token's Chainlink price, assuming the sequencer was already checked.
      * @param _config The token's price feed configuration.
      * @return price The token's USD price with 8 decimals as returned by the Chainlink aggregator.
-     * @return validUntil The last timestamp at which this price passes the heartbeat check
-     *         (`updatedAt + heartbeat`); `type(uint256).max` when the feed has no heartbeat.
+     * @return validUntil `updatedAt + heartbeat`; `type(uint256).max` with no heartbeat.
      */
     function _usdPerToken(PriceFeedConfig memory _config) internal view returns (uint256 price, uint256 validUntil) {
         (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) =

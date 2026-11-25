@@ -117,12 +117,10 @@ contract OracleManagerTest is BaseSetUp {
     function test_getValueInCurrency_returnsWhenTheTokenPriceGoesStale() public {
         MockV3Aggregator target = new MockV3Aggregator(8, 1e8);
 
-        // The token's feed last updated at setUp's start; it stays valid for one heartbeat after that.
         (,,, uint256 updatedAt,) = priceFeed.latestRoundData();
         (, uint256 validUntil) = oracle.getValueInCurrency(TOKEN, 1e18, address(target));
         assertEq(validUntil, updatedAt + HEARTBEAT);
 
-        // Still valid at that exact second, stale one second later.
         vm.warp(validUntil);
         oracle.getValueInCurrency(TOKEN, 1e18, address(target));
 
@@ -296,15 +294,61 @@ contract OracleManagerTest is BaseSetUp {
         tokens[0] = TOKEN;
         tokens[1] = TOKEN_TWO;
 
-        uint256[] memory prices = oracle.getUsdPerTokenBatch(tokens);
+        (uint256[] memory prices,) = oracle.getUsdPerTokenBatch(tokens);
 
         assertEq(prices.length, 2);
         assertEq(prices[0], uint256(INITIAL_PRICE));
         assertEq(prices[1], uint256(INITIAL_PRICE_TWO));
     }
 
+    function test_getUsdPerTokenBatch_returnsWhenEachPriceGoesStale() public {
+        uint96 shortHeartbeat = 1 hours;
+        vm.prank(admin);
+        oracle.setPriceFeed(
+            TOKEN_TWO,
+            IOracleManager.PriceFeedConfig({
+                aggregator: address(priceFeedTwo), heartbeat: shortHeartbeat, allowed: true
+            })
+        );
+
+        address[] memory tokens = new address[](2);
+        tokens[0] = TOKEN;
+        tokens[1] = TOKEN_TWO;
+
+        (,,, uint256 updatedAt,) = priceFeed.latestRoundData();
+        (,,, uint256 updatedAtTwo,) = priceFeedTwo.latestRoundData();
+        (, uint256[] memory validUntil) = oracle.getUsdPerTokenBatch(tokens);
+
+        assertEq(validUntil.length, 2);
+        assertEq(validUntil[0], updatedAt + HEARTBEAT);
+        assertEq(validUntil[1], updatedAtTwo + shortHeartbeat);
+
+        vm.warp(validUntil[1] + 1);
+        vm.expectRevert(IOracleManager.StalePriceFeed.selector);
+        oracle.getUsdPerTokenBatch(tokens);
+    }
+
+    function test_getUsdPerTokenBatch_neverExpiresWithoutAHeartbeat() public {
+        vm.prank(admin);
+        oracle.setPriceFeed(
+            TOKEN, IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: 0, allowed: true })
+        );
+
+        address[] memory tokens = new address[](2);
+        tokens[0] = TOKEN;
+        tokens[1] = TOKEN_TWO;
+
+        (,,, uint256 updatedAtTwo,) = priceFeedTwo.latestRoundData();
+        (, uint256[] memory validUntil) = oracle.getUsdPerTokenBatch(tokens);
+
+        assertEq(validUntil[0], type(uint256).max);
+        assertEq(validUntil[1], updatedAtTwo + HEARTBEAT);
+    }
+
     function test_getUsdPerTokenBatch_empty() public view {
-        assertEq(oracle.getUsdPerTokenBatch(new address[](0)).length, 0);
+        (uint256[] memory prices, uint256[] memory validUntil) = oracle.getUsdPerTokenBatch(new address[](0));
+        assertEq(prices.length, 0);
+        assertEq(validUntil.length, 0);
     }
 
     function test_getUsdPerTokenBatch_revertsOnUnsupportedToken() public {
