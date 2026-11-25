@@ -699,7 +699,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
      * @param _token The address of the ERC20 token.
      * @return tokenDecimals The number of decimals the token uses.
      */
-    function _getDecimals(address _token) public view returns (uint8 tokenDecimals) {
+    function _getDecimals(address _token) internal view returns (uint8 tokenDecimals) {
         (bool ok, bytes memory data) = _token.staticcall(abi.encodeWithSignature("decimals()"));
 
         if (ok && data.length > 0) {

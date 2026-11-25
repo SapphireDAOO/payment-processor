@@ -2,7 +2,7 @@
 pragma solidity 0.8.38;
 
 import { IPaymentAutomation } from "./interface/IPaymentAutomation.sol";
-import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
+import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
 import { IERC165, IReceiver } from "./interface/IReceiver.sol";
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
 import { IPendingProcessorProvider } from "./interface/IDeploymentProviders.sol";
@@ -29,15 +29,6 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
 
     /// @notice Owner address of the CRE workflow authorized to trigger `onReport`, as reported in the report metadata.
     address public immutable WORKFLOW_OWNER;
-
-    /**
-     * @notice Restricts access to the payment processor owner or storage contract.
-     * @dev Reverts with NotAuthorized if the caller is not permitted.
-     */
-    modifier onlyAuthorized() {
-        _isAuthorized();
-        _;
-    }
 
     /**
      * @notice Wires the adapter to the storage contract and the keeper identities it trusts.
@@ -123,24 +114,5 @@ contract PaymentAutomation is IPaymentAutomation, IReceiver {
     /// @dev A paused system rejects `processDueTasks`, so report no work rather than let keepers revert.
     function _hasDueTasks() internal view returns (bool dueTasksExist) {
         return !PP_STORAGE.isPaused() && PROCESSOR.hasDueTasks();
-    }
-
-    /**
-     * @notice Validates that the caller is the contract owner or the PaymentProcessorStorage contract.
-     * @dev Reverts with NotAuthorized if neither condition is met.
-     */
-    function _isAuthorized() internal view {
-        if (msg.sender != _owner() && msg.sender != address(PP_STORAGE)) {
-            revert NotAuthorized();
-        }
-    }
-
-    /**
-     * @notice Returns the owner of the PaymentProcessorStorage contract.
-     * @dev This helper reads the owner directly from the linked PaymentProcessorStorage instance.
-     * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
-     */
-    function _owner() internal view returns (address ownerAddress) {
-        ownerAddress = PaymentProcessorStorage(address(PP_STORAGE)).owner();
     }
 }

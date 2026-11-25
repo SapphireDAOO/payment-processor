@@ -2,7 +2,7 @@
 pragma solidity 0.8.38;
 
 import { INotes } from "./interface/INotes.sol";
-import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
+import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
 import { IAuthorizedAddressProvider } from "./interface/IDeploymentProviders.sol";
 
 /**
@@ -147,15 +147,6 @@ contract Notes is INotes {
     /// @inheritdoc INotes
     function getPublicKey(address _account) external view returns (PublicKey memory publicKey) {
         return publicKeys[_account];
-    }
-
-    /**
-     * @notice Returns the owner of the PaymentProcessorStorage contract.
-     * @dev This helper reads the owner directly from the linked PaymentProcessorStorage instance.
-     * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
-     */
-    function _owner() internal view returns (address ownerAddress) {
-        ownerAddress = PaymentProcessorStorage(address(PP_STORAGE)).owner();
     }
 
     /**

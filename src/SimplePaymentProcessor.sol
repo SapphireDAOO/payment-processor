@@ -3,7 +3,7 @@ pragma solidity 0.8.38;
 
 import { Escrow, IEscrow } from "./Escrow.sol";
 
-import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
+import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { TaskQueueLib } from "src/libraries/TaskQueueLib.sol";
@@ -45,7 +45,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     /// @notice Reference to the external Payment Processor storage contract.
     IPaymentProcessorStorage public immutable PP_STORAGE;
 
-    /// @notice Wrapped native token the platform fee is paid in.
     /// @notice Seconds an escrow holds a payment after acceptance, before release.
     uint32 public immutable ESCROW_HOLD_PERIOD;
 
@@ -71,15 +70,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
      * @dev A value of 0 means the task is not present in the heap
      */
     mapping(uint216 invoiceId => uint256 key) private index;
-
-    /**
-     * @notice Restricts access to the payment processor owner or storage contract.
-     * @dev Reverts with NotAuthorized if the caller is not permitted.
-     */
-    modifier onlyAuthorized() {
-        _isAuthorized();
-        _;
-    }
 
     /**
      * @notice Blocks the call while the system is paused.
@@ -490,28 +480,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
             (uint256(keccak256(abi.encode(address(this), _seller, _invoiceNonce))) & ((1 << 216) - 1)).toUint216();
     }
 
-    /**
-     * @notice Returns the owner of the PaymentProcessorStorage contract.
-     * @dev This helper reads the owner directly from the linked PaymentProcessorStorage instance.
-     * @return ownerAddress The address that currently owns the PaymentProcessorStorage contract.
-     */
-    function _owner() internal view returns (address ownerAddress) {
-        ownerAddress = PaymentProcessorStorage(address(PP_STORAGE)).owner();
-    }
-
     /// @dev Reverts with ContractPaused while the storage contract reports a pause.
     function _whenNotPaused() internal view {
         if (PP_STORAGE.isPaused()) revert ContractPaused();
-    }
-
-    /**
-     * @notice Validates that the caller is the contract owner or the PaymentProcessorStorage contract.
-     * @dev Reverts with NotAuthorized if neither condition is met.
-     */
-    function _isAuthorized() internal view {
-        if (msg.sender != _owner() && msg.sender != address(PP_STORAGE)) {
-            revert NotAuthorized();
-        }
     }
 
     /// @inheritdoc ISimplePaymentProcessor

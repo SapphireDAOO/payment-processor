@@ -1503,11 +1503,6 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(sellerOne.balance, sellerBefore + tokenValue - expectedFee);
     }
 
-    function test_decimal() public view {
-        uint8 decimal = intermediatedPP._getDecimals(address(0));
-        assertEq(decimal, DEFAULT_DECIMAL);
-    }
-
     function _executePayment(address _buyer, uint216 _invoiceId, uint256 _tokenValue) internal {
         mockUsdc.mint(_buyer, INITIAL_BALANCE);
 
