@@ -12,7 +12,7 @@ import { Notes } from "../src/Notes.sol";
 /**
  * @title DeploySimple
  * @notice Deploys the SimplePaymentProcessor, PaymentAutomation and Notes through a {SimpleDeployer}, against the
- *         core {DeployIntermediated} deployed.
+ *         core from env (MULTISIG, PP_STORAGE, SWEEPER), deploying whichever is unset.
  */
 contract DeploySimple is DeployConfig {
     function run() external {
@@ -21,7 +21,7 @@ contract DeploySimple is DeployConfig {
 
         vm.startBroadcast();
         Addr memory addr = _network(salt);
-        Core memory core = _existingCore(salt, addr.weth);
+        Core memory core = _deployCore(salt, addr.weth);
         _deploySimple(salt, address(core.ppStorage));
         _handover(core);
         vm.stopBroadcast();

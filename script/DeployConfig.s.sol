@@ -127,13 +127,31 @@ abstract contract DeployConfig is Script {
         });
     }
 
-    /// @notice Deploys the MultiSig, PaymentProcessorStorage and Sweeper unless already there, and sets the fee signer.
+    /// @notice The address in env `_key`, or `_initCode` deployed through {_create2} when unset.
+    function _reuseOrDeploy(string memory _key, string memory _name, bytes32 _salt, bytes memory _initCode)
+        internal
+        returns (address deployed)
+    {
+        deployed = _envAddress(_key);
+        if (deployed == address(0)) return _create2(_name, _salt, _initCode);
+        console.log(string.concat(_name, " (", _key, "):"), deployed);
+    }
+
+    /// @notice Env `_key` as an address, address(0) when unset; a set address must hold code.
+    function _envAddress(string memory _key) internal view returns (address addr) {
+        addr = vm.envOr(_key, address(0));
+        require(addr == address(0) || addr.code.length != 0, string.concat(_key, " has no code"));
+    }
+
+    /// @notice Reuses MULTISIG, PP_STORAGE and SWEEPER from env, deploys the rest, and sets the fee signer.
     function _deployCore(bytes32 _salt, address _weth) internal returns (Core memory core) {
         console.log("--- Core ---");
 
-        core.multiSig = MultiSig(_create2("MultiSig", _salt, _multiSigInitCode()));
-        core.ppStorage = PaymentProcessorStorage(_create2("PaymentProcessorStorage", _salt, _storageInitCode(_weth)));
-        core.sweeper = Sweeper(_create2("Sweeper", _salt, _sweeperInitCode(address(core.ppStorage))));
+        core.multiSig = MultiSig(_reuseOrDeploy("MULTISIG", "MultiSig", _salt, _multiSigInitCode()));
+        core.ppStorage = PaymentProcessorStorage(
+            _reuseOrDeploy("PP_STORAGE", "PaymentProcessorStorage", _salt, _storageInitCode(_weth))
+        );
+        core.sweeper = Sweeper(_reuseOrDeploy("SWEEPER", "Sweeper", _salt, _sweeperInitCode(address(core.ppStorage))));
 
         // Without a fee signer every acceptPayment and payInvoice reverts with InvalidFeeAuthorization.
         address feeSigner = vm.envOr("FEE_SIGNER", DEFAULT_FEE_SIGNER);
@@ -143,19 +161,6 @@ abstract contract DeployConfig is Script {
             core.ppStorage.setFeeSigner(feeSigner);
             console.log("Fee signer set:", feeSigner);
         }
-        console.log("");
-    }
-
-    /// @notice The core {DeployIntermediated} put at this salt; reverts if it is not deployed yet.
-    function _existingCore(bytes32 _salt, address _weth) internal view returns (Core memory core) {
-        core.ppStorage = PaymentProcessorStorage(vm.computeCreate2Address(_salt, keccak256(_storageInitCode(_weth))));
-        require(address(core.ppStorage).code.length != 0, "Core not deployed; run DeployIntermediated first");
-
-        core.multiSig = MultiSig(vm.computeCreate2Address(_salt, keccak256(_multiSigInitCode())));
-        core.sweeper = Sweeper(vm.computeCreate2Address(_salt, keccak256(_sweeperInitCode(address(core.ppStorage)))));
-
-        console.log("--- Core ---");
-        console.log("PaymentProcessorStorage (existing):", address(core.ppStorage));
         console.log("");
     }
 
@@ -180,15 +185,6 @@ abstract contract DeployConfig is Script {
 
         if (_core.ppStorage.owner() == msg.sender) _core.ppStorage.transferOwnership(address(_core.multiSig));
         console.log("Storage owner:", _core.ppStorage.owner());
-    }
-
-    /**
-     * @notice The OracleManager to reuse, read from ORACLE_MANAGER; address(0) deploys a new one.
-     * @dev A set address must hold code, so a typo cannot leave the processor pricing against an empty account.
-     */
-    function _existingOracleManager() internal view returns (address oracleManager) {
-        oracleManager = vm.envOr("ORACLE_MANAGER", address(0));
-        require(oracleManager == address(0) || oracleManager.code.length != 0, "ORACLE_MANAGER has no code");
     }
 
     /// @notice 30 days on Base mainnet, 5 minutes everywhere else.

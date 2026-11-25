@@ -10,7 +10,7 @@ import { PaymentProcessorStorage } from "../src/PaymentProcessorStorage.sol";
 
 /**
  * @title DeployIntermediated
- * @notice Runs first: deploys the shared core, then the OracleManager (unless ORACLE_MANAGER is reused) and the
+ * @notice Deploys the core (unless reused from env), the OracleManager (unless ORACLE_MANAGER is set) and the
  *         IntermediatedPaymentProcessor, and registers the price feeds.
  */
 contract DeployIntermediated is DeployConfig {
@@ -30,7 +30,7 @@ contract DeployIntermediated is DeployConfig {
         internal
         returns (IntermediatedPaymentProcessor processor)
     {
-        address existingOracle = _existingOracleManager();
+        address existingOracle = _envAddress("ORACLE_MANAGER");
 
         console.log("--- Intermediated processor ---");
 

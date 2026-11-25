@@ -8,11 +8,9 @@
 #   intermediated  MultiSig, PaymentProcessorStorage, Sweeper, IntermediatedPaymentProcessor, OracleManager
 #   simple         SimplePaymentProcessor, PaymentAutomation, Notes
 #
-# Run intermediated first; simple attaches to the core it deployed under the same salt.
-#
 # Reads from .env: TEST_NET_RPC_URL, MAINNET_RPC, ETHERSCAN_API_KEY, SENDER, and optionally
-# FEE_SIGNER, CREATE2_SALT, ORACLE_MANAGER and HANDOVER (consumed by the deploy scripts).
-# Set ORACLE_MANAGER to an already deployed OracleManager to reuse it instead of deploying one.
+# FEE_SIGNER, CREATE2_SALT, MULTISIG, PP_STORAGE, SWEEPER, ORACLE_MANAGER and HANDOVER.
+# MULTISIG, PP_STORAGE, SWEEPER and ORACLE_MANAGER reuse a deployed contract; unset ones are deployed.
 # Set HANDOVER=true on the last run to transfer storage ownership to the MultiSig.
 
 set -euo pipefail
@@ -114,7 +112,10 @@ echo "Signer:     $SIGNER_ADDR (nonce $latest, settled)"
 echo "Fee signer: ${FEE_SIGNER:-<DeployConfig.s.sol default>}"
 echo "Gas mult:   ${GAS_MULTIPLIER:-130}%"
 echo "Salt:       ${CREATE2_SALT:-<DeployConfig.s.sol default>}"
-echo "Oracle:     ${ORACLE_MANAGER:-<deploy a new OracleManager>}"
+echo "MultiSig:   ${MULTISIG:-<deploy>}"
+echo "Storage:    ${PP_STORAGE:-<deploy>}"
+echo "Sweeper:    ${SWEEPER:-<deploy>}"
+echo "Oracle:     ${ORACLE_MANAGER:-<deploy>}"
 echo "Handover:   ${HANDOVER:-false}"
 echo ""
 
