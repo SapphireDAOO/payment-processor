@@ -30,8 +30,7 @@ import {
 /**
  * @title SimplePaymentProcessor
  * @notice Lightweight payment processor for single-invoice flows with native payments.
- * @dev Scheduled invoices sit in an internal min-heap drained by `processDueTasks`, which only the owner
- *      and the registered {PaymentAutomation} adapter may call.
+ * @dev Scheduled invoices sit in an internal min-heap drained by the permissionless `processDueTasks`.
  */
 contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     using SafeCastLib for uint256;
@@ -50,8 +49,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     /// @notice Seconds an escrow holds a payment after acceptance, before release.
     uint32 public immutable ESCROW_HOLD_PERIOD;
 
-    /// @notice Address of the {PaymentAutomation} adapter allowed to drain due tasks on a keeper's behalf.
-    /// @notice Keeper adapter allowed to drive `processDueTasks`; fixed at deployment.
+    /// @notice The {PaymentAutomation} keeper adapter paired with this processor; fixed at deployment.
     address public immutable AUTOMATION;
 
     /// @notice The nonce the next invoice created here will be assigned.
@@ -97,7 +95,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
      * @dev Every dependency here is immutable; changing one means redeploying the processor.
      * @param _paymentProcessorStorageAddress The address of the shared payment processor storage contract.
      * @param _notesAddress Address of the notes contract used for invoice notes.
-     * @param _automationAddress The keeper adapter allowed to drive `processDueTasks`.
+     * @param _automationAddress The paired keeper adapter.
      * @param _escrowHoldPeriod Seconds an escrow holds a payment before release. Must be non-zero.
      */
     constructor(
@@ -264,10 +262,6 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
     /// @inheritdoc ISimplePaymentProcessor
     function processDueTasks() external nonReentrant whenNotPaused {
-        if (msg.sender != AUTOMATION) {
-            revert NotAuthorized();
-        }
-
         heap.processDueTask(index, _release, PP_STORAGE.GAS_THRESHOLD());
     }
 

@@ -177,8 +177,8 @@ interface ISimplePaymentProcessor {
 
     /**
      * @notice Processes due invoice tasks (auto-release and auto-refund) within the gas threshold.
-     * @dev Callable by the owner or the registered automation adapter. Stops once remaining gas drops
-     *      below the configured threshold; leftovers are picked up on the next call.
+     * @dev Callable by anyone. Stops once remaining gas drops below the configured threshold; leftovers
+     *      are picked up on the next call.
      */
     function processDueTasks() external;
 
@@ -314,7 +314,7 @@ interface ISimplePaymentProcessor {
      */
     event AutomationUpdated(address indexed automation);
 
-    /// @notice The keeper adapter allowed to drive `processDueTasks`. Fixed at construction.
+    /// @notice The keeper adapter paired with this processor. Fixed at construction.
     function AUTOMATION() external view returns (address automation);
 
     /**

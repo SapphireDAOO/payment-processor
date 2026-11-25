@@ -396,10 +396,6 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         vm.warp(firstAcceptedAt + holdPeriod + ((numberOfInvoice - 2) * 1 hours) + 30 minutes);
         assertTrue(simplePP.hasDueTasks());
 
-        vm.prank(buyerOne);
-        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
-        simplePP.processDueTasks();
-
         vm.prank(address(automation));
         simplePP.processDueTasks();
 
@@ -508,10 +504,11 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
         assertEq(simplePP.getInvoiceData(invoiceId).state, REFUNDED);
     }
 
-    function test_processDueTasksRejectsAnUnpairedCaller() public {
+    function test_processDueTasksIsANoOpForAnyCallerWhenNothingIsDue() public {
         vm.prank(address(0xcafe));
-        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
         simplePP.processDueTasks();
+
+        assertFalse(simplePP.hasDueTasks());
     }
 
     function test_rejectPaymentRevertsAfterWindowExpires() public {

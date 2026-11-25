@@ -23,7 +23,7 @@ Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flo
   - Manual `release` and `refundBuyer` paths.
   - Escrowed funds are burned to `address(0)` when every withdrawal retry to the intended recipient fails.
   - Optional encrypted notes via `Notes`.
-  - Holds no keeper configuration; `processDueTasks` is restricted to the owner and the registered `PaymentAutomation`.
+  - `processDueTasks` is permissionless; it is a no-op when nothing is due.
 - `src/PaymentAutomation.sol`
   - Keeper adapter for the Simple processor's due-task queue. Owns no queue, no invoice state and no funds.
   - Chainlink CRE: `onReport` (gated on the forwarder address and the workflow owner in the report metadata) plus ERC-165 `IReceiver` support.
@@ -73,11 +73,11 @@ Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flo
    - A hold period delays release after acceptance; expiry is tracked in the heap. On the Simple processor that period is fixed by the seller at invoice creation and immutable thereafter — not even the owner can change it — so the buyer knows the exact hold terms before paying. The Intermediated processor still falls back to the storage-level `defaultHoldPeriod`.
 
 4. **Automation (`PaymentAutomation`)**
-   - All keeper entrypoints live on `PaymentAutomation`; the processor holds the queue and trusts only that one address, registered via `setAutomation`.
+   - Keeper entrypoints live on `PaymentAutomation`; the processor holds the queue.
    - Chainlink CRE: a workflow (`cre/`) runs on a cron trigger and reads `hasDueTasks()`; when a task is due it submits a report onchain. The CRE forwarder delivers the verified report via `onReport`, which only accepts the configured forwarder (`setForwarderAddress`) and workflow owner (`setWorkflowOwner`).
    - Gelato: `checker()` is the Web3 Function resolver; when it reports work it returns calldata for the permissionless `processDueTasks()` exec entrypoint.
    - Both paths converge on `SimplePaymentProcessor.processDueTasks`, which drains due tasks within a gas threshold. Only one network is meant to be active at a time; the second is redundancy, to be switched on if the primary stalls. Running both at once is still safe — whichever fires first drains the queue and the other finds nothing due.
-   - `SimplePaymentProcessor.processDueTasks` also stays callable by the owner directly, as a fallback if the adapter is unset or misconfigured.
+   - `SimplePaymentProcessor.processDueTasks` is permissionless, so anyone can drain the queue directly if the keepers stall.
    - Failed withdrawals are retried up to `MAX_WITHDRAWAL_RETRIES`. On the Simple processor, exhausting them burns the escrowed funds to `address(0)` and transitions the invoice to `BURNED` — a terminal, unrecoverable state that guarantees the task queue can never wedge. The Intermediated processor still transitions to `LOCKED` for admin recovery.
 
 5. **Pause**
@@ -217,7 +217,6 @@ slither . --exclude-dependencies --json slither-report.json
 ## Operational Notes
 
 - Register a `PriceFeedConfig` in `OracleManager` for every ERC20 token and for `address(0)` (native ETH) before enabling Intermediated processor payments.
-- Register `PaymentAutomation` on the Simple processor with `setAutomation` before enabling any keeper; without it only the owner can call `processDueTasks`.
 - Set the CRE forwarder (`setForwarderAddress`) and authorized workflow owner (`setWorkflowOwner`) on `PaymentAutomation` before deploying the workflow in `cre/`; `onReport` rejects every other caller.
 - For Gelato, point a Web3 Function at `PaymentAutomation.checker()`. Its exec entrypoint `processDueTasks()` is permissionless by design: it is a no-op when nothing is due, and every state and authorization rule is enforced by the processor.
 - Set `gasThreshold` conservatively; too low a value causes `processDueTasks` to process more invoices per call than intended.

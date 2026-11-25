@@ -152,14 +152,13 @@ contract PaymentAutomationTest is SimplePaymentProcessorSetUp {
         assertEq(automation.hasDueTasks(), simplePP.hasDueTasks());
     }
 
-    function test_processDueTasksRejectsAnyOtherCaller() public {
-        // The adapter pairing is immutable, so the processor can only ever be driven by this one
-        // adapter or by the owner.
+    function test_anyoneCanProcessDueTasks() public {
         _payInvoiceAndWarpPastDecisionWindow();
 
         vm.prank(buyerOne);
-        vm.expectRevert(ISimplePaymentProcessor.NotAuthorized.selector);
         simplePP.processDueTasks();
+
+        assertFalse(simplePP.hasDueTasks());
     }
 
     function test_automatedReleaseAfterHoldPeriod() public {
