@@ -53,7 +53,7 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
     IntermediatedPaymentProcessor intermediatedPaymentProcessor;
 
     /// @dev Chains both parents' hooks so both processors deploy against the predicted storage
-    ///      address and get authorized at storage construction.
+    ///      address and get authorized at Notes construction.
     function _deployAuthorized(address _predictedStorage, address _notesAddress)
         internal
         override(BaseSetUp, SimplePaymentProcessorSetUp, IntermediatedPaymentProcessorSetUp)

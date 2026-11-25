@@ -1,12 +1,12 @@
 # Invariant Properties
 
-This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
+This file tracks the properties implemented in `test/invariant/invariant.t.sol` (processors) and
+`test/invariant/MultiSigInvariant.t.sol` (MultiSig).
 
 ## Scope
 
 - `SimplePaymentProcessor`
 - `IntermediatedPaymentProcessor`
-- `PaymentProcessorStorage`
 - `MultiSig`
 - Handlers:
   - `test/invariant/handlers/SimplePaymentProcessorHandler.sol`
@@ -24,7 +24,7 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 
 | Id | Invariant Function | Property |
 | --- | --- | --- |
-| SIM-1 | `invariant_simpleInvoiceStateConsistency` | If `status` is `CREATED` or `CANCELLED`: `balance == 0`, `escrow == address(0)`, `buyer == address(0)` |
+| SIM-1 | `invariant_simpleInvoiceStateConsistency` | If `status` is `CREATED` or `CANCELED`: `balance == 0`, `escrow == address(0)`, `buyer == address(0)` |
 | SIM-2 | `invariant_simpleInvoiceStateConsistency` | If `status` is `PAID`: escrow exists, buyer exists, `balance == price`, and `escrow.balance == balance` |
 | SIM-3 | `invariant_simpleInvoiceStateConsistency` | If `status` is `ACCEPTED`: `balance == price` and `escrow.balance == balance` |
 | SIM-4 | `invariant_simpleInvoiceStateConsistency` | If `status` is `REJECTED`, `REFUNDED`, or `RELEASED`: `balance == 0` and escrow balance is zero when escrow exists |
