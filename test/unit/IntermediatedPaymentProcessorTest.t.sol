@@ -37,8 +37,6 @@ import {
 
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 
-error InvalidFeeRate();
-
 contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp {
     using { getEscrowAddress } for IntermediatedPaymentProcessor;
     using SafeCastLib for uint256;

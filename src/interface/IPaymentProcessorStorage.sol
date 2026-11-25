@@ -9,9 +9,6 @@ interface IPaymentProcessorStorage {
     /// @notice Thrown when a caller attempts an action without the required authorization.
     error NotAuthorized();
 
-    /// @notice Thrown when the provided fee rate exceeds the maximum allowed (10,000 basis points = 100%).
-    error InvalidFeeRate();
-
     /// @notice Thrown when pausing a system that is already paused, or that has an unresolved emergency pause.
     error AlreadyPaused();
 

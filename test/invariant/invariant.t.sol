@@ -28,8 +28,7 @@ import {
     DISPUTE_SETTLED,
     DISPUTE_EXPIRED,
     RELEASED,
-    REFUNDED as ADV_REFUNDED,
-    LOCKED as ADV_LOCKED
+    REFUNDED as ADV_REFUNDED
 } from "src/constants/Intermediated.sol";
 
 import {
@@ -150,13 +149,9 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
                 assertEq(inv.balance, 0);
             }
 
-            if (inv.state == ADV_LOCKED) {
-                assertTrue(inv.balance > 0);
-            }
-
             if (
                 inv.state == PAID || inv.state == DISPUTED || inv.state == DISPUTE_RESOLVED
-                    || inv.state == DISPUTE_DISMISSED || inv.state == DISPUTE_EXPIRED || inv.state == ADV_LOCKED
+                    || inv.state == DISPUTE_DISMISSED || inv.state == DISPUTE_EXPIRED
             ) {
                 if (inv.paymentToken == address(0)) {
                     assertEq(inv.escrow.balance, inv.balance);

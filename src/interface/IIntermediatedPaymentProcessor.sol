@@ -106,9 +106,6 @@ interface IIntermediatedPaymentProcessor {
     /// @notice Thrown when native currency arrives outside a fee-wrapping withdrawal.
     error UnexpectedNativeTransfer();
 
-    /// @notice Thrown when attempting to set the oracle address to the zero address.
-    error InvalidOracle();
-
     // ================================================================
     //                              STRUCTS
     // ================================================================
@@ -521,25 +518,10 @@ interface IIntermediatedPaymentProcessor {
     event UpdateReleaseTime(uint216 indexed invoiceId, uint256 newHoldPeriod);
 
     /**
-     * @notice Emitted when an admin recovers funds from a LOCKED invoice.
-     * @param invoiceId The invoice from which funds were recovered.
-     * @param recipient The address that received the recovered funds.
-     * @param amount The amount recovered from escrow.
-     */
-    event LockedPaymentRecovered(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
-
-    /**
      * @notice Emitted when the platform fee transfer fails during release; the fee stays in escrow.
      * @param invoiceId The invoice whose fee transfer failed.
      * @param recipient The intended recipient of the failed transfer.
      * @param amount The amount that could not be transferred.
      */
     event TransferFailed(uint216 indexed invoiceId, address indexed recipient, uint256 amount);
-
-    /**
-     * @notice Emitted when the OracleManager contract is updated.
-     * @param previousOracle The previously configured OracleManager address.
-     * @param newOracle The newly configured OracleManager address.
-     */
-    event OracleUpdated(address indexed previousOracle, address indexed newOracle);
 }

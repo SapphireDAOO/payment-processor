@@ -22,22 +22,13 @@ interface IMultiSig {
     /// @notice Thrown when a transaction is not PROPOSED or APPROVED (already executed or canceled).
     error TransactionNotProposedOrApproved();
 
-    /// @notice Thrown when an operation requires PROPOSED status but the transaction is not proposed.
-    error TransactionNotProposed();
-
     /// @notice Thrown when execution is attempted with fewer than `threshold` valid approvers.
     error TransactionNotApproved();
 
     /// @notice Thrown when a signer attempts to approve a transaction they have already approved.
     error AlreadyApprovedByThisSigner();
 
-    /// @notice Thrown when the transaction has already been executed.
-    error AlreadyExecuted();
-
     error ThresholdCannotBeZero();
-
-    /// @notice Thrown when the low-level call to the payment processor fails.
-    error ExecutionFailed();
 
     /// @notice Thrown when a threshold is below a majority of signers, or above the signer count at construction.
     error InvalidThreshold();

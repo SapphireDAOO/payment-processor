@@ -31,9 +31,6 @@ uint8 constant DISPUTE_EXPIRED = 9;
 // Payment has been released to the seller.
 uint8 constant RELEASED = 10;
 
-// Invoice is permanently locked after all automated withdrawal retries (seller + buyer) failed.
-uint8 constant LOCKED = 11;
-
 // Total basis points used for percentage calculations. 10_000 = 100%.
 uint256 constant BASIS_POINTS = 10_000;
 
@@ -42,6 +39,3 @@ uint8 constant DEFAULT_DECIMAL = 18;
 
 // Smallest invoice price accepted (1 USD in 8-decimal Chainlink format).
 uint256 constant DEFAULT_MINIMUM_INVOICE_PRICE = 1e8;
-
-// Maximum number of automated seller-payout retry attempts before falling back to a buyer refund.
-uint8 constant MAX_WITHDRAWAL_RETRIES = 3;

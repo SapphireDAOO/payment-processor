@@ -22,9 +22,6 @@ interface ISimplePaymentProcessor {
     /// @notice Thrown when a task’s heap index is invalid.
     error InvalidHeapPosition();
 
-    /// @notice Thrown when the decision window value provided is invalid (e.g., zero).
-    error InvalidDecisionWindow();
-
     /// @notice Thrown when the payment amount sent does not match the expected invoice price.
     /// @param _sent The amount of Ether (in wei) sent with the transaction.
     /// @param _expected The exact invoice price expected (in wei).
@@ -304,12 +301,6 @@ interface ISimplePaymentProcessor {
      * @param amount The amount of ETH sent to address(0).
      */
     event PaymentBurned(uint216 indexed invoiceId, uint256 amount);
-
-    /**
-     * @notice Emitted when the automation adapter authorized to call `processDueTasks` is updated.
-     * @param automation The new automation adapter address.
-     */
-    event AutomationUpdated(address indexed automation);
 
     /// @notice The keeper adapter paired with this processor. Fixed at construction.
     function AUTOMATION() external view returns (address automation);
