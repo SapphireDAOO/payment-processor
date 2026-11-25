@@ -39,7 +39,8 @@ contract OracleManagerInteractions is IntermediatedPaymentProcessorSetUp {
         }
     }
 
-    function test_batchRevertsOnceTheEarliestPriceGoesStale() public {
+    function test_batchIsValidUntilTheEarliestExpiry() public {
+        uint256 forkTimestamp = block.timestamp;
         address[] memory tokens = _tokens();
         (, uint256[] memory validUntil) = oracle.getUsdPerTokenBatch(tokens);
 
@@ -51,7 +52,7 @@ contract OracleManagerInteractions is IntermediatedPaymentProcessorSetUp {
         vm.warp(earliest);
         oracle.getUsdPerTokenBatch(tokens);
 
-        vm.warp(earliest + 1);
+        vm.warp(forkTimestamp + HEARTBEAT + 1);
         vm.expectRevert(IOracleManager.StalePriceFeed.selector);
         oracle.getUsdPerTokenBatch(tokens);
     }
@@ -67,13 +68,15 @@ contract OracleManagerInteractions is IntermediatedPaymentProcessorSetUp {
         assertEq(ethValidUntil, _updatedAt(NATIVE_TOKEN_USD_PRICE_FEED) + HEARTBEAT);
     }
 
-    function test_valueInCurrencyRevertsOnceStale() public {
+    function test_valueInCurrencyIsValidUntilItsExpiry() public {
+        uint256 forkTimestamp = block.timestamp;
         (, uint256 validUntil) = oracle.getValueInCurrency(WBTC, 1e8, USDC_USD_PRICE_FEED);
 
         vm.warp(validUntil);
         oracle.getValueInCurrency(WBTC, 1e8, USDC_USD_PRICE_FEED);
 
-        vm.warp(validUntil + 1);
+        // Not validUntil + 1: the WBTC DualAggregator reveals newer rounds as time passes.
+        vm.warp(forkTimestamp + HEARTBEAT + 1);
         vm.expectRevert(IOracleManager.StalePriceFeed.selector);
         oracle.getValueInCurrency(WBTC, 1e8, USDC_USD_PRICE_FEED);
     }
