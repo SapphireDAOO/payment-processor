@@ -57,7 +57,7 @@ contract MultiSigHandler is Test {
         bytes memory data = abi.encodeCall(IPaymentProcessorStorage.setIntermediatedPlatformsOperator, operator);
 
         vm.prank(signer);
-        bytes32 txHash = multisig.proposeTransaction(address(ppStorage), 0, data);
+        bytes32 txHash = multisig.proposeTransaction(address(ppStorage), data);
 
         allTxHashes.push(txHash);
         ghostApprovals[txHash][signer] = true;
@@ -71,7 +71,8 @@ contract MultiSigHandler is Test {
         bytes32 txHash = allTxHashes[_txIndex];
         address signer = signers[_signerIndex];
 
-        if (multisig.getTransaction(txHash).status != PROPOSED) return;
+        uint8 status = multisig.getTransaction(txHash).status;
+        if (status != PROPOSED && status != APPROVED) return;
         if (ghostApprovals[txHash][signer]) return;
 
         vm.prank(signer);
@@ -87,10 +88,14 @@ contract MultiSigHandler is Test {
         bytes32 txHash = allTxHashes[_txIndex];
         address signer = signers[_signerIndex];
 
-        if (multisig.getTransaction(txHash).status != APPROVED) return;
+        uint8 status = multisig.getTransaction(txHash).status;
+        if (status != PROPOSED && status != APPROVED) return;
+
+        address[] memory approvers = _approversOf(txHash);
+        if (approvers.length < multisig.getThreshold()) return;
 
         vm.prank(signer);
-        multisig.executeTransaction(txHash);
+        multisig.executeTransaction(txHash, approvers);
 
         executedTxHashes.push(txHash);
     }
@@ -145,6 +150,26 @@ contract MultiSigHandler is Test {
         ghostThreshold = multisig.getThreshold();
     }
 
+    /// @dev Current signers who approved `_txHash`, sorted ascending as `executeTransaction` requires.
+    function _approversOf(bytes32 _txHash) internal view returns (address[] memory approvers) {
+        approvers = new address[](signers.length);
+        uint256 count;
+        for (uint256 i; i < signers.length; i++) {
+            if (!multisig.hasApproved(_txHash, signers[i])) continue;
+
+            address approver = signers[i];
+            uint256 j = count++;
+            while (j > 0 && approvers[j - 1] > approver) {
+                approvers[j] = approvers[j - 1];
+                j--;
+            }
+            approvers[j] = approver;
+        }
+        assembly {
+            mstore(approvers, count)
+        }
+    }
+
     function getTxCount() external view returns (uint256) {
         return allTxHashes.length;
     }
@@ -184,7 +209,7 @@ contract MultiSigHandler is Test {
         address proposer = signers[0];
 
         vm.prank(proposer);
-        bytes32 txHash = multisig.proposeTransaction(_target, 0, _data);
+        bytes32 txHash = multisig.proposeTransaction(_target, _data);
 
         allTxHashes.push(txHash);
         ghostApprovals[txHash][proposer] = true;
@@ -202,8 +227,9 @@ contract MultiSigHandler is Test {
 
         if (needed > 0) return false;
 
+        address[] memory approvers = _approversOf(txHash);
         vm.prank(proposer);
-        multisig.executeTransaction(txHash);
+        multisig.executeTransaction(txHash, approvers);
         executedTxHashes.push(txHash);
 
         return true;

@@ -54,7 +54,7 @@ abstract contract MultiSigSetUp is Test {
 
     function _propose(bytes memory data) internal returns (bytes32 txHash) {
         vm.prank(signerOne);
-        txHash = multisig.proposeTransaction(address(ppStorage), 0, data);
+        txHash = multisig.proposeTransaction(address(ppStorage), data);
     }
 
     /// @dev signerOne auto-approves on propose; one more signer reaches the threshold of 2.
@@ -63,6 +63,21 @@ abstract contract MultiSigSetUp is Test {
 
         vm.prank(signerTwo);
         multisig.approveTransaction(txHash);
+    }
+
+    /// @dev Current signers who approved `_txHash`, ascending; the test signers are address(1) to address(4).
+    function _approversOf(bytes32 _txHash) internal view returns (address[] memory approvers) {
+        address[4] memory candidates = [signerOne, signerTwo, signerThree, outsider];
+        approvers = new address[](candidates.length);
+        uint256 count;
+        for (uint256 i; i < candidates.length; i++) {
+            if (multisig.isSigner(candidates[i]) && multisig.hasApproved(_txHash, candidates[i])) {
+                approvers[count++] = candidates[i];
+            }
+        }
+        assembly {
+            mstore(approvers, count)
+        }
     }
 
     function _encodeSetFeeSigner(address _feeSigner) internal pure returns (bytes memory) {

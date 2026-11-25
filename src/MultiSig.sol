@@ -54,7 +54,7 @@ contract MultiSig is IMultiSig {
 
     /**
      * @notice Deploys the multisig with an initial signer set and approval threshold.
-     * @param _initialSigners Array of addresses to register as signers (minimum 2).
+     * @param _initialSigners Distinct, non-zero addresses to register as signers (minimum 2).
      * @param _initialThreshold Minimum approvals required for execution; must be >= 1
      *        and <= _initialSigners.length.
      */
@@ -64,48 +64,47 @@ contract MultiSig is IMultiSig {
         if (_initialThreshold < _majorityOf(len) || _initialThreshold > len) revert InvalidThreshold();
 
         for (uint256 i; i < len; i++) {
-            signers[_initialSigners[i]] = true;
-            emit SignerAdded(_initialSigners[i]);
+            address signer = _initialSigners[i];
+            if (signer == address(0)) revert InvalidSigner();
+            if (signers[signer]) revert AlreadyASigner();
+
+            signers[signer] = true;
+            emit SignerAdded(signer);
         }
         signerCount = len;
         threshold = _initialThreshold;
     }
 
     /// @inheritdoc IMultiSig
-    function proposeTransaction(address _target, uint256 _value, bytes calldata _data)
-        external
-        onlySigner
-        returns (bytes32 txHash)
-    {
+    function proposeTransaction(address _target, bytes calldata _data) external onlySigner returns (bytes32 txHash) {
         if (_target == address(0)) revert InvalidTarget();
 
         nonce++;
         uint256 newNonce = nonce;
 
-        Transaction memory txn = Transaction({
-            target: _target, value: _value, nonce: newNonce, data: _data, status: PROPOSED, approvalCount: 1
-        });
+        Transaction memory txn =
+            Transaction({ target: _target, nonce: newNonce, data: _data, status: PROPOSED, approvalCount: 1 });
 
         txHash = keccak256(abi.encode(_target, _data, newNonce));
 
         transactions[txHash] = txn;
         approvals[txHash][msg.sender] = true;
 
-        emit TransactionProposed(txHash, _target, _value, _data, newNonce, msg.sender);
+        emit TransactionProposed(txHash, _target, _data, newNonce, msg.sender);
     }
 
     /// @inheritdoc IMultiSig
     function approveTransaction(bytes32 _txHash) external onlySigner {
         Transaction memory txn = transactions[_txHash];
         if (txn.nonce == 0) revert TransactionDoesNotExist();
-        if (txn.status != PROPOSED) revert AlreadyApproved();
+        if (txn.status != PROPOSED && txn.status != APPROVED) revert TransactionNotProposedOrApproved();
         if (approvals[_txHash][msg.sender]) revert AlreadyApprovedByThisSigner();
 
         uint256 newApprovalCount = txn.approvalCount + 1;
         transactions[_txHash].approvalCount = newApprovalCount;
         approvals[_txHash][msg.sender] = true;
 
-        if (newApprovalCount >= threshold) {
+        if (txn.status == PROPOSED && newApprovalCount >= threshold) {
             transactions[_txHash].status = APPROVED;
             emit TransactionApproved(_txHash);
         }
@@ -114,9 +113,14 @@ contract MultiSig is IMultiSig {
     }
 
     /// @inheritdoc IMultiSig
-    function executeTransaction(bytes32 _txHash) external onlySigner returns (bytes memory) {
+    function executeTransaction(bytes32 _txHash, address[] calldata _approvers)
+        external
+        onlySigner
+        returns (bytes memory)
+    {
         Transaction memory txn = transactions[_txHash];
-        if (txn.status != APPROVED) revert TransactionNotApproved();
+        if (txn.status != PROPOSED && txn.status != APPROVED) revert TransactionNotProposedOrApproved();
+        _checkApprovers(_txHash, _approvers);
         transactions[_txHash].status = EXECUTED;
 
         emit TransactionExecuted(_txHash, msg.sender);
@@ -135,6 +139,7 @@ contract MultiSig is IMultiSig {
 
     /// @inheritdoc IMultiSig
     function addSigner(address _signer) external onlySelf {
+        if (_signer == address(0)) revert InvalidSigner();
         if (signers[_signer]) revert AlreadyASigner();
 
         signerCount++;
@@ -179,6 +184,23 @@ contract MultiSig is IMultiSig {
     /// @inheritdoc IMultiSig
     function isSigner(address _account) external view returns (bool) {
         return signers[_account];
+    }
+
+    /**
+     * @notice Reverts unless `_approvers` holds at least `threshold` current signers who approved `_txHash`.
+     * @dev Strictly ascending order rules out duplicates; removed signers fail the `signers` check.
+     * @param _txHash The transaction being executed.
+     * @param _approvers The approving signers, sorted ascending by address.
+     */
+    function _checkApprovers(bytes32 _txHash, address[] calldata _approvers) internal view {
+        address last;
+        for (uint256 i; i < _approvers.length; i++) {
+            address approver = _approvers[i];
+            if (approver <= last) revert ApproversNotSorted();
+            if (!signers[approver] || !approvals[_txHash][approver]) revert InvalidApprover(approver);
+            last = approver;
+        }
+        if (_approvers.length < threshold) revert TransactionNotApproved();
     }
 
     /**

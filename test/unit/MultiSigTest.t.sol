@@ -21,23 +21,22 @@ contract MultiSigTest is MultiSigSetUp {
         address target = address(ppStorage);
 
         vm.expectRevert(IMultiSig.NotSigner.selector);
-        multisig.proposeTransaction(target, 0, data);
+        multisig.proposeTransaction(target, data);
 
         vm.startPrank(signerOne);
         vm.expectRevert(IMultiSig.InvalidTarget.selector);
-        multisig.proposeTransaction(address(0), 0, data);
+        multisig.proposeTransaction(address(0), data);
 
         uint256 nonce = multisig.getNonce() + 1;
         bytes32 expectedTxHash = _hashTx(target, data, nonce);
 
         vm.expectEmit(address(multisig));
-        emit IMultiSig.TransactionProposed(expectedTxHash, target, 0, data, nonce, signerOne);
-        bytes32 txHash = multisig.proposeTransaction(target, 0, data);
+        emit IMultiSig.TransactionProposed(expectedTxHash, target, data, nonce, signerOne);
+        bytes32 txHash = multisig.proposeTransaction(target, data);
         vm.stopPrank();
 
         IMultiSig.Transaction memory txn = multisig.getTransaction(txHash);
         assertEq(txn.target, target);
-        assertEq(txn.value, 0);
         assertEq(txn.nonce, nonce);
         assertEq(txn.status, PROPOSED);
         assertEq(expectedTxHash, txHash);
@@ -70,13 +69,16 @@ contract MultiSigTest is MultiSigSetUp {
         emit IMultiSig.ApprovalAdded(txHash, signerTwo, 2);
         multisig.approveTransaction(txHash);
 
-        vm.expectRevert(IMultiSig.AlreadyApproved.selector);
+        vm.expectRevert(IMultiSig.AlreadyApprovedByThisSigner.selector);
         multisig.approveTransaction(txHash);
         vm.stopPrank();
 
+        vm.prank(signerThree);
+        multisig.approveTransaction(txHash);
+
         IMultiSig.Transaction memory txn = multisig.getTransaction(txHash);
         assertEq(txn.status, APPROVED);
-        assertEq(txn.approvalCount, 2);
+        assertEq(txn.approvalCount, 3);
     }
 
     function test_executeTransaction() public {
@@ -84,22 +86,24 @@ contract MultiSigTest is MultiSigSetUp {
         bytes memory data = _encodeSetOperator(newOperator);
 
         bytes32 txHash = _propose(data);
+        address[] memory approvers = _approversOf(txHash);
 
         vm.expectRevert(IMultiSig.NotSigner.selector);
-        multisig.executeTransaction(txHash);
+        multisig.executeTransaction(txHash, approvers);
 
         vm.prank(signerOne);
         vm.expectRevert(IMultiSig.TransactionNotApproved.selector);
-        multisig.executeTransaction(txHash);
+        multisig.executeTransaction(txHash, approvers);
 
         vm.prank(signerTwo);
         multisig.approveTransaction(txHash);
+        approvers = _approversOf(txHash);
 
         vm.expectEmit(address(multisig));
         emit IMultiSig.TransactionExecuted(txHash, signerThree);
 
         vm.prank(signerThree);
-        multisig.executeTransaction(txHash);
+        multisig.executeTransaction(txHash, approvers);
 
         IMultiSig.Transaction memory txn = multisig.getTransaction(txHash);
         assertEq(txn.status, EXECUTED);
@@ -117,17 +121,18 @@ contract MultiSigTest is MultiSigSetUp {
 
         vm.prank(signerOne);
         bytes memory data = abi.encodeCall(IMultiSig.addSigner, outsider);
-        bytes32 txHash = multisig.proposeTransaction(address(multisig), 0, data);
+        bytes32 txHash = multisig.proposeTransaction(address(multisig), data);
 
         vm.prank(signerTwo);
         multisig.approveTransaction(txHash);
 
         uint256 signerCountBefore = multisig.getSignerCount();
+        address[] memory approvers = _approversOf(txHash);
 
         vm.prank(signerOne);
         vm.expectEmit(address(multisig));
         emit IMultiSig.SignerAdded(outsider);
-        multisig.executeTransaction(txHash);
+        multisig.executeTransaction(txHash, approvers);
 
         assertTrue(multisig.isSigner(outsider));
         assertEq(multisig.getSignerCount(), signerCountBefore + 1);
@@ -144,17 +149,18 @@ contract MultiSigTest is MultiSigSetUp {
 
         vm.prank(signerOne);
         bytes memory data = abi.encodeCall(IMultiSig.removeSigner, signerTwo);
-        bytes32 txHash = multisig.proposeTransaction(address(multisig), 0, data);
+        bytes32 txHash = multisig.proposeTransaction(address(multisig), data);
 
         vm.prank(signerThree);
         multisig.approveTransaction(txHash);
 
         uint256 signerCountBefore = multisig.getSignerCount();
+        address[] memory approvers = _approversOf(txHash);
 
         vm.prank(signerOne);
         vm.expectEmit(address(multisig));
         emit IMultiSig.SignerRemoved(signerTwo);
-        multisig.executeTransaction(txHash);
+        multisig.executeTransaction(txHash, approvers);
 
         vm.prank(address(multisig));
         vm.expectRevert(IMultiSig.InsufficientSigners.selector);
@@ -233,7 +239,7 @@ contract MultiSigTest is MultiSigSetUp {
 
         vm.prank(signerOne);
         bytes memory data = abi.encodeCall(IMultiSig.updateThreshold, newThreshold);
-        bytes32 txHash = multisig.proposeTransaction(address(multisig), 0, data);
+        bytes32 txHash = multisig.proposeTransaction(address(multisig), data);
 
         vm.prank(signerThree);
         multisig.approveTransaction(txHash);
@@ -243,11 +249,12 @@ contract MultiSigTest is MultiSigSetUp {
         multisig.approveTransaction(txHash);
 
         uint256 thresholdBefore = multisig.getThreshold();
+        address[] memory approvers = _approversOf(txHash);
 
         vm.prank(signerOne);
         vm.expectEmit(address(multisig));
         emit IMultiSig.ThresholdUpdated(thresholdBefore, newThreshold);
-        multisig.executeTransaction(txHash);
+        multisig.executeTransaction(txHash, approvers);
     }
 
     function test_constructor() public {
@@ -265,6 +272,30 @@ contract MultiSigTest is MultiSigSetUp {
 
         vm.expectRevert(IMultiSig.InvalidThreshold.selector);
         new MultiSig(signers, 3);
+    }
+
+    function test_constructorRejectsDuplicateSigners() public {
+        address[] memory signers = new address[](3);
+        signers[0] = signerOne;
+        signers[1] = signerTwo;
+        signers[2] = signerOne;
+
+        vm.expectRevert(IMultiSig.AlreadyASigner.selector);
+        new MultiSig(signers, 2);
+    }
+
+    function test_constructorRejectsZeroAddressSigner() public {
+        address[] memory signers = new address[](2);
+        signers[0] = signerOne;
+
+        vm.expectRevert(IMultiSig.InvalidSigner.selector);
+        new MultiSig(signers, 2);
+    }
+
+    function test_addSignerRejectsZeroAddress() public {
+        vm.prank(address(multisig));
+        vm.expectRevert(IMultiSig.InvalidSigner.selector);
+        multisig.addSigner(address(0));
     }
 
     function test_cancelTransaction() public {
@@ -292,15 +323,17 @@ contract MultiSigTest is MultiSigSetUp {
         multisig.cancelTransaction(txHash);
 
         vm.prank(signerTwo);
-        vm.expectRevert(IMultiSig.AlreadyApproved.selector);
+        vm.expectRevert(IMultiSig.TransactionNotProposedOrApproved.selector);
         multisig.approveTransaction(txHash);
 
+        address[] memory approvers = _approversOf(txHash);
         vm.prank(signerOne);
-        vm.expectRevert(IMultiSig.TransactionNotApproved.selector);
-        multisig.executeTransaction(txHash);
+        vm.expectRevert(IMultiSig.TransactionNotProposedOrApproved.selector);
+        multisig.executeTransaction(txHash, approvers);
 
         bytes32 approvedTxHash = _proposeAndApprove(data);
         assertEq(multisig.getTransaction(approvedTxHash).status, APPROVED);
+        approvers = _approversOf(approvedTxHash);
 
         vm.prank(address(multisig));
         multisig.cancelTransaction(approvedTxHash);
@@ -308,7 +341,60 @@ contract MultiSigTest is MultiSigSetUp {
         assertEq(multisig.getTransaction(approvedTxHash).status, CANCELED);
 
         vm.prank(signerOne);
+        vm.expectRevert(IMultiSig.TransactionNotProposedOrApproved.selector);
+        multisig.executeTransaction(approvedTxHash, approvers);
+    }
+
+    function test_removedSignerApprovalNoLongerCounts() public {
+        bytes32 txHash = _proposeAndApprove(_encodeSetFeeSigner(address(0xf005)));
+        assertEq(multisig.getTransaction(txHash).status, APPROVED);
+
+        vm.prank(address(multisig));
+        multisig.removeSigner(signerTwo);
+
+        address[] memory approvers = new address[](2);
+        approvers[0] = signerOne;
+        approvers[1] = signerTwo;
+        vm.prank(signerOne);
+        vm.expectRevert(abi.encodeWithSelector(IMultiSig.InvalidApprover.selector, signerTwo));
+        multisig.executeTransaction(txHash, approvers);
+
+        approvers = _approversOf(txHash);
+        assertEq(approvers.length, 1);
+        vm.prank(signerOne);
         vm.expectRevert(IMultiSig.TransactionNotApproved.selector);
-        multisig.executeTransaction(approvedTxHash);
+        multisig.executeTransaction(txHash, approvers);
+
+        vm.prank(signerThree);
+        multisig.approveTransaction(txHash);
+        approvers = _approversOf(txHash);
+
+        vm.prank(signerOne);
+        multisig.executeTransaction(txHash, approvers);
+
+        assertEq(multisig.getTransaction(txHash).status, EXECUTED);
+        assertEq(ppStorage.getFeeSigner(), address(0xf005));
+    }
+
+    function test_executeRejectsUnsortedDuplicateOrNonApprovingApprovers() public {
+        bytes32 txHash = _proposeAndApprove(_encodeSetFeeSigner(address(0xf005)));
+
+        address[] memory approvers = new address[](2);
+        approvers[0] = signerTwo;
+        approvers[1] = signerOne;
+        vm.prank(signerOne);
+        vm.expectRevert(IMultiSig.ApproversNotSorted.selector);
+        multisig.executeTransaction(txHash, approvers);
+
+        approvers[0] = signerOne;
+        approvers[1] = signerOne;
+        vm.prank(signerOne);
+        vm.expectRevert(IMultiSig.ApproversNotSorted.selector);
+        multisig.executeTransaction(txHash, approvers);
+
+        approvers[1] = signerThree;
+        vm.prank(signerOne);
+        vm.expectRevert(abi.encodeWithSelector(IMultiSig.InvalidApprover.selector, signerThree));
+        multisig.executeTransaction(txHash, approvers);
     }
 }
