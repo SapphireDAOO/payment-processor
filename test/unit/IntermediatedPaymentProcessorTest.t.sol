@@ -9,6 +9,7 @@ import { console } from "forge-std/console.sol";
 import { Vm } from "forge-std/Vm.sol";
 
 import { IntermediatedPaymentProcessorSetUp } from "../utils/IntermediatedPaymentProcessorSetUp.sol";
+import { NoReceiveEther } from "../utils/NoReceiveEther.sol";
 
 import {
     getInvoiceCreationParam,
@@ -1893,5 +1894,75 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         );
         intermediatedPP.payMetaInvoice(metaInvoiceId, address(mockUsdc), receivers, sig);
         vm.stopPrank();
+    }
+
+    function test_payInvoiceRefundsNativeOverpayment() public {
+        uint256 price = 100e8;
+        uint216 invoiceId = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+        );
+        uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
+        bytes memory sig = _feeSig(address(intermediatedPP), invoiceId, feeReceiver);
+
+        uint256 buyerBefore = buyerOne.balance;
+        vm.prank(buyerOne);
+        intermediatedPP.payInvoice{ value: tokenValue + 1 ether }(invoiceId, address(0), feeReceiver, sig);
+
+        assertEq(buyerOne.balance, buyerBefore - tokenValue);
+        assertEq(intermediatedPP.getInvoice(invoiceId).escrow.balance, tokenValue);
+        assertEq(address(intermediatedPP).balance, 0);
+    }
+
+    function test_payMetaInvoiceRejectsNativeToken() public {
+        address[] memory sellers = new address[](2);
+        sellers[0] = sellerOne;
+        sellers[1] = sellerTwo;
+
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 100e8;
+        prices[1] = 200e8;
+
+        (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+        uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
+
+        address[] memory receivers = _metaReceivers(metaInvoiceId);
+        bytes memory sig = _metaFeeSig(metaInvoiceId);
+
+        vm.deal(address(intermediatedPP), 100 ether);
+
+        vm.prank(buyerOne);
+        vm.expectRevert(IIntermediatedPaymentProcessor.InvalidNativePayment.selector);
+        intermediatedPP.payMetaInvoice(metaInvoiceId, address(0), receivers, sig);
+
+        assertEq(address(intermediatedPP).balance, 100 ether);
+        assertEq(intermediatedPP.getInvoice(invoiceIds[0]).state, CREATED);
+        assertEq(intermediatedPP.getInvoice(invoiceIds[1]).state, CREATED);
+    }
+
+    function test_releaseRevertsWhenSellerTransferFails() public {
+        address seller = address(new NoReceiveEther());
+        uint256 price = 100e8;
+        uint216 invoiceId = intermediatedPP.createSingleInvoice(
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), seller, price, _testPaymentTokens())
+        );
+        uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
+
+        vm.prank(buyerOne);
+        intermediatedPP.payInvoice{ value: tokenValue }(
+            invoiceId, address(0), feeReceiver, _feeSig(address(intermediatedPP), invoiceId, feeReceiver)
+        );
+
+        vm.expectRevert(IIntermediatedPaymentProcessor.EscrowWithdrawFailed.selector);
+        intermediatedPP.release(invoiceId);
+
+        IIntermediatedPaymentProcessor.Invoice memory inv = intermediatedPP.getInvoice(invoiceId);
+        assertEq(inv.state, PAID);
+        assertEq(inv.balance, tokenValue);
+        assertEq(inv.escrow.balance, tokenValue);
+
+        uint256 buyerBefore = buyerOne.balance;
+        intermediatedPP.refund(invoiceId, BASIS_POINTS);
+        assertEq(buyerOne.balance, buyerBefore + tokenValue);
     }
 }

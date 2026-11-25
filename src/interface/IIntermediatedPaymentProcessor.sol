@@ -202,7 +202,7 @@ interface IIntermediatedPaymentProcessor {
     /**
      * @notice Pays a single invoice using native ETH or an approved ERC20 token.
      * @dev `_feeReceiver` is recorded on the invoice and paid the platform fee on release or dispute
-     *      settlement, so it must be authorized by the fee signer via `_data`.
+     *      settlement, so it must be authorized by the fee signer via `_data`. Native overpayment is refunded.
      * @param _invoiceId The ID of the invoice to be paid.
      * @param _paymentToken The token address used for payment (or zero address for ETH).
      * @param _feeReceiver The address to pay this invoice's platform fee to.
@@ -233,8 +233,8 @@ interface IIntermediatedPaymentProcessor {
         payable;
 
     /**
-     * @notice Pays all sub-invoices in a meta invoice using native ETH or ERC20.
-     * @dev Caller must be the buyer of all sub-invoices. Use `address(0)` for native payment.
+     * @notice Pays all sub-invoices in a meta invoice using an ERC20 token.
+     * @dev Reverts with InvalidNativePayment for `address(0)`; native payments go through `payMetaInvoiceWithValue`.
      *      Canceled sub-invoices are automatically excluded: each cancellation reduces the
      *      stored meta-invoice price, so the caller only pays for the remaining non-canceled
      *      sub-invoices. Sub-invoices not in CREATED state are silently skipped.
@@ -321,6 +321,7 @@ interface IIntermediatedPaymentProcessor {
      *      DISPUTE_DISMISSED, or DISPUTE_EXPIRED state. `releaseAt` is recorded on the invoice but not
      *      enforced here; the operator decides when to release. Platform fees are deducted before the net
      *      amount is transferred to the seller. The invoice transitions to RELEASED and its balance is zeroed.
+     *      Reverts with EscrowWithdrawFailed if the seller transfer fails.
      * @param _invoiceId The ID of the invoice.
      */
     function release(uint216 _invoiceId) external;

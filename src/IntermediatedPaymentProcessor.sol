@@ -188,9 +188,9 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         }
 
         uint256 amountPaid = _pay(i, _invoiceId, _paymentToken, priceInToken, _feeReceiver);
-        _refundExtra(priceInToken, amountPaid);
-
         invoices[_invoiceId] = i;
+
+        if (_paymentToken == address(0)) _refundExtra(msg.value, amountPaid);
     }
 
     /**
@@ -227,6 +227,8 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         address[] calldata _feeReceivers,
         bytes memory _data
     ) external nonReentrant whenNotPaused {
+        if (_paymentToken == address(0)) revert InvalidNativePayment();
+
         MetaInvoice memory m = metaInvoices[_invoiceId];
         if (m.price == 0) revert InvoiceDoesNotExist();
 
@@ -312,7 +314,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
         uint256 fee = _applyBasisPoints(i.balance, i.feeRate);
         uint256 sellerNetAmount = i.balance - fee;
-        IEscrow(i.escrow).withdraw(i.paymentToken, i.seller, sellerNetAmount);
+        if (!IEscrow(i.escrow).withdraw(i.paymentToken, i.seller, sellerNetAmount)) revert EscrowWithdrawFailed();
 
         invoices[_invoiceId].state = RELEASED;
         invoices[_invoiceId].balance = 0;
@@ -709,14 +711,11 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
     /**
      * @notice Returns the part of a native payment that was not applied to the invoice(s).
-     * @dev Useful because if the quoted price from the off-chain call (usually the frontend) is slightly
-     *      higher than the on-chain quote, the transaction shouldn't revert; the extra amount is refunded
-     *      instead. This is a precautionary measure — situations like this have little chance of occurring.
-     * @param _priceInToken The quoted price, in the native token.
+     * @param _amountSent The native amount the caller sent.
      * @param _amountPaid The amount actually applied.
      */
-    function _refundExtra(uint256 _priceInToken, uint256 _amountPaid) internal {
-        uint256 refundableAmount = _priceInToken - _amountPaid;
+    function _refundExtra(uint256 _amountSent, uint256 _amountPaid) internal {
+        uint256 refundableAmount = _amountSent - _amountPaid;
         if (refundableAmount > 0) (msg.sender).safeTransferETH(refundableAmount);
     }
 
