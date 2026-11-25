@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.38;
 
 import { Notes } from "src/Notes.sol";
 import { MockWeth } from "../mock/MockWeth.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.38;
 
 interface IOracleManager {
     /// @notice Thrown when a caller attempts an owner-only oracle configuration update.

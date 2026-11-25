@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.38;
 
 import { IMultiSig } from "./interface/IMultiSig.sol";
 import { PROPOSED, APPROVED, EXECUTED, CANCELED, MINIMUM_SIGNERS } from "./constants/MultiSig.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.38;
 
 import { IOracleManager } from "./interface/IOracleManager.sol";
 import { AggregatorV3Interface } from "./interface/AggregatorV3Interface.sol";

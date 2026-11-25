@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.38;
 
 import { INotes } from "src/Notes.sol";
 import { NotesSetUp } from "../utils/NotesSetUp.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.38;
 
 import { OracleManager } from "../../src/OracleManager.sol";
 import { IOracleManager } from "../../src/interface/IOracleManager.sol";

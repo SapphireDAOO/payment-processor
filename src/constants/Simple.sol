@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.38;
 
 // Status code representing that an invoice has been created and is awaiting payment.
 uint8 constant CREATED = 1;

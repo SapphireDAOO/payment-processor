@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.38;
 
 import { IIntermediatedPaymentProcessor, IntermediatedPaymentProcessor } from "src/IntermediatedPaymentProcessor.sol";
 import { IOracleManager } from "src/interface/IOracleManager.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.38;
 
 // Transaction has been proposed and is awaiting sufficient approvals.
 uint8 constant PROPOSED = 1;
