@@ -5,7 +5,7 @@ import { IPaymentAutomation } from "./interface/IPaymentAutomation.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
 import { IERC165, IReceiver } from "./interface/IReceiver.sol";
 import { ISimplePaymentProcessor } from "./interface/ISimplePaymentProcessor.sol";
-import { IPendingProcessorProvider } from "./interface/IMasterDeployer.sol";
+import { IPendingProcessorProvider } from "./interface/IDeploymentProviders.sol";
 
 import { CRE_SOURCE, GELATO_SOURCE } from "./constants/Automation.sol";
 

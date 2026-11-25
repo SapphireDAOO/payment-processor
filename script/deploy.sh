@@ -1,24 +1,33 @@
 #!/usr/bin/env bash
 #
-# Runs script/Deploy.s.sol against a network and verifies the deployed contracts.
+# Runs a deploy script against a network and verifies the deployed contracts.
 #
 # Usage:
-#   script/deploy.sh local            # anvil, no verification
-#   script/deploy.sh testnet          # Base Sepolia, verified
-#   script/deploy.sh mainnet          # Base mainnet, verified (prompts first)
-#   script/deploy.sh testnet --dry-run  # simulate only, no broadcast
+#   script/deploy.sh <local|testnet|mainnet> <simple|intermediated> [--dry-run]
 #
-# Reads from .env: TEST_NET_RPC_URL, MAINNET_RPC, ETHERSCAN_API_KEY, SENDER,
-# and optionally FEE_SIGNER, CREATE2_SALT and ORACLE_MANAGER (all consumed by Deploy.s.sol).
+#   intermediated  MultiSig, PaymentProcessorStorage, Sweeper, IntermediatedPaymentProcessor, OracleManager
+#   simple         SimplePaymentProcessor, PaymentAutomation, Notes
+#
+# Run intermediated first; simple attaches to the core it deployed under the same salt.
+#
+# Reads from .env: TEST_NET_RPC_URL, MAINNET_RPC, ETHERSCAN_API_KEY, SENDER, and optionally
+# FEE_SIGNER, CREATE2_SALT, ORACLE_MANAGER and HANDOVER (consumed by the deploy scripts).
 # Set ORACLE_MANAGER to an already deployed OracleManager to reuse it instead of deploying one.
+# Set HANDOVER=true on the last run to transfer storage ownership to the MultiSig.
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 NETWORK="${1:-}"
+TARGET=""
 DRY_RUN=false
-[[ "${2:-}" == "--dry-run" ]] && DRY_RUN=true
+for arg in "${@:2}"; do
+    case "$arg" in
+        --dry-run) DRY_RUN=true ;;
+        *) TARGET="$arg" ;;
+    esac
+done
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -58,13 +67,19 @@ case "$NETWORK" in
         VERIFY_ARGS=(--verify --etherscan-api-key "$ETHERSCAN_API_KEY")
         SIGNER_ADDR="$SENDER"
         if [[ "$DRY_RUN" == false ]]; then
-            read -rp "Deploy to MAINNET as $SENDER? [y/N] " reply
+            read -rp "Deploy $TARGET to MAINNET as $SENDER? [y/N] " reply
             [[ "$reply" == "y" || "$reply" == "Y" ]] || die "aborted"
         fi
         ;;
     *)
-        die "usage: $0 {local|testnet|mainnet} [--dry-run]"
+        die "usage: $0 {local|testnet|mainnet} {simple|intermediated} [--dry-run]"
         ;;
+esac
+
+case "$TARGET" in
+    simple)        SCRIPT=script/DeploySimple.s.sol;        CONTRACT=DeploySimple ;;
+    intermediated) SCRIPT=script/DeployIntermediated.s.sol; CONTRACT=DeployIntermediated ;;
+    *)             die "usage: $0 {local|testnet|mainnet} {simple|intermediated} [--dry-run]" ;;
 esac
 
 [[ -n "${RPC_OVERRIDE:-}" ]] && RPC_URL="$RPC_OVERRIDE"
@@ -77,7 +92,7 @@ if [[ "$latest" != "$pending" ]]; then
     die "$SIGNER_ADDR has transactions in flight ($latest confirmed, $pending pending) — wait for them to settle"
 fi
 
-FORGE_ARGS=(script/Deploy.s.sol --tc Deploy --rpc-url "$RPC_URL")
+FORGE_ARGS=("$SCRIPT" --tc "$CONTRACT" --rpc-url "$RPC_URL")
 FORGE_ARGS+=("${SIGNING_ARGS[@]}")
 FORGE_ARGS+=(--gas-estimate-multiplier "${GAS_MULTIPLIER:-130}")
 
@@ -93,12 +108,14 @@ fi
 FORGE_ARGS+=(-vvv)
 
 echo "Network:    $NETWORK"
+echo "Target:     $TARGET ($SCRIPT)"
 echo "RPC:        $RPC_URL"
 echo "Signer:     $SIGNER_ADDR (nonce $latest, settled)"
-echo "Fee signer: ${FEE_SIGNER:-<Deploy.s.sol default>}"
+echo "Fee signer: ${FEE_SIGNER:-<DeployConfig.s.sol default>}"
 echo "Gas mult:   ${GAS_MULTIPLIER:-130}%"
-echo "Salt:       ${CREATE2_SALT:-<Deploy.s.sol default>}"
+echo "Salt:       ${CREATE2_SALT:-<DeployConfig.s.sol default>}"
 echo "Oracle:     ${ORACLE_MANAGER:-<deploy a new OracleManager>}"
+echo "Handover:   ${HANDOVER:-false}"
 echo ""
 
 forge script "${FORGE_ARGS[@]}"
@@ -107,4 +124,4 @@ forge script "${FORGE_ARGS[@]}"
 
 CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
 echo ""
-echo "Broadcast log: broadcast/Deploy.s.sol/$CHAIN_ID/run-latest.json"
+echo "Broadcast log: broadcast/$(basename "$SCRIPT")/$CHAIN_ID/run-latest.json"

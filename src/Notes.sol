@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import { INotes } from "./interface/INotes.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "./PaymentProcessorStorage.sol";
-import { IAuthorizedAddressProvider } from "./interface/IMasterDeployer.sol";
+import { IAuthorizedAddressProvider } from "./interface/IDeploymentProviders.sol";
 
 /**
  * @title Notes

@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import { Notes } from "src/Notes.sol";
 import { MockWeth } from "../mock/MockWeth.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
-import { IAuthorizedAddressProvider, IPendingProcessorProvider } from "../../src/interface/IMasterDeployer.sol";
+import { IAuthorizedAddressProvider, IPendingProcessorProvider } from "../../src/interface/IDeploymentProviders.sol";
 import { Test } from "forge-std/Test.sol";
 
 abstract contract BaseSetUp is Test, IAuthorizedAddressProvider, IPendingProcessorProvider {

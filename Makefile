@@ -16,6 +16,8 @@ help:
 	@echo "  deploy-local    Deploy to local Anvil node"
 	@echo "  deploy-test     Deploy to testnet sepolia and verify"
 	@echo "  deploy-mainnet  Deploy to mainnet and verify"
+	@echo ""
+	@echo "Deploy targets take TARGET=simple|intermediated, e.g. make deploy-test TARGET=simple"
 
 build:
 	@forge build
@@ -30,15 +32,10 @@ clean:
 	@forge clean
 
 deploy-local:
-	@forge script script/Deploy.s.sol --rpc-url anvil \
-	--account sp-key --sender $(SENDER) --broadcast -vvv
+	@script/deploy.sh local $(TARGET)
 
 deploy-test:
-	@forge script script/Deploy.s.sol --rpc-url $(TEST_NET_RPC_URL) \
-	--account sp-key --sender $(SENDER) --etherscan-api-key $(ETHERSCAN_API_KEY) \
-	--verify --broadcast -vvv
+	@script/deploy.sh testnet $(TARGET)
 
 deploy-mainnet:
-	@forge script script/Deploy.s.sol --rpc-url $(MAINNET_RPC) \
-	--account sp-key --sender $(SENDER) --etherscan-api-key $(ETHERSCAN_API_KEY) \
-	--verify --broadcast -vvv
+	@script/deploy.sh mainnet $(TARGET)
