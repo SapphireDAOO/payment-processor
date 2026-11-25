@@ -28,6 +28,14 @@ runs = 5000
 depth = 64
 fail_on_revert = true
 
+[profile.ci.fuzz]
+runs = 256
+
+[profile.ci.invariant]
+runs = 256
+depth = 64
+fail_on_revert = true
+
 [rpc_endpoints]
 amoy = "${TEST_NET_RPC_URL}"
 anvil = "http://127.0.0.1:8545"
