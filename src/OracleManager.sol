@@ -66,14 +66,15 @@ contract OracleManager is IOracleManager {
         if (!config.allowed) revert UnsupportedToken();
 
         _checkSequencer();
-        return _usdPerToken(config);
+        (uint256 price,) = _usdPerToken(config);
+        return price;
     }
 
     /// @inheritdoc IOracleManager
     function getValueInCurrency(address _paymentToken, uint256 _amount, address _toAggregator)
         external
         view
-        returns (uint256 value)
+        returns (uint256 value, uint256 validUntil)
     {
         PriceFeedConfig memory config = priceFeeds[_paymentToken];
         if (!config.allowed) revert UnsupportedToken();
@@ -82,9 +83,11 @@ contract OracleManager is IOracleManager {
         _checkSequencer();
 
         uint8 tokenDecimals = _paymentToken == address(0) ? DEFAULT_DECIMAL : _decimalsOf(_paymentToken);
-        uint256 usdValue = _amount.mulDiv(_usdPerToken(config), 10 ** tokenDecimals);
+        (uint256 usdPerToken, uint256 tokenPriceValidUntil) = _usdPerToken(config);
+        uint256 usdValue = _amount.mulDiv(usdPerToken, 10 ** tokenDecimals);
 
-        return usdValue.mulDiv(10 ** FEED_DECIMAL, _latestPrice(_toAggregator));
+        value = usdValue.mulDiv(10 ** FEED_DECIMAL, _latestPrice(_toAggregator));
+        validUntil = tokenPriceValidUntil;
     }
 
     /// @inheritdoc IOracleManager
@@ -97,7 +100,7 @@ contract OracleManager is IOracleManager {
             PriceFeedConfig memory config = priceFeeds[_paymentTokens[i]];
             if (!config.allowed) revert UnsupportedToken();
 
-            prices[i] = _usdPerToken(config);
+            (prices[i],) = _usdPerToken(config);
         }
     }
 
@@ -160,16 +163,24 @@ contract OracleManager is IOracleManager {
     /**
      * @notice Reads and validates a token's Chainlink price, assuming the sequencer was already checked.
      * @param _config The token's price feed configuration.
-     * @return The token's USD price with 8 decimals as returned by the Chainlink aggregator.
+     * @return price The token's USD price with 8 decimals as returned by the Chainlink aggregator.
+     * @return validUntil The last timestamp at which this price passes the heartbeat check
+     *         (`updatedAt + heartbeat`); `type(uint256).max` when the feed has no heartbeat.
      */
-    function _usdPerToken(PriceFeedConfig memory _config) internal view returns (uint256) {
+    function _usdPerToken(PriceFeedConfig memory _config) internal view returns (uint256 price, uint256 validUntil) {
         (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) =
             AggregatorV3Interface(_config.aggregator).latestRoundData();
         if (answeredInRound < roundId) revert StalePrice();
         if (answer <= 0) revert InvalidPrice();
-        if (_config.heartbeat != 0 && block.timestamp > updatedAt + _config.heartbeat) revert StalePriceFeed();
 
-        return answer.toUint256(); // 8 decimals from Chainlink
+        if (_config.heartbeat == 0) {
+            validUntil = type(uint256).max;
+        } else {
+            validUntil = updatedAt + _config.heartbeat;
+            if (block.timestamp > validUntil) revert StalePriceFeed();
+        }
+
+        price = answer.toUint256(); // 8 decimals from Chainlink
     }
 
     /**

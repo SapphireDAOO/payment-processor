@@ -110,8 +110,36 @@ contract OracleManagerTest is BaseSetUp {
         // TOKEN is $2,000. 3 tokens = $6,000. At 1.25 USD per unit of the target, that is 4,800.
         MockV3Aggregator target = new MockV3Aggregator(8, 1.25e8);
 
-        uint256 value = oracle.getValueInCurrency(TOKEN, 3e18, address(target));
+        (uint256 value,) = oracle.getValueInCurrency(TOKEN, 3e18, address(target));
         assertEq(value, 4800e8);
+    }
+
+    function test_getValueInCurrency_returnsWhenTheTokenPriceGoesStale() public {
+        MockV3Aggregator target = new MockV3Aggregator(8, 1e8);
+
+        // The token's feed last updated at setUp's start; it stays valid for one heartbeat after that.
+        (,,, uint256 updatedAt,) = priceFeed.latestRoundData();
+        (, uint256 validUntil) = oracle.getValueInCurrency(TOKEN, 1e18, address(target));
+        assertEq(validUntil, updatedAt + HEARTBEAT);
+
+        // Still valid at that exact second, stale one second later.
+        vm.warp(validUntil);
+        oracle.getValueInCurrency(TOKEN, 1e18, address(target));
+
+        vm.warp(validUntil + 1);
+        vm.expectRevert(IOracleManager.StalePriceFeed.selector);
+        oracle.getValueInCurrency(TOKEN, 1e18, address(target));
+    }
+
+    function test_getValueInCurrency_neverExpiresWithoutAHeartbeat() public {
+        MockV3Aggregator target = new MockV3Aggregator(8, 1e8);
+        vm.prank(admin);
+        oracle.setPriceFeed(
+            TOKEN, IOracleManager.PriceFeedConfig({ aggregator: address(priceFeed), heartbeat: 0, allowed: true })
+        );
+
+        (, uint256 validUntil) = oracle.getValueInCurrency(TOKEN, 1e18, address(target));
+        assertEq(validUntil, type(uint256).max);
     }
 
     function test_getValueInCurrency_usesTheTokensOwnDecimals() public {
@@ -125,7 +153,8 @@ contract OracleManagerTest is BaseSetUp {
 
         MockV3Aggregator target = new MockV3Aggregator(8, 1e8);
 
-        assertEq(oracle.getValueInCurrency(address(sixDecimals), 250e6, address(target)), 250e8);
+        (uint256 value,) = oracle.getValueInCurrency(address(sixDecimals), 250e6, address(target));
+        assertEq(value, 250e8);
     }
 
     function test_getValueInCurrency_rejectsAnUnsupportedSourceToken() public {

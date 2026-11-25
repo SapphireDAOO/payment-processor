@@ -70,15 +70,22 @@ interface IOracleManager {
      *      result as informational rather than as a basis for moving funds.
      *
      *      Both feeds are assumed to report {FEED_DECIMAL} decimals, as Chainlink USD pairs do.
+     *
+     *      `validUntil` comes from the payment token's feed only, since the target aggregator has no
+     *      heartbeat to measure it against. A later sequencer outage can also make the call revert
+     *      before then.
      * @param _paymentToken The token being converted; `address(0)` for native currency.
      * @param _amount The amount of `_paymentToken`, in that token's own decimals.
      * @param _toAggregator Aggregator quoting USD per unit of the target currency (e.g. EUR/USD).
      * @return value The converted amount, with {FEED_DECIMAL} decimals.
+     * @return validUntil The last timestamp at which the token price behind `value` is still fresh
+     *         (`updatedAt + heartbeat`); after it the feed is stale and this call reverts with
+     *         `StalePriceFeed`. `type(uint256).max` when the token's feed has no heartbeat.
      */
     function getValueInCurrency(address _paymentToken, uint256 _amount, address _toAggregator)
         external
         view
-        returns (uint256 value);
+        returns (uint256 value, uint256 validUntil);
 
     /**
      * @notice Reports whether a token is allowed as payment.
