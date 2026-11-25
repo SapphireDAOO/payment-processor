@@ -646,7 +646,7 @@ contract SimplePaymentProcessorTest is SimplePaymentProcessorSetUp {
 
     function test_invoiceCreationEmitsOnlyCreationFields() public {
         uint256 price = 1 ether;
-        uint216 nonce = ppStorage.getNextInvoiceNonce();
+        uint216 nonce = simplePP.getNextInvoiceNonce();
         uint216 expectedId =
             uint216(uint256(keccak256(abi.encode(address(simplePP), sellerOne, uint256(nonce)))) & ((1 << 216) - 1));
 

@@ -190,7 +190,7 @@ interface ISimplePaymentProcessor {
     function hasDueTasks() external view returns (bool dueTasksExist);
 
     /**
-     * @notice Returns the nonce that will be assigned to the next invoice.
+     * @notice Returns the nonce that will be assigned to the next invoice created by this processor.
      * @return nextInvoiceNonceValue The next invoice nonce value.
      */
     function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceValue);

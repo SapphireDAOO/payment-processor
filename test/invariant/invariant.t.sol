@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { Test } from "forge-std/Test.sol";
 
-import { BaseSetUp, PaymentProcessorStorage } from "../utils/BaseSetUp.sol";
+import { BaseSetUp } from "../utils/BaseSetUp.sol";
 
 import { SimplePaymentProcessorSetUp, SimplePaymentProcessor } from "../utils/SimplePaymentProcessorSetUp.sol";
 import {
@@ -79,9 +79,8 @@ contract Invariant is StdInvariant, Test, BaseSetUp, SimplePaymentProcessorSetUp
     }
 
     function invariant_consistentId() external view {
-        uint256 totalFromHandlers = sHandler.getTotalInvoiceCreated() + aHandler.getTotalSingleInvoiceCreated();
-        uint256 totalInStorage = PaymentProcessorStorage(storageAddress).totalInvoiceCreated();
-        assertEq(totalFromHandlers, totalInStorage);
+        assertEq(sHandler.getTotalInvoiceCreated(), simplePaymentProcessor.getNextInvoiceNonce() - 1);
+        assertEq(aHandler.getTotalSingleInvoiceCreated(), intermediatedPaymentProcessor.totalUniqueInvoiceCreated());
     }
 
     function invariant_consistentMetaInvoiceId() external view {

@@ -49,6 +49,9 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     /// @notice OracleManager used to convert USD-denominated invoice prices into payment-token amounts.
     IOracleManager public immutable ORACLE;
 
+    /// @notice The nonce the next invoice (standalone or sub-invoice) created here will be assigned.
+    uint216 private nextInvoiceNonce;
+
     /// @notice The next available meta-invoice ID to be assigned.
     uint216 private nextMetaInvoiceNonce;
 
@@ -110,6 +113,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     constructor(address _paymentProcessorStorageAddress, address _oracle) {
         PP_STORAGE = IPaymentProcessorStorage(_paymentProcessorStorageAddress);
         ORACLE = IOracleManager(_oracle);
+        nextInvoiceNonce = 1;
         nextMetaInvoiceNonce = 1;
     }
 
@@ -125,7 +129,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         whenNotPaused
         returns (uint216 invoiceId)
     {
-        return _createInvoice(PP_STORAGE.updateInvoiceNonce(1), 0, _param);
+        return _createInvoice(nextInvoiceNonce++, 0, _param);
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
@@ -139,7 +143,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
         if (length == 0) revert EmptyMetaInvoice();
 
         uint256 totalPrice = 0;
-        uint216 firstInvoiceNonce = PP_STORAGE.getNextInvoiceNonce();
+        uint216 firstInvoiceNonce = nextInvoiceNonce;
 
         uint256 lastInvoiceNonce = length + firstInvoiceNonce - 1;
 
@@ -154,7 +158,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
         metaInvoices[metaInvoiceId].price = totalPrice;
         nextMetaInvoiceNonce++;
-        PP_STORAGE.updateInvoiceNonce(length.toUint216());
+        nextInvoiceNonce = firstInvoiceNonce + length.toUint216();
 
         emit MetaInvoiceCreated(metaInvoiceId, totalPrice);
 
@@ -764,7 +768,7 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
 
     /// @inheritdoc IIntermediatedPaymentProcessor
     function totalUniqueInvoiceCreated() external view returns (uint216 totalInvoices) {
-        return PP_STORAGE.totalInvoiceCreated();
+        return nextInvoiceNonce - 1;
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
@@ -773,8 +777,8 @@ contract IntermediatedPaymentProcessor is IIntermediatedPaymentProcessor, Escrow
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor
-    function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonce) {
-        return PP_STORAGE.getNextInvoiceNonce();
+    function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceValue) {
+        return nextInvoiceNonce;
     }
 
     /// @inheritdoc IIntermediatedPaymentProcessor

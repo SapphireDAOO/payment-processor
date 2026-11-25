@@ -5,14 +5,14 @@ import { IPaymentProcessorStorage } from "./IPaymentProcessorStorage.sol";
 
 /**
  * @title IAuthorizedAddressProvider
- * @notice Implemented by contracts that deploy PaymentProcessorStorage.
- * @dev PaymentProcessorStorage calls this on its deployer (`msg.sender`) during construction
- *      to fetch the addresses to authorize. Authorization can only be granted this way, at
- *      deployment time; no setter exists to change it afterwards.
+ * @notice Implemented by contracts that deploy Notes.
+ * @dev Notes calls this on its deployer (`msg.sender`) during construction to fetch the addresses
+ *      allowed to write notes. Authorization can only be granted this way, at deployment time; no
+ *      setter exists to change it afterwards.
  */
 interface IAuthorizedAddressProvider {
     /**
-     * @notice Returns the addresses PaymentProcessorStorage should authorize at construction.
+     * @notice Returns the addresses Notes should authorize at construction.
      * @return authorized The list of addresses to authorize.
      */
     function authorizedAddresses() external view returns (address[] memory authorized);
@@ -39,18 +39,16 @@ interface IPendingProcessorProvider {
  * @title IMasterDeployer
  * @notice Deploys the full payment processor system deterministically via CREATE2.
  * @dev PaymentProcessorStorage's address is predicted upfront: its init code contains only the
- *      configuration (the authorized processors are fetched from the deployer via
- *      {IAuthorizedAddressProvider.authorizedAddresses} during its constructor), so the address
- *      is known before the processors exist. The processors are deployed first against the
- *      predicted address, then the storage contract is deployed at exactly that address with the
- *      processors authorized.
+ *      configuration, so the address is known before the processors exist. The processors are
+ *      deployed first against the predicted address, then the storage contract is deployed at
+ *      exactly that address.
  *
  *      Deployment runs in two transactions, {deployCore} then {deploySystem}, because deploying
  *      all eight contracts at once needs ~15.6M gas and RPC providers reject a transaction whose
  *      gas limit exceeds 16,777,216. The two heaviest contracts (SimplePaymentProcessor and
  *      IntermediatedPaymentProcessor) are split across the two calls to keep each well clear of
- *      that ceiling. The pending authorization list spans both calls and is cleared by
- *      {deploySystem}; once it completes, authorization on the storage contract can never change.
+ *      that ceiling. The pending Notes authorization list is filled and cleared by {deploySystem};
+ *      once it completes, authorization on Notes can never change.
  */
 interface IMasterDeployer is IAuthorizedAddressProvider {
     /// @notice Thrown when `deployAll` is called by an address other than the deployer.
@@ -200,7 +198,7 @@ interface IMasterDeployer is IAuthorizedAddressProvider {
 
     /**
      * @notice Second deployment phase: OracleManager, IntermediatedPaymentProcessor, Sweeper, and
-     *         finally PaymentProcessorStorage at its predicted address with both processors authorized.
+     *         finally PaymentProcessorStorage at its predicted address.
      * @dev Callable once, by the deployer only, and only after {deployCore}. The OracleManager is
      *      deployed only when `_params.oracleManager` is address(0); otherwise that one is reused, with
      *      its price feeds and admin unchanged. Ownership of the storage

@@ -218,7 +218,6 @@ contract Deploy is Script {
         console.log("--- Wiring ---");
 
         console.log("Notes authorized at construction: deployer, SimplePaymentProcessor, IntermediatedPaymentProcessor");
-        console.log("Storage authorized at construction: SimplePaymentProcessor, IntermediatedPaymentProcessor");
         // Must precede the ownership handover below: setFeeSigner is owner-only, and without it every
         // acceptPayment and payInvoice reverts with InvalidFeeAuthorization.
         address feeSigner = vm.envOr("FEE_SIGNER", DEFAULT_FEE_SIGNER);

@@ -63,20 +63,15 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_minimumPriceIsFixed() public {
         uint256 minimum = DEFAULT_MINIMUM_INVOICE_PRICE;
 
-        uint256 nextNonce = ppStorage.getNextInvoiceNonce();
+        uint256 nextNonce = intermediatedPP.getNextInvoiceNonce();
         vm.expectRevert(IIntermediatedPaymentProcessor.PriceIsTooLow.selector);
         intermediatedPP.createSingleInvoice(
             getInvoiceCreationParam(nextNonce, sellerOne, minimum - 1, _testPaymentTokens())
         );
 
         intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, minimum, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, minimum, _testPaymentTokens())
         );
-    }
-
-    function test_updateInvoiceNonce() public {
-        vm.expectRevert(NotAuthorized.selector);
-        ppStorage.updateInvoiceNonce(1);
     }
 
     function test_setPriceFeed() public {
@@ -97,7 +92,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_singleInvoiceCreation() public {
         uint256 price = 100e8;
 
-        uint256 invoiceNonce = ppStorage.getNextInvoiceNonce();
+        uint256 invoiceNonce = intermediatedPP.getNextInvoiceNonce();
 
         vm.prank(buyerOne);
         vm.expectRevert(IIntermediatedPaymentProcessor.NotAuthorized.selector);
@@ -132,7 +127,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
     function test_createMultipleInvoiceAndMakePayment() public {
         // set up
-        uint256 invoiceNonce = ppStorage.getNextInvoiceNonce();
+        uint256 invoiceNonce = intermediatedPP.getNextInvoiceNonce();
 
         address[] memory sellers = new address[](2);
         sellers[0] = sellerOne;
@@ -176,7 +171,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_nativeTokenPaymentForSingleInvoice() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         vm.startPrank(buyerOne);
@@ -217,7 +212,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         assertEq(inv.state, PAID);
 
         invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         vm.warp(15 days);
@@ -304,7 +299,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[1] = 200e8;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param,) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
         uint256 expected = intermediatedPP.getMetaInvoice(metaInvoiceId).price;
@@ -321,7 +316,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_erc20PaymentForSingleInvoice() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         vm.prank(buyerOne);
@@ -364,7 +359,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         }
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
 
@@ -407,7 +402,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         // single invoice
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         vm.prank(buyerOne);
@@ -435,7 +430,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[2] = 1400e8;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         intermediatedPP.createMetaInvoice(param);
 
@@ -450,7 +445,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_disputeCreation() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
@@ -484,7 +479,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[1] = 0.02 ether;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
 
@@ -515,7 +510,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_settledDispute() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(mockUsdc), price);
@@ -565,7 +560,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_resolveDispute() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         vm.prank(buyerOne);
@@ -588,7 +583,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_invoiceRelease() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
@@ -632,7 +627,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         disputeWindow[1] = 4 days;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
 
@@ -682,7 +677,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         disputeWindow[2] = 3 days;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
 
@@ -704,7 +699,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_fullRefund() public {
         uint256 price = 1500e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
@@ -740,7 +735,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_partialRefundErc20ThenRelease() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         vm.prank(buyerOne);
@@ -776,7 +771,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_fullRefundErc20() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         vm.prank(buyerOne);
@@ -797,7 +792,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_refundAndRelease() public {
         uint256 price = 1500e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
@@ -831,7 +826,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_invoiceFeeRateSnapshotIsUsedOnRelease() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         assertEq(intermediatedPP.getInvoice(invoiceId).feeRate, FEE_RATE);
@@ -855,7 +850,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_invoiceFeeRateSnapshotIsUsedOnDisputeSettlement() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
@@ -890,7 +885,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[2] = 0.02 ether;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param,) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
         IIntermediatedPaymentProcessor.MetaInvoice memory metaInv = intermediatedPP.getMetaInvoice(metaInvoiceId);
@@ -902,7 +897,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint32 customHold = 7 days;
 
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens());
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens());
         param.holdPeriod = customHold;
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(param);
@@ -923,7 +918,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
     function test_createInvoiceRevertsWhenHoldPeriodIsZero() public {
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, 100e8, _testPaymentTokens());
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, 100e8, _testPaymentTokens());
         param.holdPeriod = 0;
 
         vm.expectRevert(HoldPeriodCanNotBeZero.selector);
@@ -935,7 +930,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint32 customHold = 7 days;
 
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens());
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens());
         param.holdPeriod = customHold;
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(param);
@@ -956,7 +951,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_expiredDispute() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
@@ -1002,7 +997,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[1] = 200e8;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory invoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         params[0].holdPeriod = customHold;
         params[1].holdPeriod = customHold;
@@ -1031,7 +1026,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 price = 100_000_001;
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         // Buyer pays using USDC; token amount is rounded down in getTokenValueFromUsd.
@@ -1052,7 +1047,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_setInvoiceReleaseTimeOnDisputeResolved() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
@@ -1076,7 +1071,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_setInvoiceReleaseTimeOnDisputeDismissed() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
 
@@ -1101,7 +1096,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         _price = bound(_price, 1e8, type(uint128).max);
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
         );
 
         uint256 nextInvoiceNonce = intermediatedPP.getNextInvoiceNonce();
@@ -1112,7 +1107,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     }
 
     function test_createSingleInvoiceEmitsTheOrderId() public {
-        uint216 nonce = ppStorage.getNextInvoiceNonce();
+        uint216 nonce = intermediatedPP.getNextInvoiceNonce();
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
             getInvoiceCreationParam(nonce, sellerOne, 100e8, _testPaymentTokens());
         uint216 expectedId = uint216(uint256(keccak256(abi.encode(param.invoiceId))) & ((1 << 216) - 1));
@@ -1142,7 +1137,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[1] = 50e8;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory subInvoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         vm.recordLogs();
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(params);
@@ -1167,7 +1162,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         _price = bound(_price, 1e8, 100e8);
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerTwo, _price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerTwo, _price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
@@ -1205,7 +1200,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[1] = _priceT;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param,) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
 
@@ -1238,7 +1233,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[1] = _priceT;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param,) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 invoiceId = intermediatedPP.createMetaInvoice(param);
 
@@ -1309,7 +1304,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         _price = bound(_price, 1e8, 100e8);
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(mockUsdc), _price);
@@ -1341,7 +1336,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[1] = _priceT;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory param, uint216[] memory subInvoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(param);
         uint256 totalEth = intermediatedPP.getTokenValueFromUsd(address(0), _priceO + _priceT);
@@ -1368,7 +1363,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         _refundShare = bound(_refundShare, 1, BASIS_POINTS - 1); // partial, not full
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
@@ -1394,7 +1389,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         _sellerShare = bound(_sellerShare, 0, BASIS_POINTS);
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
@@ -1431,7 +1426,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         _holdPeriod = bound(_holdPeriod, 1, type(uint32).max / 2);
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
@@ -1461,7 +1456,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         _wrongValue = bound(_wrongValue, 1, 100 ether);
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
         );
 
         vm.prank(buyerOne);
@@ -1475,7 +1470,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         _price = bound(_price, 1e8, 100e8);
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, _price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), _price);
@@ -1533,7 +1528,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         uint256 price = 10e8;
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
@@ -1544,7 +1539,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         // Build args before arming expectRevert: inner staticcalls would otherwise consume it.
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens());
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens());
         IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params =
             new IIntermediatedPaymentProcessor.InvoiceCreationParam[](1);
         params[0] = param;
@@ -1595,7 +1590,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
     function test_pauseLeavesCancelInvoiceOpen() public {
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, 10e8, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, 10e8, _testPaymentTokens())
         );
 
         vm.prank(admin);
@@ -1613,7 +1608,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         vm.stopPrank();
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, 10e8, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, 10e8, _testPaymentTokens())
         );
 
         assertEq(intermediatedPP.getInvoice(invoiceId).state, CREATED);
@@ -1628,7 +1623,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         ppStorage.emergencyPause();
 
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, 10e8, _testPaymentTokens());
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, 10e8, _testPaymentTokens());
 
         vm.expectRevert(IIntermediatedPaymentProcessor.ContractPaused.selector);
         intermediatedPP.createSingleInvoice(param);
@@ -1641,7 +1636,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_payInvoiceRequiresAnAuthorizedFeeReceiver() public {
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
@@ -1695,7 +1690,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         address invoiceFeeReceiver = address(0xfee5);
 
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, _testPaymentTokens())
         );
 
         uint256 tokenValue = intermediatedPP.getTokenValueFromUsd(address(0), price);
@@ -1725,7 +1720,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[1] = 50e8;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory subInvoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(params);
 
@@ -1764,7 +1759,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         prices[1] = 50e8;
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params,) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, _testPaymentTokens());
 
         uint216 metaInvoiceId = intermediatedPP.createMetaInvoice(params);
         uint256 totalValue = intermediatedPP.getTokenValueFromUsd(address(0), prices[0] + prices[1]);
@@ -1822,7 +1817,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
 
         uint256 price = 100e8;
         uint216 invoiceId = intermediatedPP.createSingleInvoice(
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, price, usdcOnly)
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, price, usdcOnly)
         );
 
         assertTrue(intermediatedPP.isPaymentTokenAllowed(invoiceId, address(mockUsdc)));
@@ -1859,7 +1854,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
     function test_createInvoiceRequiresAtLeastOnePaymentToken() public {
         // Built first: expectRevert applies to the next call, which getNextInvoiceNonce would otherwise be.
         IIntermediatedPaymentProcessor.InvoiceCreationParam memory param =
-            getInvoiceCreationParam(ppStorage.getNextInvoiceNonce(), sellerOne, 100e8, new address[](0));
+            getInvoiceCreationParam(intermediatedPP.getNextInvoiceNonce(), sellerOne, 100e8, new address[](0));
 
         vm.expectRevert(IIntermediatedPaymentProcessor.NoPaymentTokens.selector);
         intermediatedPP.createSingleInvoice(param);
@@ -1878,7 +1873,7 @@ contract IntermediatedPaymentProcessorTest is IntermediatedPaymentProcessorSetUp
         nativeOnly[0] = address(0);
 
         (IIntermediatedPaymentProcessor.InvoiceCreationParam[] memory params, uint216[] memory subInvoiceIds) =
-            getInvoiceCreationParams(ppStorage.getNextInvoiceNonce(), sellers, prices, nativeOnly);
+            getInvoiceCreationParams(intermediatedPP.getNextInvoiceNonce(), sellers, prices, nativeOnly);
 
         // Widen only the first sub-invoice, so the pair disagree on what they accept.
         params[0].paymentTokens = _testPaymentTokens();

@@ -39,8 +39,8 @@ Foundry-based smart contracts for Sapphire DAO that support escrowed invoice flo
   - Validates sequencer uptime (L2 grace period) and feed heartbeat.
   - Ownership delegated to `PaymentProcessorStorage.owner()`.
 - `src/PaymentProcessorStorage.sol`
-  - Shared configuration: fee receiver, fee rate, default hold period, gas threshold, marketplace, and authorization list.
-  - Ownable; authorizes processor contracts.
+  - Shared configuration: fee receiver, fee rate, default hold period, gas threshold, and the Intermediated Platforms Operator.
+  - Ownable.
   - System-wide pause read by both processors, with an owner pause and a self-expiring emergency pause.
 - `src/Escrow.sol`
   - Minimal per-invoice escrow; only the payment processor can withdraw.
@@ -133,7 +133,6 @@ CREATED → PAID → RELEASED           (automated or manual)
 | `defaultHoldPeriod` | Escrow hold time after acceptance (seconds). Used by the Intermediated processor only; the Simple processor takes the period per invoice from the seller. |
 | `gasThreshold` | Minimum gas to keep processing the heap in `processDueTasks` |
 | `marketplace` | Authorized caller for Intermediated processor invoice/dispute functions |
-| `authorized` | Allowlist for restricted storage writes |
 | `emergencyPauser` | EOA allowed to call `emergencyPause`; set via `setEmergencyPauser`, unset by default |
 
 `OracleManager` must have a `PriceFeedConfig` registered for each payment token (including `address(0)` for native ETH) before the Intermediated processor can accept payments.
@@ -217,7 +216,6 @@ slither . --exclude-dependencies --json slither-report.json
 
 ## Operational Notes
 
-- Authorize each processor in `PaymentProcessorStorage` before deployment goes live.
 - Register a `PriceFeedConfig` in `OracleManager` for every ERC20 token and for `address(0)` (native ETH) before enabling Intermediated processor payments.
 - Register `PaymentAutomation` on the Simple processor with `setAutomation` before enabling any keeper; without it only the owner can call `processDueTasks`.
 - Set the CRE forwarder (`setForwarderAddress`) and authorized workflow owner (`setWorkflowOwner`) on `PaymentAutomation` before deploying the workflow in `cre/`; `onReport` rejects every other caller.

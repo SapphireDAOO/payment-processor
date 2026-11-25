@@ -5,9 +5,8 @@ import { Test } from "forge-std/Test.sol";
 import { MultiSig } from "../../src/MultiSig.sol";
 import { IPaymentProcessorStorage, PaymentProcessorStorage } from "../../src/PaymentProcessorStorage.sol";
 import { MockWeth } from "../mock/MockWeth.sol";
-import { IAuthorizedAddressProvider } from "../../src/interface/IMasterDeployer.sol";
 
-abstract contract MultiSigSetUp is Test, IAuthorizedAddressProvider {
+abstract contract MultiSigSetUp is Test {
     MultiSig multisig;
     PaymentProcessorStorage ppStorage;
 
@@ -28,12 +27,6 @@ abstract contract MultiSigSetUp is Test, IAuthorizedAddressProvider {
 
     function setUp() public virtual {
         _multiSigSetUp();
-    }
-
-    /// @dev PaymentProcessorStorage reads this from its deployer at construction; the multisig
-    ///      tests need no authorized processors.
-    function authorizedAddresses() external pure returns (address[] memory authorized) {
-        authorized = new address[](0);
     }
 
     function _multiSigSetUp() internal virtual returns (MultiSig deployedMultiSig) {

@@ -55,7 +55,7 @@ abstract contract IntermediatedPaymentProcessorSetUp is BaseSetUp {
     }
 
     /// @dev Deploys the oracle and processor against the predicted storage address so the
-    ///      processor can be authorized at storage construction.
+    ///      processor can be authorized at Notes construction.
     function _deployAuthorized(address _predictedStorage, address _notesAddress) internal virtual override {
         super._deployAuthorized(_predictedStorage, _notesAddress);
         addr = _setUp();

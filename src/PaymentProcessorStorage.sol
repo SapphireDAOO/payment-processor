@@ -2,13 +2,12 @@
 pragma solidity 0.8.28;
 
 import { IPaymentProcessorStorage } from "./interface/IPaymentProcessorStorage.sol";
-import { IAuthorizedAddressProvider } from "./interface/IMasterDeployer.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 
 /**
  * @title PaymentProcessorStorage
  * @notice Stores global state and metadata for invoices, escrow configurations, and contract parameters.
- * @dev Ownable contract that exposes controlled write access to update internal mappings and counters.
+ * @dev Ownable contract; every setter is owner-only, apart from the emergency pause controls.
  */
 contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     /// @notice Default time window during which a created invoice remains valid for payment.
@@ -25,18 +24,6 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
 
     /// @notice Minimum gas that must remain to continue processing automated tasks.
     uint96 public constant GAS_THRESHOLD = 100_000;
-
-    /**
-     * @notice The next available unique invoice nonce.
-     * @dev Used to track and increment standalone or sub-invoice nonces.
-     */
-    uint216 private nextInvoiceNonce;
-
-    /**
-     * @notice Tracks whether an address is authorized to perform restricted actions.
-     *  @dev Maps an address to a boolean indicating its authorization status.
-     */
-    mapping(address caller => bool state) private isAuthorized;
 
     /// @notice Address that receives platform fees. Fixed at construction.
     address public immutable FEE_RECEIVER;
@@ -62,20 +49,9 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     bool private ownerPaused;
 
     /**
-     * @notice Ensures that only authorized addresses can call the function.
-     * @dev Reverts with `NotAuthorized` if `msg.sender` is not authorized.
-     */
-    modifier onlyAuthorized() {
-        _onlyAuthorized();
-        _;
-    }
-
-    /**
      * @notice Initializes the contract with the given configuration.
-     * @dev The addresses to authorize are fetched from the deployer via
-     *      {IAuthorizedAddressProvider.authorizedAddresses} rather than passed in, which keeps them out
-     *      of the CREATE2 init code so this contract's address is predictable before the processors
-     *      exist. Authorization is fixed here and cannot be changed afterwards.
+     * @dev The init code holds only the configuration, so this contract's CREATE2 address is
+     *      predictable before the processors that reference it exist.
      * @param _configuration The initial configuration parameters.
      */
     constructor(Configuration memory _configuration) {
@@ -85,21 +61,8 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
         FEE_RECEIVER = _configuration.feeReceiver;
         WETH = _configuration.weth;
         intermediatedPlatformsOperator = _configuration.intermediatedPlatformsOperator;
-        nextInvoiceNonce = 1;
-
-        address[] memory authorized = IAuthorizedAddressProvider(msg.sender).authorizedAddresses();
-        for (uint256 i; i < authorized.length; i++) {
-            isAuthorized[authorized[i]] = true;
-            emit AuthorizationUpdated(authorized[i], true);
-        }
 
         emit ConfigurationInitialized(_configuration);
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function updateInvoiceNonce(uint216 _by) external onlyAuthorized returns (uint216 totalInvoices) {
-        nextInvoiceNonce += _by;
-        return totalInvoiceCreated();
     }
 
     /// @inheritdoc IPaymentProcessorStorage
@@ -188,26 +151,6 @@ contract PaymentProcessorStorage is IPaymentProcessorStorage, Ownable {
     function _emergencyPauseActive() internal view returns (bool active) {
         uint40 startedAt = emergencyPausedAt;
         return startedAt != 0 && block.timestamp < startedAt + EMERGENCY_PAUSE_DURATION;
-    }
-
-    /**
-     * @notice Ensures the caller is an authorized address.
-     * @dev Reverts with NotAuthorized if the caller is not authorized.
-     */
-    function _onlyAuthorized() internal view {
-        if (!isAuthorized[msg.sender]) {
-            revert NotAuthorized();
-        }
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceValue) {
-        return nextInvoiceNonce;
-    }
-
-    /// @inheritdoc IPaymentProcessorStorage
-    function totalInvoiceCreated() public view returns (uint216 totalInvoices) {
-        return nextInvoiceNonce - 1;
     }
 
     /// @inheritdoc IPaymentProcessorStorage

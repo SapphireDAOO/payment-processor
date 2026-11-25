@@ -32,7 +32,7 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider, IPendingProcess
 
     bytes32 internal constant TEST_SALT = keccak256("payment-processor.test");
 
-    /// @dev Read back by PaymentProcessorStorage's and Notes' constructors; populated via {_authorize}.
+    /// @dev Read back by Notes' constructor; populated via {_authorize}.
     address[] private pendingAuthorized;
 
     /// @dev Read back by PaymentAutomation's constructor, which takes no processor argument.
@@ -50,9 +50,9 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider, IPendingProcess
 
     /**
      * @notice Initializes shared storage and notes contracts for tests.
-     * @dev PaymentProcessorStorage authorization is fixed at construction, so its address is
-     *      predicted first, dependent contracts are deployed against the prediction (via the
-     *      {_deployAuthorized} hook), and the storage contract is deployed last via CREATE2.
+     * @dev Notes authorization is fixed at construction, so the storage and notes addresses are
+     *      predicted first, the processors are deployed against the predictions (via the
+     *      {_deployAuthorized} hook), and Notes then the storage contract are deployed via CREATE2.
      * @return storageAddress The deployed PaymentProcessorStorage address.
      * @return notesAddress The deployed Notes address.
      */
@@ -81,10 +81,9 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider, IPendingProcess
         pendingAuthorized.push(address(this));
         notes = new Notes{ salt: TEST_SALT }(predictedStorage);
         assertEq(address(notes), predictedNotes, "notes deployed away from prediction");
-        pendingAuthorized.pop();
+        delete pendingAuthorized;
 
         ppStorage = new PaymentProcessorStorage{ salt: TEST_SALT }(config);
-        delete pendingAuthorized;
         assertEq(address(ppStorage), predictedStorage, "storage deployed away from prediction");
 
         vm.prank(admin);
@@ -164,7 +163,7 @@ abstract contract BaseSetUp is Test, IAuthorizedAddressProvider, IPendingProcess
         );
     }
 
-    /// @notice Registers an address to be authorized when PaymentProcessorStorage deploys.
+    /// @notice Registers an address to be authorized to write notes when Notes deploys.
     function _authorize(address _processor) internal {
         pendingAuthorized.push(_processor);
     }

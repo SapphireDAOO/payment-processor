@@ -58,8 +58,7 @@ contract MasterDeployer is IMasterDeployer, IPendingProcessorProvider {
     ///      against the same address.
     address public predictedStorage;
 
-    /// @dev Read back by PaymentProcessorStorage's constructor. Populated across {deployCore} and
-    ///      {deploySystem}, then cleared once the storage contract has read it.
+    /// @dev Read back by Notes' constructor. Populated by {deploySystem} and cleared once Notes has read it.
     address[] private pendingAuthorized;
 
     /**
@@ -174,7 +173,6 @@ contract MasterDeployer is IMasterDeployer, IPendingProcessorProvider {
 
         sweeper = Sweeper(Create2.deploy(0, _params.salt, abi.encodePacked(_initCodes.sweeper, abi.encode(predicted))));
 
-        // The deployer may write notes; the storage contract deliberately does not authorize it.
         pendingAuthorized.push(address(simplePaymentProcessor));
         pendingAuthorized.push(address(intermediatedPaymentProcessor));
         pendingAuthorized.push(DEPLOYER);
@@ -182,16 +180,12 @@ contract MasterDeployer is IMasterDeployer, IPendingProcessorProvider {
         notes = Notes(Create2.deploy(0, _params.salt, _notesInitCode(_initCodes.notes, predicted)));
         if (address(notes) != predictedNotes) revert AddressMismatch(predictedNotes, address(notes));
 
+        // Authorization is only available during deployment.
         delete pendingAuthorized;
-        pendingAuthorized.push(address(simplePaymentProcessor));
-        pendingAuthorized.push(address(intermediatedPaymentProcessor));
 
         ppStorage = PaymentProcessorStorage(
             Create2.deploy(0, _params.salt, _storageInitCode(_initCodes.ppStorage, _params.config))
         );
-
-        // Authorization is only available during deployment.
-        delete pendingAuthorized;
 
         if (address(ppStorage) != predicted) revert StorageAddressMismatch(predicted, address(ppStorage));
 

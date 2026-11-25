@@ -54,6 +54,9 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
     /// @notice Keeper adapter allowed to drive `processDueTasks`; fixed at deployment.
     address public immutable AUTOMATION;
 
+    /// @notice The nonce the next invoice created here will be assigned.
+    uint216 private nextInvoiceNonce;
+
     /// @dev True only while a fee is in flight from escrow to `weth`, so `receive` accepts nothing else.
     bool transient wrappingFee;
 
@@ -109,6 +112,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         NOTES = INotes(_notesAddress);
         AUTOMATION = _automationAddress;
         ESCROW_HOLD_PERIOD = _escrowHoldPeriod;
+        nextInvoiceNonce = 1;
     }
 
     /**
@@ -126,7 +130,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
         returns (uint216 invoiceId)
     {
         if (_price < MINIMUM_INVOICE_VALUE) revert ValueIsTooLow();
-        uint216 newNonce = PP_STORAGE.updateInvoiceNonce(1);
+        uint216 newNonce = nextInvoiceNonce++;
         invoiceId = _computeInvoiceId(msg.sender, newNonce);
 
         Invoice storage i = invoices[invoiceId];
@@ -535,7 +539,7 @@ contract SimplePaymentProcessor is ISimplePaymentProcessor, ReentrancyGuard {
 
     /// @inheritdoc ISimplePaymentProcessor
     function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceValue) {
-        return PP_STORAGE.getNextInvoiceNonce();
+        return nextInvoiceNonce;
     }
 
     /// @inheritdoc ISimplePaymentProcessor

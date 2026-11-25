@@ -17,7 +17,7 @@ This file tracks the properties implemented in `test/invariant/invariant.t.sol`.
 
 | Id | Invariant Function | Property |
 | --- | --- | --- |
-| INV-1 | `invariant_consistentId` | `sHandler.getTotalInvoiceCreated() + aHandler.getTotalSingleInvoiceCreated() == PaymentProcessorStorage.totalInvoiceCreated()` |
+| INV-1 | `invariant_consistentId` | Each processor counts its own invoices: `sHandler.getTotalInvoiceCreated() == simplePaymentProcessor.getNextInvoiceNonce() - 1` and `aHandler.getTotalSingleInvoiceCreated() == intermediatedPaymentProcessor.totalUniqueInvoiceCreated()` |
 | INV-2 | `invariant_consistentMetaInvoiceId` | `aHandler.getTotalMetaInvoiceCreated() == intermediatedPaymentProcessor.totalMetaInvoiceCreated()` |
 
 ## Simple Processor State Invariants

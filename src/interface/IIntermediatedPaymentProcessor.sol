@@ -357,7 +357,7 @@ interface IIntermediatedPaymentProcessor {
     function isPaymentTokenAllowed(uint216 _invoiceId, address _paymentToken) external view returns (bool allowed);
 
     /**
-     * @notice Returns the total number of unique invoices created.
+     * @notice Returns the total number of unique invoices created by this processor.
      * @return totalInvoices The total number of unique invoices created.
      */
     function totalUniqueInvoiceCreated() external view returns (uint216 totalInvoices);
@@ -369,10 +369,10 @@ interface IIntermediatedPaymentProcessor {
     function totalMetaInvoiceCreated() external view returns (uint216 totalMetaInvoices);
 
     /**
-     * @notice Returns the nonce that will be assigned to the next invoice.
-     * @return nextInvoiceNonce The next invoice nonce value.
+     * @notice Returns the nonce that will be assigned to the next invoice created by this processor.
+     * @return nextInvoiceNonceValue The next invoice nonce value.
      */
-    function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonce);
+    function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceValue);
 
     /**
      * @notice Returns the nonce that will be assigned to the next meta-invoice.

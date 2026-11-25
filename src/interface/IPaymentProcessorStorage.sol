@@ -42,15 +42,6 @@ interface IPaymentProcessorStorage {
     }
 
     /**
-     * @notice Updates the invoice nonce counter.
-     * @dev Only callable by authorized addresses (e.g., processor contracts). Increments
-     *      the internal nonce by the provided amount.
-     * @param _by The amount to increment the invoice nonce by.
-     * @return totalInvoices The updated total number of invoices created.
-     */
-    function updateInvoiceNonce(uint216 _by) external returns (uint216 totalInvoices);
-
-    /**
      * @notice Updates the sole platform operator wallet authorized to call privileged
      *         `IntermediatedPaymentProcessor` functions: creating invoices, triggering releases and
      *         refunds, and resolving disputes.
@@ -133,18 +124,6 @@ interface IPaymentProcessorStorage {
     function getPauseState() external view returns (bool pausedState, uint256 expiry);
 
     /**
-     * @notice Returns the nonce that will be assigned to the next invoice.
-     * @return nextInvoiceNonceValue The next invoice nonce value.
-     */
-    function getNextInvoiceNonce() external view returns (uint216 nextInvoiceNonceValue);
-
-    /**
-     * @notice Returns the total number of unique invoices created.
-     * @return totalInvoices The total number of invoices created.
-     */
-    function totalInvoiceCreated() external view returns (uint216 totalInvoices);
-
-    /**
      * @notice Returns the key whose signature authorizes a per-invoice fee receiver.
      * @return feeSigner The fee signer address.
      */
@@ -176,13 +155,6 @@ interface IPaymentProcessorStorage {
      * @param config The configuration the contract was initialized with.
      */
     event ConfigurationInitialized(Configuration config);
-
-    /**
-     * @notice Emitted when an address is granted or revoked authorization.
-     * @param account The address whose authorization status changed.
-     * @param authorized The new authorization status.
-     */
-    event AuthorizationUpdated(address indexed account, bool authorized);
 
     /**
      * @notice Emitted when the Intermediated Platforms Operator address is updated.

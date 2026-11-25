@@ -18,7 +18,7 @@ abstract contract SimplePaymentProcessorSetUp is BaseSetUp {
     }
 
     /// @dev Deploys the processor against the predicted storage address so it can be authorized at
-    ///      storage construction. The automation adapter needs no authorization — it only calls
+    ///      Notes construction. The automation adapter needs no authorization — it only calls
     ///      `processDueTasks` on the processor.
     function _deployAuthorized(address _predictedStorage, address _notesAddress) internal virtual override {
         super._deployAuthorized(_predictedStorage, _notesAddress);
